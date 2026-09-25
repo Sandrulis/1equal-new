@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useCookieConsent } from "@/app/components/cookie-consent";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
 import type { ReactNode } from "react";
 import { LanguageMenu } from "@/app/components/language-menu";
@@ -48,6 +49,7 @@ export function TopBar({ onHome }: { onHome: () => void }) {
 
 function UserMenu({ name }: { name: string }) {
   const { t } = useLanguage();
+  const { openSettings } = useCookieConsent();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +91,14 @@ function UserMenu({ name }: { name: string }) {
             <MenuItem icon={<IconKey />} label={t("user.password")} onClick={() => setOpen(false)} />
             <MenuItem icon={<IconSettings />} label={t("user.settings")} onClick={() => setOpen(false)} />
             <MenuItem icon={<IconShield />} label={t("user.twoFactor")} onClick={() => setOpen(false)} />
+            <MenuItem
+              icon={<IconCookie />}
+              label={t("cookie.settings")}
+              onClick={() => {
+                setOpen(false);
+                openSettings();
+              }}
+            />
           </div>
         </div>
       ) : null}
@@ -128,6 +138,16 @@ function IconShield() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M12 3l8 3v6c0 5-3.4 7.6-8 9-4.6-1.4-8-4-8-9V6l8-3z" />
       <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconCookie() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 8.2 12.6 3.2 3.2 0 0 1-3.4-4.4A3.2 3.2 0 0 1 12.6 8 3.2 3.2 0 0 1 12 3z" />
+      <circle cx="9" cy="13" r="0.8" fill="currentColor" />
+      <circle cx="13" cy="16" r="0.8" fill="currentColor" />
     </svg>
   );
 }

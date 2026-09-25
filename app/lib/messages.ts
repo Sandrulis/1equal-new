@@ -138,7 +138,6 @@ const messages = {
   "landing.nav.faq": { lv: "Jautājumi", en: "FAQ" },
   "landing.nav.how": { lv: "Kā tas strādā", en: "How it works" },
   "landing.skip": { lv: "Pāriet pie satura", en: "Skip to content" },
-  "landing.footer.account": { lv: "Konts", en: "Account" },
   "landing.hero.title": { lv: "Komandas sezona vienā vietā", en: "The team season in one place" },
   "landing.hero.lead": {
     lv: "Kalendārs, sastāvs, dalība un laukumu maksa komandai. Skaidrs skats spēlētājiem.",
@@ -259,6 +258,49 @@ const messages = {
   "auth.toSignup": { lv: "Nav konta? Reģistrēties", en: "No account? Sign up" },
   "auth.toLogin": { lv: "Jau ir konts? Ienākt", en: "Already have an account? Log in" },
   "auth.backLogin": { lv: "Atpakaļ uz ienākšanu", en: "Back to log in" },
+  "legal.nav": { lv: "Noteikumi", en: "Policies" },
+  "legal.privacy": { lv: "Privātuma politika", en: "Privacy policy" },
+  "legal.terms": { lv: "Lietošanas noteikumi", en: "Terms of use" },
+  "legal.cookies": { lv: "Sīkdatņu politika", en: "Cookie policy" },
+  "legal.updated": { lv: "Spēkā no 26.09.2026.", en: "In force from 26.09.2026." },
+  "cookie.banner.title": { lv: "Mēs izmantojam sīkdatnes", en: "We use cookies" },
+  "cookie.banner.text": {
+    lv: "Obligātās sīkdatnes ir vajadzīgas, lai sistēma darbotos. Preferenču, statistikas un mārketinga sīkdatnes izmantojam tikai ar tavu piekrišanu.",
+    en: "Necessary cookies are required for the system to work. Preference, analytics and marketing cookies are used only with your consent.",
+  },
+  "cookie.customize": { lv: "Pielāgot", en: "Customize" },
+  "cookie.reject": { lv: "Atteikt neobligātās", en: "Reject optional" },
+  "cookie.accept": { lv: "Piekrist visām", en: "Accept all" },
+  "cookie.save": { lv: "Saglabāt izvēli", en: "Save choice" },
+  "cookie.settings": { lv: "Sīkdatņu iestatījumi", en: "Cookie settings" },
+  "cookie.settings.lead": {
+    lv: "Izvēlies, kuras sīkdatņu kategorijas atļaut. Izvēli vari mainīt jebkurā laikā.",
+    en: "Choose which cookie categories to allow. You can change this at any time.",
+  },
+  "cookie.always": { lv: "Vienmēr ieslēgtas", en: "Always on" },
+  "cookie.necessary.title": { lv: "Obligātās sīkdatnes", en: "Necessary cookies" },
+  "cookie.necessary.text": {
+    lv: "Saglabā tavu piekrišanu, lai josla neparādītos katrā apmeklējumā. Bez tām izvēli nevar atcerēties.",
+    en: "Store your consent so the banner does not return on every visit. The choice cannot be remembered without them.",
+  },
+  "cookie.preferences.title": { lv: "Preferenču sīkdatnes", en: "Preference cookies" },
+  "cookie.preferences.text": {
+    lv: "Paredzētas saskarnes izvēlēm, piemēram, valodai. Pašlaik valoda saglabājas šajā pārlūkā arī bez šī slēdža.",
+    en: "Meant for interface choices, such as language. Right now the language is saved in this browser even without this switch.",
+  },
+  "cookie.analytics.title": { lv: "Statistikas sīkdatnes", en: "Analytics cookies" },
+  "cookie.analytics.text": {
+    lv: "Ļaus anonīmi mērīt lapas apmeklējumu, kad šāds rīks būs pieslēgts. Pašlaik statistika netiek vākta.",
+    en: "Will allow anonymous visit measurement once such a tool is connected. No analytics are collected right now.",
+  },
+  "cookie.marketing.title": { lv: "Mārketinga sīkdatnes", en: "Marketing cookies" },
+  "cookie.marketing.text": {
+    lv: "Personalizētam saturam. Pašlaik netiek lietota neviena mārketinga sīkdatne.",
+    en: "For personalized content. No marketing cookie is used yet.",
+  },
+  "cookie.table.name": { lv: "Nosaukums", en: "Name" },
+  "cookie.table.purpose": { lv: "Mērķis", en: "Purpose" },
+  "cookie.table.duration": { lv: "Ilgums", en: "Duration" },
 } as const;
 
 export type MessageKey = keyof typeof messages;

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { useLanguage } from "@/app/lib/language";
 
@@ -72,6 +73,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
           )}
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

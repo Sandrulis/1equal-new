@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { EVENTS, VENUES, type EventType } from "@/app/lib/demo-data";
 import { isoDate } from "@/app/lib/format";
@@ -103,19 +104,7 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-line bg-paper">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted">
-          <p className="font-medium text-ink">1equal</p>
-          <nav aria-label={t("landing.footer.account")} className="flex gap-4">
-            <Link href="/login" className="cursor-pointer hover:text-ink">
-              {t("auth.login.title")}
-            </Link>
-            <Link href="/signup" className="cursor-pointer hover:text-ink">
-              {t("auth.signup.nav")}
-            </Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
