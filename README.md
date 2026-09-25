@@ -2,7 +2,7 @@
 
 Amatieru komandas paneļa demo. Kalendārs ar spēlēm un treniņiem, dalībnieki, apakškomandas un laukumi ar stundas cenu. Dati ir lokāli, bez servera.
 
-**Pašreizējā versija:** `0.1.0`
+**Pašreizējā versija:** `0.1.1`
 
 ```bash
 npm install

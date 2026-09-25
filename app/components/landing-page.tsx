@@ -90,7 +90,7 @@ export function LandingPage() {
 
         <FaqSection />
 
-        <section aria-labelledby="cta-title" className="px-4 pb-16">
+        <section aria-labelledby="cta-title" className="px-5 pt-10 pb-16 sm:px-8 sm:pt-14">
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-4 rounded-3xl bg-navy px-6 py-10 text-white sm:px-10">
             <h2 id="cta-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.cta.title")}
