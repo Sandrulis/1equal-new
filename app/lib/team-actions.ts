@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
-import type { IssuedTeam } from "@/app/lib/invite-code";
+import { eventHasEnded, eventVotingOpen } from "@/app/lib/event-voting";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
+import { listEnabledFrontendModuleKeys } from "@/app/lib/site-admin/repository";
 import { eventFromRow, memberFromRow, requireUserAdmin } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
@@ -120,8 +123,38 @@ export async function createOwnedTeam(input: { name: string; sourceUrl: string |
   revalidatePath("/", "layout");
   return {
     ok: true,
-    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, members: [member], subteams: [], venues: [], events: [] },
+    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, trainingVotingHours: 24, gameVotingHours: 72, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
   };
+}
+
+function votingHours(value: number): number | null {
+  const hours = Math.round(Number(value));
+  if (!Number.isInteger(hours) || hours < 1 || hours > 168) return null;
+  return hours;
+}
+
+export async function updateOwnedTeam(input: {
+  teamId: string;
+  name: string;
+  trainingVotingHours: number;
+  gameVotingHours: number;
+}): Promise<{ ok: true; name: string; trainingVotingHours: number; gameVotingHours: number } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  const name = input.name.trim().slice(0, 80);
+  const training = votingHours(input.trainingVotingHours);
+  const game = votingHours(input.gameVotingHours);
+  if (!name) return { ok: false, error: "site_settings.error.name" };
+  if (training == null || game == null) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  const saved = await gate.client
+    .from("teams")
+    .update({ name, training_voting_hours: training, game_voting_hours: game, updated_at: new Date().toISOString() })
+    .eq("id", input.teamId);
+  if (saved.error) return { ok: false, error: "auth.error.generic" };
+  revalidatePath("/", "layout");
+  return { ok: true, name, trainingVotingHours: training, gameVotingHours: game };
 }
 
 export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
@@ -129,7 +162,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!code) return { ok: false, error: "team.join.not_found" };
-  const found = await gate.client.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id").eq("invite_code", code).maybeSingle();
+  const found = await gate.client.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, balance").eq("invite_code", code).maybeSingle();
   if (found.error || !found.data?.invite_code) return { ok: false, error: "team.join.not_found" };
 
   await gate.client.from("team_members").upsert({ team_id: found.data.id, user_id: gate.account.id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
@@ -162,6 +195,10 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
       sourceUrl: found.data.source_url,
       logoUrl: found.data.logo_url,
       leaderId: found.data.leader_id,
+      trainingVotingHours: found.data.training_voting_hours ?? 24,
+      gameVotingHours: found.data.game_voting_hours ?? 72,
+      balance: Number(found.data.balance ?? 0),
+      rsvps: [],
       members: members.data.map((row) => memberFromRow(row, idsByUser.get(row.user_id) ?? [])),
       subteams: (groups.data ?? []).map((row) => ({ id: row.id, name: row.name, color: row.color, updatedAt: toLocalDateTimeStamp(row.updated_at) })),
       venues: (places.data ?? []).map(venueFromRow),
@@ -378,6 +415,285 @@ export async function createOwnedEvent(input: {
   if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
   revalidatePath("/", "layout");
   return { ok: true, event: eventFromRow(inserted.data) };
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+async function readTeamLedger(client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"], teamId: string): Promise<TeamLedgerLine[] | null> {
+  const rows = await client.from("team_ledger").select("id, event_id, amount, event_date, event_type, created_at").eq("team_id", teamId).order("created_at", { ascending: false });
+  if (rows.error || !rows.data) return null;
+  return rows.data.map((row) => ({
+    id: row.id,
+    amount: Number(row.amount),
+    at: toLocalDateTimeStamp(row.created_at),
+    eventId: row.event_id,
+    eventDate: String(row.event_date).slice(0, 10),
+    eventType: row.event_type === "game" ? "game" : "training",
+  }));
+}
+
+async function applyEventSettlement(
+  client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"],
+  teamId: string,
+  event: { id: string; date: string; start: string; end: string; type: "game" | "training"; expense: number | null },
+  settledAt: string | null,
+): Promise<number | null> {
+  const team = await client.from("teams").select("balance").eq("id", teamId).maybeSingle();
+  if (team.error || !team.data) return null;
+  let balance = roundMoney(Number(team.data.balance ?? 0));
+  const expense = event.type === "game" && event.expense != null ? roundMoney(event.expense) : 0;
+  const ended = eventHasEnded(event);
+  const line = await client.from("team_ledger").select("id, amount").eq("event_id", event.id).maybeSingle();
+  if (line.error) return null;
+  const charged = line.data ? Math.abs(Number(line.data.amount)) : 0;
+  if (settledAt && line.data && (!ended || expense <= 0)) {
+    balance = roundMoney(balance + charged);
+    const bumped = await client.from("teams").update({ balance }).eq("id", teamId);
+    if (bumped.error) return null;
+    await client.from("team_ledger").delete().eq("id", line.data.id);
+    await client.from("team_events").update({ settled_at: null }).eq("id", event.id);
+    return balance;
+  }
+  if (settledAt && line.data && charged !== expense) {
+    balance = roundMoney(balance - (expense - charged));
+    const bumped = await client.from("teams").update({ balance }).eq("id", teamId);
+    if (bumped.error) return null;
+    await client.from("team_ledger").update({ amount: -expense, event_date: event.date, event_type: event.type }).eq("id", line.data.id);
+    return balance;
+  }
+  if (!settledAt && ended && expense > 0) {
+    const claimed = await client.from("team_events").update({ settled_at: new Date().toISOString() }).eq("id", event.id).is("settled_at", null).select("id");
+    if (claimed.error || !claimed.data?.length) return balance;
+    const inserted = await client.from("team_ledger").insert({
+      team_id: teamId,
+      event_id: event.id,
+      amount: -expense,
+      event_date: event.date,
+      event_type: event.type,
+    });
+    if (inserted.error) {
+      await client.from("team_events").update({ settled_at: null }).eq("id", event.id);
+      return balance;
+    }
+    balance = roundMoney(balance - expense);
+    const bumped = await client.from("teams").update({ balance }).eq("id", teamId);
+    if (bumped.error) return null;
+  }
+  return balance;
+}
+
+export async function updateOwnedEvent(input: {
+  teamId: string;
+  eventId: string;
+  date: string;
+  start: string;
+  type: "game" | "training";
+  venueId: string;
+  subteamId: string | null;
+  expense: number | null;
+  withCoach: boolean;
+}): Promise<{ ok: true; event: TeamEvent; teamBalance: number; ledger: TeamLedgerLine[] } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start)) return { ok: false, error: "auth.error.generic" };
+  if (input.type !== "game" && input.type !== "training") return { ok: false, error: "auth.error.generic" };
+  const existing = await gate.client.from("team_events").select("id, settled_at").eq("id", input.eventId).eq("team_id", input.teamId).maybeSingle();
+  if (existing.error || !existing.data) return { ok: false, error: "auth.error.generic" };
+  const venue = await gate.client.from("venues").select("id").eq("id", input.venueId).eq("team_id", input.teamId).eq("hidden", false).maybeSingle();
+  if (venue.error || !venue.data) return { ok: false, error: "auth.error.generic" };
+  const subteamId = input.subteamId || null;
+  if (subteamId) {
+    const group = await gate.client.from("subteams").select("id").eq("id", subteamId).eq("team_id", input.teamId).maybeSingle();
+    if (group.error || !group.data) return { ok: false, error: "auth.error.generic" };
+  }
+  const expense = input.type === "game" ? roundMoney(Number(input.expense)) : null;
+  if (input.type === "game" && (!Number.isFinite(expense) || expense == null || expense < 0 || expense > 1_000_000)) return { ok: false, error: "auth.error.generic" };
+  const updated = await gate.client
+    .from("team_events")
+    .update({
+      event_date: input.date,
+      start_time: input.start,
+      event_type: input.type,
+      venue_id: input.venueId,
+      subteam_id: subteamId,
+      expense,
+      with_coach: input.type === "training" && input.withCoach,
+    })
+    .eq("id", input.eventId)
+    .eq("team_id", input.teamId)
+    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach")
+    .single();
+  if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
+  const event = eventFromRow(updated.data);
+  const teamBalance = await applyEventSettlement(gate.client, input.teamId, { ...event, expense: event.expense ?? null }, existing.data.settled_at);
+  if (teamBalance == null) return { ok: false, error: "auth.error.generic" };
+  const ledger = await readTeamLedger(gate.client, input.teamId);
+  if (!ledger) return { ok: false, error: "auth.error.generic" };
+  revalidatePath("/", "layout");
+  return { ok: true, event, teamBalance, ledger };
+}
+
+export async function deleteOwnedEvent(input: {
+  teamId: string;
+  eventId: string;
+}): Promise<{ ok: true; teamBalance: number; ledger: TeamLedgerLine[]; refunds: { userId: string; balance: number; ledger: BalanceEntry[] }[] } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id, balance").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  const event = await gate.client.from("team_events").select("id").eq("id", input.eventId).eq("team_id", input.teamId).maybeSingle();
+  if (event.error || !event.data) return { ok: false, error: "auth.error.generic" };
+  const charges = await gate.client.from("balance_entries").select("user_id, amount").eq("event_id", input.eventId).eq("kind", "event");
+  if (charges.error) return { ok: false, error: "auth.error.generic" };
+  const lines = await gate.client.from("team_ledger").select("amount").eq("event_id", input.eventId);
+  if (lines.error) return { ok: false, error: "auth.error.generic" };
+  const refundTotal = (charges.data ?? []).reduce((sum, row) => sum + Math.abs(Number(row.amount)), 0);
+  const settledSum = (lines.data ?? []).reduce((sum, row) => sum + Number(row.amount), 0);
+  const previous = roundMoney(Number(team.data.balance ?? 0));
+  const teamBalance = roundMoney(previous - refundTotal - settledSum);
+  if (teamBalance !== previous) {
+    const bumped = await gate.client.from("teams").update({ balance: teamBalance }).eq("id", input.teamId);
+    if (bumped.error) return { ok: false, error: "auth.error.generic" };
+  }
+  const removed = await gate.client.from("team_events").delete().eq("id", input.eventId).eq("team_id", input.teamId);
+  if (removed.error) {
+    await gate.client.from("teams").update({ balance: previous }).eq("id", input.teamId);
+    return { ok: false, error: "auth.error.generic" };
+  }
+  const userIds = [...new Set((charges.data ?? []).map((row) => row.user_id))];
+  const refunds: { userId: string; balance: number; ledger: BalanceEntry[] }[] = [];
+  if (userIds.length) {
+    const rows = await gate.client.from("balance_entries").select("id, user_id, amount, created_at").eq("team_id", input.teamId).in("user_id", userIds).order("created_at", { ascending: false });
+    if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
+    for (const userId of userIds) {
+      const ledger = rows.data.filter((row) => row.user_id === userId).map((row) => ({ id: row.id, amount: Number(row.amount), at: toLocalDateTimeStamp(row.created_at) }));
+      refunds.push({ userId, balance: roundMoney(ledger.reduce((sum, item) => sum + item.amount, 0)), ledger });
+    }
+  }
+  const ledger = await readTeamLedger(gate.client, input.teamId);
+  if (!ledger) return { ok: false, error: "auth.error.generic" };
+  revalidatePath("/", "layout");
+  return { ok: true, teamBalance, ledger, refunds };
+}
+
+export async function setEventAttendance(input: {
+  teamId: string;
+  eventId: string;
+  userId: string;
+  status: "going" | "absent" | "pending";
+}): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id, training_voting_hours, game_voting_hours, balance").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+  const leader = team.data.leader_id === gate.account.id;
+  const actor = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
+  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (input.userId !== gate.account.id && !leader) return { ok: false, error: "auth.error.generic" };
+  const target = await gate.client.from("team_members").select("user_id, fee_exempt").eq("team_id", input.teamId).eq("user_id", input.userId).maybeSingle();
+  if (target.error || !target.data) return { ok: false, error: "auth.error.generic" };
+  const event = await gate.client.from("team_events").select("id, event_date, start_time, event_type, venue_id").eq("id", input.eventId).eq("team_id", input.teamId).maybeSingle();
+  if (event.error || !event.data) return { ok: false, error: "auth.error.generic" };
+  const votingEvent: TeamEvent = {
+    id: event.data.id,
+    date: event.data.event_date,
+    start: String(event.data.start_time).slice(0, 5),
+    end: "",
+    type: event.data.event_type === "game" ? "game" : "training",
+    titleId: "",
+    subteamId: "",
+    venueId: event.data.venue_id,
+  };
+  if (!leader && !eventVotingOpen(votingEvent, team.data.training_voting_hours ?? 24, team.data.game_voting_hours ?? 72)) {
+    return { ok: false, error: "event.vote.closed" };
+  }
+  const existing = await gate.client.from("team_event_rsvps").select("status").eq("event_id", input.eventId).eq("user_id", input.userId).maybeSingle();
+  if (existing.error) return { ok: false, error: "auth.error.generic" };
+  const previous = existing.data?.status === "going" || existing.data?.status === "absent" ? existing.data.status : "pending";
+  if (previous !== input.status) {
+    if (input.status === "pending") {
+      const cleared = await gate.client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
+      if (cleared.error) return { ok: false, error: "auth.error.generic" };
+    } else {
+      const saved = await gate.client.from("team_event_rsvps").upsert({
+        event_id: input.eventId,
+        team_id: input.teamId,
+        user_id: input.userId,
+        status: input.status,
+        updated_at: new Date().toISOString(),
+      });
+      if (saved.error) return { ok: false, error: "auth.error.generic" };
+    }
+  }
+  const wasGoing = previous === "going";
+  const nowGoing = input.status === "going";
+  let teamBalance = Math.round(Number(team.data.balance ?? 0) * 100) / 100;
+  if (wasGoing !== nowGoing) {
+    if (nowGoing) {
+      const modules = await listEnabledFrontendModuleKeys();
+      const finance = modules.includes(FRONTEND_MODULE_KEYS.finance);
+      let price = 0;
+      if (finance && target.data.fee_exempt !== true) {
+        const venue = await gate.client.from("venues").select("price_per_hour").eq("id", event.data.venue_id).maybeSingle();
+        const raw = Number(venue.data?.price_per_hour ?? 0);
+        if (Number.isFinite(raw) && raw > 0) price = Math.round(raw * 100) / 100;
+      }
+      if (price > 0) {
+        const inserted = await gate.client.from("balance_entries").insert({
+          team_id: input.teamId,
+          user_id: input.userId,
+          amount: -price,
+          kind: "event",
+          event_id: input.eventId,
+          created_by: gate.account.id,
+        });
+        if (inserted.error) {
+          if (previous === "pending") await gate.client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
+          else await gate.client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+          return { ok: false, error: "auth.error.generic" };
+        }
+        teamBalance = Math.round((teamBalance + price) * 100) / 100;
+        const bumped = await gate.client.from("teams").update({ balance: teamBalance }).eq("id", input.teamId);
+        if (bumped.error) {
+          await gate.client.from("balance_entries").delete().eq("event_id", input.eventId).eq("user_id", input.userId).eq("kind", "event");
+          if (previous === "pending") await gate.client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
+          else await gate.client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+          return { ok: false, error: "auth.error.generic" };
+        }
+      }
+    } else {
+      const removed = await gate.client
+        .from("balance_entries")
+        .delete()
+        .eq("event_id", input.eventId)
+        .eq("user_id", input.userId)
+        .eq("kind", "event")
+        .select("amount");
+      if (removed.error) return { ok: false, error: "auth.error.generic" };
+      const taken = (removed.data ?? []).reduce((sum, row) => sum + Math.abs(Number(row.amount)), 0);
+      if (taken > 0) {
+        teamBalance = Math.round((teamBalance - taken) * 100) / 100;
+        const bumped = await gate.client.from("teams").update({ balance: teamBalance }).eq("id", input.teamId);
+        if (bumped.error) return { ok: false, error: "auth.error.generic" };
+      }
+    }
+  }
+  const rows = await gate.client
+    .from("balance_entries")
+    .select("id, amount, created_at")
+    .eq("team_id", input.teamId)
+    .eq("user_id", input.userId)
+    .order("created_at", { ascending: false });
+  if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
+  const ledger = rows.data.map((row) => ({ id: row.id, amount: Number(row.amount), at: toLocalDateTimeStamp(row.created_at) }));
+  const memberBalance = Math.round(ledger.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+  revalidatePath("/", "layout");
+  return { ok: true, memberBalance, ledger, teamBalance };
 }
 
 export async function deleteOwnedSubteam(teamId: string, subteamId: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {

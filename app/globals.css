@@ -42,6 +42,20 @@ button:disabled {
   cursor: not-allowed;
 }
 
+@keyframes vote-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.vote-pulse {
+  animation: vote-pulse 1.15s ease-in-out infinite;
+}
+
 button:focus-visible,
 a:focus-visible,
 select:focus-visible {

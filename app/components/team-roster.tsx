@@ -5,7 +5,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { TeamMark } from "@/app/components/team-mark";
 import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo-data";
-import { adjustMemberBalance, removeOwnedMember } from "@/app/lib/team-actions";
+import { adjustMemberBalance, removeOwnedMember, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { formatDisplayDate, formatDisplayDateTime, formatMoney, formatRelativeUpdated, toLocalDateTimeStamp } from "@/app/lib/format";
@@ -43,6 +43,9 @@ export function TeamRoster({
   teamId = null,
   leaderId = null,
   accountId = null,
+  trainingVotingHours = 24,
+  gameVotingHours = 72,
+  onTeamSaved,
   subteams,
   memberId,
   onOpenMember,
@@ -50,6 +53,8 @@ export function TeamRoster({
   onMemberSaved,
   onMemberRemoved,
   finance = true,
+  persistedBalance = 0,
+  persistedEntries = [],
 }: {
   teamName: string;
   inviteCode: string;
@@ -59,6 +64,9 @@ export function TeamRoster({
   teamId?: string | null;
   leaderId?: string | null;
   accountId?: string | null;
+  trainingVotingHours?: number;
+  gameVotingHours?: number;
+  onTeamSaved?: (team: { name: string; trainingVotingHours: number; gameVotingHours: number }) => void;
   subteams?: Subteam[];
   memberId: string | null;
   onOpenMember: (id: string) => void;
@@ -66,6 +74,8 @@ export function TeamRoster({
   onMemberSaved?: (member: Member, teamCode: string) => void;
   onMemberRemoved?: (id: string) => void;
   finance?: boolean;
+  persistedBalance?: number;
+  persistedEntries?: TeamEntry[];
 }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -82,8 +92,10 @@ export function TeamRoster({
   const [statementOpen, setStatementOpen] = useState(false);
   const [teamEntries, setTeamEntries] = useState<TeamEntry[]>([]);
   const [adjusting, setAdjusting] = useState<Member | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const canAdjust = Boolean(teamId && leaderId && accountId && leaderId === accountId);
-  const teamBalance = Math.round(teamEntries.reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100;
+  const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
+  const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
   const player = memberId ? members.find((member) => member.id === memberId) : undefined;
 
   function openPlayer(id: string) {
@@ -151,7 +163,14 @@ export function TeamRoster({
         <div className="flex min-w-0 items-center gap-4">
           <TeamMark name={teamName} logoUrl={logoUrl} textClassName="text-lg" className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl" />
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">{teamName}</h1>
+            <div className="flex min-w-0 items-center gap-1">
+              <h1 className="truncate text-2xl font-semibold tracking-tight">{teamName}</h1>
+              {canAdjust && teamId ? (
+                <IconTipButton label={t("actions.edit")} tone="muted" onClick={() => setSettingsOpen(true)}>
+                  <IconPencil />
+                </IconTipButton>
+              ) : null}
+            </div>
             {sourceUrl ? (
               <a href={sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block max-w-full truncate text-sm text-train">
                 {sourceUrl}
@@ -294,6 +313,25 @@ export function TeamRoster({
         onClose={() => setInviting(false)}
         onDone={() => showFeedback({ message: t("roster.invite.saved"), variant: "success" })}
       />
+      {teamId ? (
+        <TeamSettingsDialog
+          open={settingsOpen}
+          name={teamName}
+          trainingHours={trainingVotingHours}
+          gameHours={gameVotingHours}
+          onClose={() => setSettingsOpen(false)}
+          onSave={async (next) => {
+            const result = await updateOwnedTeam({ teamId, ...next });
+            if (!result.ok) {
+              showFeedback({ message: t(result.error), variant: "error" });
+              return false;
+            }
+            onTeamSaved?.(result);
+            showFeedback({ message: t("site_settings.saved"), variant: "success" });
+            return true;
+          }}
+        />
+      ) : null}
       <BalanceDialog
         open={balancing}
         title={t("roster.balance.add")}
@@ -307,7 +345,7 @@ export function TeamRoster({
           showFeedback({ message: t("roster.balance.saved"), variant: "success" });
         }}
       />
-      <TeamStatementDialog open={statementOpen} entries={teamEntries} onClose={() => setStatementOpen(false)} />
+      <TeamStatementDialog open={statementOpen} entries={statementEntries} onClose={() => setStatementOpen(false)} />
       <BalanceDialog
         open={adjusting !== null}
         title={t("roster.balance.adjust")}
@@ -401,6 +439,85 @@ function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entrie
   );
 }
 
+function TeamSettingsDialog({
+  open,
+  name,
+  trainingHours,
+  gameHours,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  name: string;
+  trainingHours: number;
+  gameHours: number;
+  onClose: () => void;
+  onSave: (next: { name: string; trainingVotingHours: number; gameVotingHours: number }) => Promise<boolean>;
+}) {
+  const { t } = useLanguage();
+  const [draftName, setDraftName] = useState(name);
+  const [training, setTraining] = useState(String(trainingHours));
+  const [game, setGame] = useState(String(gameHours));
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftName(name);
+    setTraining(String(trainingHours));
+    setGame(String(gameHours));
+    setPending(false);
+  }, [open, name, trainingHours, gameHours]);
+
+  const trainingValue = Number(training);
+  const gameValue = Number(game);
+  const hoursOk = Number.isInteger(trainingValue) && trainingValue >= 1 && trainingValue <= 168 && Number.isInteger(gameValue) && gameValue >= 1 && gameValue <= 168;
+  const dirty = draftName.trim() !== name || trainingValue !== trainingHours || gameValue !== gameHours;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!draftName.trim() || !hoursOk || !dirty || pending) return;
+    setPending(true);
+    const saved = await onSave({ name: draftName.trim(), trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+    setPending(false);
+    if (saved) onClose();
+  }
+
+  return (
+    <AdminDialog open={open} title={t("team.settings.title")} onClose={onClose}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">{t("team.settings.name")}</span>
+          <input required value={draftName} maxLength={80} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
+        </label>
+        <div>
+          <p className="text-sm font-medium">{t("team.voting.title")}</p>
+          <div className="mt-3 grid grid-cols-2 items-start gap-3">
+            <label className="block text-sm">
+              <span className="text-muted">{t("team.voting.training")}</span>
+              <input required type="number" min={1} max={168} step={1} value={training} onChange={(event) => setTraining(event.target.value)} className={fieldClass} />
+              <span className="mt-1 block text-xs text-muted">{t("team.voting.training.help")}</span>
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">{t("team.voting.game")}</span>
+              <input required type="number" min={1} max={168} step={1} value={game} onChange={(event) => setGame(event.target.value)} className={fieldClass} />
+              <span className="mt-1 block text-xs text-muted">{t("team.voting.game.help")}</span>
+            </label>
+          </div>
+          <p className="mt-3 text-xs text-muted">{t("team.voting.help")}</p>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="submit" disabled={!dirty || !hoursOk || pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {t("actions.save")}
+          </button>
+        </div>
+      </form>
+    </AdminDialog>
+  );
+}
+
 function BalanceDialog({
   open,
   title,
@@ -416,13 +533,13 @@ function BalanceDialog({
 }) {
   const { t } = useLanguage();
   const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("0.00");
+  const [amount, setAmount] = useState("");
   const [negative, setNegative] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDescription("");
-    setAmount("0.00");
+    setAmount("");
     setNegative(false);
   }, [open]);
 
@@ -432,7 +549,7 @@ function BalanceDialog({
     if ((described && !description.trim()) || !Number.isFinite(value) || value <= 0) return;
     onAdd(negative ? -value : value, description.trim());
     setDescription("");
-    setAmount("0.00");
+    setAmount("");
     setNegative(false);
     onClose();
   }
@@ -448,7 +565,7 @@ function BalanceDialog({
         ) : null}
         <label className="block text-sm">
           <span className="text-muted">{t("roster.balance.amount")}</span>
-          <span className="mt-1 flex overflow-hidden rounded-lg bg-ice ring-1 ring-line focus-within:ring-train">
+          <span className="mt-1 flex items-center rounded-lg bg-ice ring-1 ring-line focus-within:ring-train">
             <button
               type="button"
               aria-pressed={negative}
@@ -460,14 +577,16 @@ function BalanceDialog({
             </button>
             <input
               required
-              type="number"
               inputMode="decimal"
-              min="0"
-              step="0.01"
+              placeholder="0,00"
               value={amount}
+              onFocus={() => {
+                if (/^0+([.,]0*)?$/.test(amount)) setAmount("");
+              }}
               onChange={(event) => setAmount(event.target.value)}
-              className="w-full bg-transparent px-3 py-2 text-ink outline-none"
+              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-ink outline-none placeholder:text-muted"
             />
+            <span className="shrink-0 pr-3 text-muted">€</span>
           </span>
         </label>
         <div className="flex justify-end gap-2 pt-2">

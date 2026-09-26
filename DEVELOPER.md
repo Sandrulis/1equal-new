@@ -36,14 +36,14 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard` | Kalendārs bez parauga notikumiem. Pievienot notikumu saglabā `team_events`. Spēļu izklājums atver sastāvu tikai parauga notikumiem, ja modulis `module_game_layout` ir ieslēgts |
+| `/dashboard` | Kalendārs bez parauga notikumiem. Pievienot, labot un dzēst saglabā `team_events`. Vadītājs labo savas komandas notikumus. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
 | `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
 | `/dashboard/team/:id` | Spēlētāja profils. Bilances vēsture ir redzama tikai ar `module_finance` |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Slēpts, ja `module_subteams` ir izslēgts |
 | `/dashboard/venues` | Komandas laukumi. Treniņa cena. Dzēšana paslēpj rindu, neizdzēš to |
 | `/demo/...` | Tie paši skati bez konta un ar visiem moduļiem. `/demo/admin` nav |
 
-Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu un `leader_id`. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, pozīcija, telefons, vairākas apakškomandas un samaksas atbrīvojums. Spēlētāja bilance ir `balance_entries`. Komandas bilances josla augšā ir tikai šīs sesijas saraksts, un to redz, ja finanses ir ieslēgtas. Pievienot bilanci drīkst tikai komandas vadītājs.
+Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu un `leader_id`. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, pozīcija, telefons, vairākas apakškomandas un samaksas atbrīvojums. Balsošana ir atvērta `training_voting_hours` (24) un `game_voting_hours` (72) stundas pirms sākuma. Būs, ja finanses ir ieslēgtas un nav atbrīvojuma, noņem laukuma cenu no `balance_entries` un pieskaita `teams.balance`. Pēc notikuma sākuma `settleFinishedEvents` vienreiz noņem spēles izdevumus un ieraksta `team_ledger`. Tas notiek, kad ielādējas komandas, nevis ar cron. Treniņam izdevumu nav. Dzēšana atdod pieteikušos naudu un atgriež jau norautos izdevumus. Joslas Pievienot bilanci joprojām ir tikai šajā sesijā, un to redz, ja finanses ir ieslēgtas. To drīkst tikai komandas vadītājs.
 
 Zem 600px komandas saites ir apakšējā izvēlne. Adminam turpat augšā ir izvēlne tikai ar admin saitēm. No 600 līdz 1023px josla ir ikonas, tooltip ir blakus ikonai un josla neritinās no tooltip. Komandas poga augšā virs 600px atver sarakstu, zem 600px ved uz kalendāru. No 1024px izvērsta josla maina režģi. Kalendāra saitei skaita nav. Pārējām komandas un admin saitēm labajā pusē ir skaits.
 
@@ -112,6 +112,9 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `015_default_nav_not_modules.sql` | Noņem `module_calendar`, `module_team`, `module_venues` |
 | `016_user_last_seen.sql` | `users.last_seen_at` |
 | `017_team_events.sql` | `team_events`. Spēlei izdevumi, treniņam treneris, apakškomanda nav obligāta |
+| `018_team_voting_hours.sql` | `teams.training_voting_hours`, `teams.game_voting_hours` |
+| `019_event_attendance_balance.sql` | `teams.balance`, `team_event_rsvps`, notikuma ieraksts `balance_entries` |
+| `020_team_event_settlement.sql` | `team_events.settled_at`, `team_ledger` |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 
@@ -132,7 +135,8 @@ app/
   robots.ts sitemap.ts
   components/
     team-dashboard.tsx       # Sānjosla, kalendārs, admin skati, moduļu vārti
-    event-form-dialog.tsx    # Notikuma pievienošana
+    event-form-dialog.tsx    # Notikuma pievienošana un labošana, datuma izvēle
+    event-details.tsx        # Notikuma dati, balsošanas atskaite, labot un dzēst
     team-switcher.tsx        # Komandu saraksts virs 600px
     change-password-dialog.tsx
     admin-users-list.tsx
@@ -147,7 +151,8 @@ app/
     messages.ts              # lv + en
     auth/actions.ts          # signIn, signUp, resetPassword, changePassword, signOut
     frontend-modules.ts      # module_subteams, module_game_layout, module_finance
-    team-actions.ts          # Komandas, dalībnieki, laukumi, bilance, notikumi
+    event-voting.ts          # Balsošanas termiņš un vai notikums ir beidzies
+    team-actions.ts          # Komandas, dalībnieki, laukumi, bilance, notikumi, dalība
     site-admin/              # Zīmols, valodas, tulkojumi, moduļi, saraksti
     integrations/actions.ts  # Integrāciju saglabāšana
 supabase/migrations/
@@ -168,7 +173,6 @@ Noklusējuma solis ir patch +0.0.1. `README.md` rāda **Current version**. Izmai
 
 ## Roadmap
 
-- Kalendāra notikumus rediģēt un dzēst. Pievienot jau var: datums, veids, sākums, laukums, apakškomanda, spēlei izdevumi, treniņam slēdzis ar treneri
-- Komandas bilanci un treniņu vai spēļu maksu glabāt datubāzē. Tagad komandas josla ir tikai šajā sesijā
+- Joslas Pievienot bilanci glabāt datubāzē. Notikumu maksa un spēles izdevumi jau glabājas
 - Uzaicinājuma e-pasts, Turnstile reģistrācijā, Google poga loginā, Resend vēstules un Sentry pārlūkā
 - 2FA lietotāja izvēlnē (tagad tikai aizver izvēlni)

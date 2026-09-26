@@ -1,8 +1,9 @@
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
+import { eventHasEnded } from "@/app/lib/event-voting";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
-import type { IssuedTeam } from "@/app/lib/invite-code";
+import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { Subteam } from "@/app/lib/demo-data";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -29,6 +30,9 @@ type TeamRow = {
   source_url: string | null;
   logo_url: string | null;
   leader_id: string | null;
+  training_voting_hours: number | null;
+  game_voting_hours: number | null;
+  balance: number | string | null;
   updated_at: string;
 };
 
@@ -102,14 +106,57 @@ export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member
   };
 }
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export async function settleFinishedEvents(teamIds: string[]): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin || teamIds.length === 0) return;
+  const open = await admin
+    .from("team_events")
+    .select("id, team_id, event_date, start_time, event_type, expense, settled_at")
+    .in("team_id", teamIds)
+    .is("settled_at", null);
+  if (open.error || !open.data) return;
+  const now = Date.now();
+  for (const row of open.data) {
+    const expense = roundMoney(Number(row.expense));
+    if (!Number.isFinite(expense) || expense <= 0) continue;
+    const date = String(row.event_date).slice(0, 10);
+    if (!eventHasEnded({ date, start: String(row.start_time).slice(0, 5), end: "" }, now)) continue;
+    const claimed = await admin.from("team_events").update({ settled_at: new Date().toISOString() }).eq("id", row.id).is("settled_at", null).select("id");
+    if (claimed.error || !claimed.data?.length) continue;
+    const inserted = await admin.from("team_ledger").insert({
+      team_id: row.team_id,
+      event_id: row.id,
+      amount: -expense,
+      event_date: date,
+      event_type: row.event_type === "game" ? "game" : "training",
+    });
+    if (inserted.error) {
+      await admin.from("team_events").update({ settled_at: null }).eq("id", row.id);
+      continue;
+    }
+    const team = await admin.from("teams").select("balance").eq("id", row.team_id).maybeSingle();
+    const next = roundMoney(Number(team.data?.balance ?? 0) - expense);
+    const bumped = await admin.from("teams").update({ balance: next }).eq("id", row.team_id);
+    if (bumped.error) {
+      await admin.from("team_ledger").delete().eq("event_id", row.id);
+      await admin.from("team_events").update({ settled_at: null }).eq("id", row.id);
+    }
+  }
+}
+
 export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
   const admin = createAdminClient();
   if (!admin) return [];
   const mine = await admin.from("team_members").select("team_id").eq("user_id", userId);
   if (mine.error || !mine.data?.length) return [];
   const teamIds = mine.data.map((row) => row.team_id);
-  const [teams, members, groups, links, entries, places, events] = await Promise.all([
-    admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
+  await settleFinishedEvents(teamIds);
+  const [teams, members, groups, links, entries, places, events, rsvps, ledgerRows] = await Promise.all([
+    admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     admin
       .from("team_members")
       .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name)")
@@ -119,6 +166,8 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     admin.from("balance_entries").select("id, team_id, user_id, amount, created_at").in("team_id", teamIds).order("created_at", { ascending: false }),
     admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").in("team_id", teamIds),
     admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach").in("team_id", teamIds).order("event_date").order("start_time"),
+    admin.from("team_event_rsvps").select("team_id, event_id, user_id, status").in("team_id", teamIds),
+    admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").in("team_id", teamIds).order("created_at", { ascending: false }),
   ]);
   if (teams.error || !teams.data || members.error || !members.data) return [];
   const idsByMember = new Map<string, string[]>();
@@ -181,6 +230,22 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
       sourceUrl: team.source_url,
       logoUrl: team.logo_url,
       leaderId: team.leader_id,
+      trainingVotingHours: team.training_voting_hours ?? 24,
+      gameVotingHours: team.game_voting_hours ?? 72,
+      balance: Number(team.balance ?? 0),
+      ledger: ((ledgerRows.data ?? []) as { id: string; team_id: string; event_id: string | null; amount: number | string; event_date: string; event_type: string; created_at: string }[])
+        .filter((row) => row.team_id === team.id)
+        .map((row): TeamLedgerLine => ({
+          id: row.id,
+          amount: Number(row.amount),
+          at: toLocalDateTimeStamp(row.created_at),
+          eventId: row.event_id,
+          eventDate: String(row.event_date).slice(0, 10),
+          eventType: row.event_type === "game" ? "game" : "training",
+        })),
+      rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string }[])
+        .filter((row) => row.team_id === team.id && (row.status === "going" || row.status === "absent"))
+        .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
       members: byTeam.get(team.id) ?? [],
       subteams: subteamsByTeam.get(team.id) ?? [],
       venues: venuesByTeam.get(team.id) ?? [],

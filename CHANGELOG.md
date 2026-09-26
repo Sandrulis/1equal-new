@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.6
+
+- Notikumu var labot un dzēst. Dzēšana atdod pieteikušos naudu un atgriež jau norautos spēles izdevumus
+- Būs noņem laukuma cenu no spēlētāja uz komandu. Pēc notikuma sākuma spēles izdevumi vienreiz noiet no komandas bilances
+- Balsošanas stundas, atskaite un datuma izvēle notikuma formā. Kalendāra notikums, kam vēl jābalso, pulsē
+
 ## v0.1.5
 
 - Ielogotā komandas kalendārā vairs nerādās parauga spēles un treniņi

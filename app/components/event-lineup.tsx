@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { defaultRsvp, type Rsvp } from "@/app/components/event-details";
+import { memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { IconCheck, IconChevronLeft } from "@/app/components/icon-tip-button";
-import { MEMBERS, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { formatDisplayDate } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
-import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 export type SlotMap = Record<number, string>;
 export type SideMap = Record<string, "black" | "white">;
@@ -51,10 +50,8 @@ const TONE: Record<Tone, { idle: string; filled: string }> = {
   },
 };
 
-function goingMembers(event: TeamEvent, rsvp: Record<string, Rsvp> | undefined): Member[] {
-  return MEMBERS.filter((member) => member.subteamId === event.subteamId)
-    .sort((a, b) => a.name.localeCompare(b.name, "lv"))
-    .filter((member, index) => (rsvp?.[member.id] ?? defaultRsvp(event.id, index)) === "going");
+function goingMembers(event: TeamEvent, members: Member[], rsvp: Record<string, Rsvp> | undefined, knownRsvp: boolean): Member[] {
+  return members.filter((member, index) => memberRsvp(event.id, member.id, index, rsvp, knownRsvp) === "going");
 }
 
 function slotKey(map: SlotMap): string {
@@ -92,6 +89,10 @@ function pruneSides(map: SideMap, going: Member[]): SideMap {
 
 export function EventLineup({
   event,
+  members,
+  venueName,
+  subteamName,
+  knownRsvp = false,
   rsvp,
   savedSlots,
   savedSides,
@@ -100,6 +101,10 @@ export function EventLineup({
   onBack,
 }: {
   event: TeamEvent;
+  members: Member[];
+  venueName: string;
+  subteamName: string;
+  knownRsvp?: boolean;
   rsvp: Record<string, Rsvp> | undefined;
   savedSlots: SlotMap;
   savedSides: SideMap;
@@ -107,12 +112,14 @@ export function EventLineup({
   onSaveSides: (sides: SideMap) => void;
   onBack: () => void;
 }) {
-  const going = useMemo(() => goingMembers(event, rsvp), [event, rsvp]);
+  const going = useMemo(() => goingMembers(event, members, rsvp, knownRsvp), [event, members, rsvp, knownRsvp]);
   if (event.type === "game") {
     return (
       <GameLineup
         event={event}
         going={going}
+        venueName={venueName}
+        subteamName={subteamName}
         saved={pruneSlots(savedSlots, going)}
         onSave={onSaveSlots}
         onBack={onBack}
@@ -132,18 +139,21 @@ export function EventLineup({
 function GameLineup({
   event,
   going,
+  venueName,
+  subteamName,
   saved,
   onSave,
   onBack,
 }: {
   event: TeamEvent;
   going: Member[];
+  venueName: string;
+  subteamName: string;
   saved: SlotMap;
   onSave: (slots: SlotMap) => void;
   onBack: () => void;
 }) {
   const { t } = useLanguage();
-  const { subteamById, venueById } = useTeamCatalog();
   const [slots, setSlots] = useState<SlotMap>(saved);
   const [baseline, setBaseline] = useState(slotKey(saved));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -177,11 +187,11 @@ function GameLineup({
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col items-center pb-8">
-      <h1 className="text-2xl font-semibold tracking-tight">{subteamById(event.subteamId)?.name}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{subteamName}</h1>
       <p className="mt-1 text-sm text-muted">
         {formatDisplayDate(event.date)} {event.start}
       </p>
-      <p className="text-sm text-muted">{venueById(event.venueId)?.name}</p>
+      <p className="text-sm text-muted">{venueName}</p>
 
       <p className="mt-4 text-center text-sm text-muted">{t("lineup.pick")}</p>
       <div className="mt-2 flex min-h-9 flex-wrap justify-center gap-2">

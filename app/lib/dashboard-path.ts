@@ -31,9 +31,15 @@ export function parseDashboardPath(path: string[] | undefined, options?: { demoE
     if (section) return { view: "admin", section };
   }
   const demoEvents = options?.demoEvents ?? true;
-  const eventKnown = demoEvents && parts[0] === "events" && EVENTS.some((event) => event.id === parts[1]);
-  if (eventKnown && parts.length === 2) return { view: "home", eventId: parts[1], lineup: false };
-  if (eventKnown && parts.length === 3 && parts[2] === "lineup") return { view: "home", eventId: parts[1], lineup: true };
+  const eventId = parts[1];
+  const eventPath = parts[0] === "events" && Boolean(eventId && /^[A-Za-z0-9-]+$/.test(eventId));
+  const catalogEvent = EVENTS.some((event) => event.id === eventId);
+  if (eventPath && (demoEvents || !catalogEvent) && parts.length === 2) {
+    return { view: "home", eventId, lineup: false };
+  }
+  if (eventPath && (demoEvents || !catalogEvent) && parts.length === 3 && parts[2] === "lineup") {
+    return { view: "home", eventId, lineup: true };
+  }
   return null;
 }
 

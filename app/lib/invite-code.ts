@@ -2,6 +2,15 @@ import { TEAM_NAME, type Member, type Subteam, type TeamEvent, type Venue } from
 
 export const DEMO_INVITE_CODE = "RIGA4K";
 
+export type TeamLedgerLine = {
+  id: string;
+  amount: number;
+  at: string;
+  eventId: string | null;
+  eventDate: string;
+  eventType: "game" | "training";
+};
+
 export type IssuedTeam = {
   id?: string;
   name: string;
@@ -10,6 +19,11 @@ export type IssuedTeam = {
   sourceUrl?: string | null;
   logoUrl?: string | null;
   leaderId?: string | null;
+  trainingVotingHours?: number;
+  gameVotingHours?: number;
+  balance?: number;
+  ledger?: TeamLedgerLine[];
+  rsvps?: { eventId: string; userId: string; status: "going" | "absent" }[];
   members?: Member[];
   subteams?: Subteam[];
   venues?: Venue[];

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminDialog } from "@/app/components/admin-dialog";
 import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { formatDisplayDate, formatMoney } from "@/app/lib/format";
@@ -27,9 +28,6 @@ function roleKey(role: Member["role"]): MessageKey {
 export function PlayerProfile({ member, subteams, finance = true }: { member: Member; subteams?: Subteam[]; finance?: boolean }) {
   const { t } = useLanguage();
   const { subteamById } = useTeamCatalog();
-  const usingLedger = member.ledger != null;
-  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
-  const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const groups = ids.map((id) => subteams?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const jersey = formatJersey(member.number);
@@ -79,46 +77,64 @@ export function PlayerProfile({ member, subteams, finance = true }: { member: Me
 
       {member.ehl ? <PlayerEhl profile={member.ehl} /> : null}
 
-      {finance ? <section className="rounded-2xl bg-paper ring-1 ring-line">
-        <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
-        {charges.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-muted sm:px-5">{t(usingLedger ? "player.ledger.empty" : "player.empty")}</p>
-        ) : (
-          <>
-            <ul className="mt-3 divide-y divide-line md:hidden">
-              {charges.map((charge) => (
-                <ChargeRow key={charge.id} charge={charge} />
-              ))}
-              <TotalRow total={total} />
-            </ul>
-            <div className="mt-2 hidden overflow-x-auto md:block">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-line text-xs tracking-wide text-muted uppercase">
-                    <th className="px-5 py-3 font-medium">{t("player.date")}</th>
-                    <th className="px-5 py-3 font-medium">{t("player.event")}</th>
-                    <th className="px-5 py-3 text-right font-medium">{t("player.payment")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {charges.map((charge) => (
-                    <ChargeTableRow key={charge.id} charge={charge} />
-                  ))}
-                  <tr className="border-t border-line">
-                    <td className="px-5 py-3 font-semibold" colSpan={2}>
-                      {t("player.total")}
-                    </td>
-                    <td className={`px-5 py-3 text-right font-semibold tabular-nums ${total < 0 ? "text-game" : "text-ink"}`}>
-                      {formatMoney(total)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </section> : null}
+      {finance ? (
+        <section className="rounded-2xl bg-paper ring-1 ring-line">
+          <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
+          <PlayerBalanceLog member={member} />
+        </section>
+      ) : null}
     </div>
+  );
+}
+
+export function PlayerBalanceDialog({ member, onClose }: { member: Member; onClose: () => void }) {
+  const { t } = useLanguage();
+  return (
+    <AdminDialog open title={t("player.log")} onClose={onClose} wide closeButton>
+      <PlayerBalanceLog member={member} />
+    </AdminDialog>
+  );
+}
+
+export function PlayerBalanceLog({ member }: { member: Member }) {
+  const { t } = useLanguage();
+  const usingLedger = member.ledger != null;
+  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
+  const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
+  if (charges.length === 0) {
+    return <p className="px-4 py-8 text-sm text-muted sm:px-5">{t(usingLedger ? "player.ledger.empty" : "player.empty")}</p>;
+  }
+  return (
+    <>
+      <ul className="mt-3 divide-y divide-line md:hidden">
+        {charges.map((charge) => (
+          <ChargeRow key={charge.id} charge={charge} />
+        ))}
+        <TotalRow total={total} />
+      </ul>
+      <div className="mt-2 hidden overflow-x-auto md:block">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-line text-xs tracking-wide text-muted uppercase">
+              <th className="px-5 py-3 font-medium">{t("player.date")}</th>
+              <th className="px-5 py-3 font-medium">{t("player.event")}</th>
+              <th className="px-5 py-3 text-right font-medium">{t("player.payment")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {charges.map((charge) => (
+              <ChargeTableRow key={charge.id} charge={charge} />
+            ))}
+            <tr className="border-t border-line">
+              <td className="px-5 py-3 font-semibold" colSpan={2}>
+                {t("player.total")}
+              </td>
+              <td className={`px-5 py-3 text-right font-semibold tabular-nums ${total < 0 ? "text-game" : "text-ink"}`}>{formatMoney(total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

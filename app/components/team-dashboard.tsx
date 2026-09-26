@@ -4,12 +4,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { EVENTS, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { CURRENT_USER_ID, EVENTS, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
-import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
-import { createOwnedEvent, createOwnedTeam, joinOwnedTeam } from "@/app/lib/team-actions";
+import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam, type TeamLedgerLine } from "@/app/lib/invite-code";
+import { AdminDialog } from "@/app/components/admin-dialog";
+import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, setEventAttendance, updateOwnedEvent } from "@/app/lib/team-actions";
 import {
   formatDisplayDate,
   formatDuration,
@@ -23,7 +24,7 @@ import {
 } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
-import { EventDetails, type Rsvp } from "@/app/components/event-details";
+import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
@@ -46,6 +47,7 @@ import { SubteamAdmin } from "@/app/components/subteam-admin";
 import { TeamRoster } from "@/app/components/team-roster";
 import { VenueAdmin } from "@/app/components/venue-admin";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
+import { eventAudienceIncludes, eventHasEnded, eventVotingDeadline } from "@/app/lib/event-voting";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 type TypeFilter = "all" | EventType;
@@ -93,9 +95,30 @@ function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; g
   );
 }
 
+function membersForEvent(event: TeamEvent, roster: Member[]): Member[] {
+  const pool = roster.filter((member) => eventAudienceIncludes(event, member));
+  return [...pool].sort((a, b) => a.name.localeCompare(b.name, "lv"));
+}
+
+function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
 function eventTitleKey(titleId: string): MessageKey {
   return `event.${titleId}` as MessageKey;
 }
+
+const demoAttendanceMoney = { player: {} as Record<string, number>, team: 0 };
+const demoAttendanceRsvp: Record<string, Record<string, Rsvp>> = {};
+const demoEventCharges: TeamLedgerLine[] = [];
+const demoAddedEvents: TeamEvent[] = [];
+const demoHiddenEventIds: string[] = [];
+const demoEventEdits: Record<string, TeamEvent> = {};
 
 export function TeamDashboard({
   basePath,
@@ -118,7 +141,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${(team.events ?? []).map((item) => item.id).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}`).join("|");
   const preferredCode = useRef<string | null>(null);
   preferredCode.current = ownedTeam?.code ?? preferredCode.current;
   useEffect(() => {
@@ -129,6 +152,9 @@ export function TeamDashboard({
     if (!next) return;
     setOwnedTeam(next);
     setTeams(listMyTeams());
+    const seeded: Record<string, Record<string, Rsvp>> = {};
+    for (const row of next.rsvps ?? []) seeded[row.eventId] = { ...seeded[row.eventId], [row.userId]: row.status };
+    setRsvp(seeded);
   }, [account, initialTeams, serverTeams]);
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -168,6 +194,14 @@ export function TeamDashboard({
     const team = selectMyTeam(code);
     if (!team) return;
     setOwnedTeam(team);
+  }
+
+  function rememberTeam(patch: { name: string; trainingVotingHours: number; gameVotingHours: number }) {
+    if (!ownedTeam) return;
+    const next = { ...ownedTeam, ...patch };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
   }
 
   function rememberMember(member: Member, teamCode: string) {
@@ -248,8 +282,13 @@ export function TeamDashboard({
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
-  const [demoEvents, setDemoEvents] = useState<TeamEvent[]>([]);
+  const [demoEvents, setDemoEvents] = useState<TeamEvent[]>(() => demoAddedEvents.slice());
+  const [eventEdits, setEventEdits] = useState<Record<string, TeamEvent>>(() => ({ ...demoEventEdits }));
+  const [hiddenEventIds, setHiddenEventIds] = useState<string[]>(() => demoHiddenEventIds.slice());
+  const [demoCharges, setDemoCharges] = useState<TeamLedgerLine[]>(() => demoEventCharges.slice());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [adminNavOpen, setAdminNavOpen] = useState(false);
   const [compactRail, setCompactRail] = useState(false);
@@ -290,16 +329,24 @@ export function TeamDashboard({
   }, [adminNavOpen]);
   const [savedSlots, setSavedSlots] = useState<Record<string, SlotMap>>({});
   const [savedSides, setSavedSides] = useState<Record<string, SideMap>>({});
-  const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>({});
+  const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>(() => {
+    const next: Record<string, Record<string, Rsvp>> = {};
+    for (const [eventId, rows] of Object.entries(demoAttendanceRsvp)) next[eventId] = { ...rows };
+    return next;
+  });
+  const rsvpRef = useRef(rsvp);
+  rsvpRef.current = rsvp;
+  const [demoPlayerDelta, setDemoPlayerDelta] = useState<Record<string, number>>(() => ({ ...demoAttendanceMoney.player }));
+  const [demoTeamDelta, setDemoTeamDelta] = useState(() => demoAttendanceMoney.team);
   const pendingAnchor = useRef<string | null>(null);
 
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
   const calendarEvents = useMemo(() => {
-    if (basePath === "/demo") return [...EVENTS, ...demoEvents];
-    return ownedTeam?.events ?? [];
-  }, [basePath, demoEvents, ownedTeam]);
+    const source = basePath === "/demo" ? [...EVENTS, ...demoEvents] : (ownedTeam?.events ?? []);
+    return source.filter((event) => !hiddenEventIds.includes(event.id)).map((event) => eventEdits[event.id] ?? event);
+  }, [basePath, demoEvents, eventEdits, hiddenEventIds, ownedTeam]);
 
   const filtered = useMemo(() => {
     return calendarEvents.filter((event) => {
@@ -357,12 +404,53 @@ export function TeamDashboard({
     }, 0);
   }
 
-  function setMemberRsvp(memberId: string, status: Rsvp) {
+  async function setMemberRsvp(memberId: string, status: Rsvp) {
     if (!openEventId) return;
+    const eventId = openEventId;
+    const previous = rsvp[eventId]?.[memberId] ?? demoAttendanceRsvp[eventId]?.[memberId] ?? "pending";
+    demoAttendanceRsvp[eventId] = { ...demoAttendanceRsvp[eventId], [memberId]: status };
     setRsvp((current) => ({
       ...current,
-      [openEventId]: { ...current[openEventId], [memberId]: status },
+      [eventId]: { ...current[eventId], [memberId]: status },
     }));
+    if (basePath === "/demo" || !ownedTeam?.id) {
+      const event = calendarEvents.find((item) => item.id === eventId);
+      const price = event ? Math.round((venues.find((item) => item.id === event.venueId)?.pricePerHour ?? 0) * 100) / 100 : 0;
+      const member = MEMBERS.find((item) => item.id === memberId);
+      const wasGoing = previous === "going";
+      const nowGoing = status === "going";
+      if (moduleOn(FRONTEND_MODULE_KEYS.finance) && event && member && !member.feeExempt && price > 0 && wasGoing !== nowGoing) {
+        const playerStep = nowGoing ? -price : price;
+        const teamStep = nowGoing ? price : -price;
+        const nextPlayer = Math.round(((demoAttendanceMoney.player[memberId] ?? 0) + playerStep) * 100) / 100;
+        demoAttendanceMoney.player[memberId] = nextPlayer;
+        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team + teamStep) * 100) / 100;
+        setDemoPlayerDelta({ ...demoAttendanceMoney.player });
+        setDemoTeamDelta(demoAttendanceMoney.team);
+      }
+      return;
+    }
+    const result = await setEventAttendance({ teamId: ownedTeam.id, eventId, userId: memberId, status });
+    if ((rsvpRef.current[eventId]?.[memberId] ?? "pending") !== status) return;
+    if (!result.ok) {
+      demoAttendanceRsvp[eventId] = { ...demoAttendanceRsvp[eventId], [memberId]: previous };
+      setRsvp((current) => ({
+        ...current,
+        [eventId]: { ...current[eventId], [memberId]: previous },
+      }));
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    const members = (ownedTeam.members ?? []).map((member) =>
+      member.id === memberId ? { ...member, balance: result.memberBalance, ledger: result.ledger } : member,
+    );
+    const rsvps = (ownedTeam.rsvps ?? []).filter((row) => !(row.eventId === eventId && row.userId === memberId));
+    if (status === "going" || status === "absent") rsvps.push({ eventId, userId: memberId, status });
+    const next = { ...ownedTeam, members, balance: result.teamBalance, rsvps };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+    router.refresh();
   }
 
   function toggleVenue(id: string) {
@@ -375,49 +463,155 @@ export function TeamDashboard({
     setVenueId(null);
   }
 
+  function eventFromInput(id: string, input: NewEventInput, previous?: TeamEvent): TeamEvent {
+    return {
+      id,
+      date: input.date,
+      start: input.start,
+      end: previous?.end ?? "",
+      type: input.type,
+      titleId: previous?.titleId ?? "",
+      subteamId: input.subteamId ?? "",
+      venueId: input.venueId,
+      expense: input.expense,
+      withCoach: input.withCoach,
+    };
+  }
+
   async function addEvent(input: NewEventInput) {
     if (savingEvent) return;
+    const editing = editingEvent;
     if (basePath === "/demo" || !ownedTeam?.id) {
-      setDemoEvents((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          date: input.date,
-          start: input.start,
-          end: "",
-          type: input.type,
-          titleId: "",
-          subteamId: input.subteamId ?? "",
-          venueId: input.venueId,
-          expense: input.expense,
-          withCoach: input.withCoach,
-        },
-      ]);
+      if (editing) {
+        const nextEvent = eventFromInput(editing.id, input, editing);
+        const index = demoAddedEvents.findIndex((item) => item.id === editing.id);
+        if (index >= 0) demoAddedEvents[index] = nextEvent;
+        demoEventEdits[editing.id] = nextEvent;
+        setDemoEvents(demoAddedEvents.slice());
+        setEventEdits({ ...demoEventEdits });
+      } else {
+        demoAddedEvents.push(eventFromInput(crypto.randomUUID(), input));
+        setDemoEvents(demoAddedEvents.slice());
+      }
       const picked = parseIsoDate(input.date);
       setYear(picked.getFullYear());
       setMonth(picked.getMonth());
       setSelectedIso(input.date);
       setAddingEvent(false);
-      showFeedback({ message: t("event.add.saved"), variant: "success" });
+      setEditingEvent(null);
+      showFeedback({ message: t(editing ? "event.edit.saved" : "event.add.saved"), variant: "success" });
       return;
     }
     setSavingEvent(true);
-    const result = await createOwnedEvent({ teamId: ownedTeam.id, ...input });
-    setSavingEvent(false);
-    if (!result.ok) {
-      showFeedback({ message: t(result.error), variant: "error" });
-      return;
+    let savedTeam: IssuedTeam;
+    if (editing) {
+      const updated = await updateOwnedEvent({ teamId: ownedTeam.id, eventId: editing.id, ...input });
+      setSavingEvent(false);
+      if (!updated.ok) {
+        showFeedback({ message: t(updated.error), variant: "error" });
+        return;
+      }
+      savedTeam = {
+        ...ownedTeam,
+        events: (ownedTeam.events ?? []).map((item) => (item.id === updated.event.id ? updated.event : item)),
+        balance: updated.teamBalance,
+        ledger: updated.ledger,
+      };
+    } else {
+      const created = await createOwnedEvent({ teamId: ownedTeam.id, ...input });
+      setSavingEvent(false);
+      if (!created.ok) {
+        showFeedback({ message: t(created.error), variant: "error" });
+        return;
+      }
+      savedTeam = { ...ownedTeam, events: [...(ownedTeam.events ?? []), created.event] };
     }
-    const next = { ...ownedTeam, events: [...(ownedTeam.events ?? []), result.event] };
-    setCurrentTeam(next);
-    setOwnedTeam(next);
+    setCurrentTeam(savedTeam);
+    setOwnedTeam(savedTeam);
     setTeams(listMyTeams());
     const picked = parseIsoDate(input.date);
     setYear(picked.getFullYear());
     setMonth(picked.getMonth());
     setSelectedIso(input.date);
     setAddingEvent(false);
-    showFeedback({ message: t("event.add.saved"), variant: "success" });
+    setEditingEvent(null);
+    showFeedback({ message: t(editing ? "event.edit.saved" : "event.add.saved"), variant: "success" });
+    router.refresh();
+  }
+
+  function refundDemoEvent(event: TeamEvent) {
+    const rows = demoAttendanceRsvp[event.id] ?? {};
+    const price = Math.round((venues.find((item) => item.id === event.venueId)?.pricePerHour ?? 0) * 100) / 100;
+    for (const [userId, status] of Object.entries(rows)) {
+      if (status !== "going" || price <= 0) continue;
+      const member = MEMBERS.find((item) => item.id === userId);
+      if (!member || member.feeExempt) continue;
+      demoAttendanceMoney.player[userId] = Math.round(((demoAttendanceMoney.player[userId] ?? 0) + price) * 100) / 100;
+      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - price) * 100) / 100;
+    }
+    delete demoAttendanceRsvp[event.id];
+    const chargeIndex = demoEventCharges.findIndex((line) => line.eventId === event.id);
+    if (chargeIndex >= 0) {
+      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - demoEventCharges[chargeIndex].amount) * 100) / 100;
+      demoEventCharges.splice(chargeIndex, 1);
+    }
+    setDemoPlayerDelta({ ...demoAttendanceMoney.player });
+    setDemoTeamDelta(demoAttendanceMoney.team);
+    setDemoCharges(demoEventCharges.slice());
+    setRsvp((current) => {
+      const next = { ...current };
+      delete next[event.id];
+      return next;
+    });
+  }
+
+  async function removeEvent(event: TeamEvent) {
+    if (savingEvent) return;
+    if (basePath === "/demo" || !ownedTeam?.id) {
+      refundDemoEvent(event);
+      const added = demoAddedEvents.findIndex((item) => item.id === event.id);
+      if (added >= 0) demoAddedEvents.splice(added, 1);
+      if (!demoHiddenEventIds.includes(event.id)) demoHiddenEventIds.push(event.id);
+      delete demoEventEdits[event.id];
+      setDemoEvents(demoAddedEvents.slice());
+      setHiddenEventIds(demoHiddenEventIds.slice());
+      setEventEdits({ ...demoEventEdits });
+      setDeleteTarget(null);
+      showFeedback({ message: t("event.delete.saved"), variant: "success" });
+      router.push(basePath);
+      return;
+    }
+    setSavingEvent(true);
+    const result = await deleteOwnedEvent({ teamId: ownedTeam.id, eventId: event.id });
+    setSavingEvent(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    const refunded = new Map(result.refunds.map((row) => [row.userId, row]));
+    const members = (ownedTeam.members ?? []).map((member) => {
+      const refund = refunded.get(member.id);
+      return refund ? { ...member, balance: refund.balance, ledger: refund.ledger } : member;
+    });
+    const next = {
+      ...ownedTeam,
+      events: (ownedTeam.events ?? []).filter((item) => item.id !== event.id),
+      members,
+      balance: result.teamBalance,
+      ledger: result.ledger,
+      rsvps: (ownedTeam.rsvps ?? []).filter((row) => row.eventId !== event.id),
+    };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+    setRsvp((current) => {
+      const copy = { ...current };
+      delete copy[event.id];
+      return copy;
+    });
+    setDeleteTarget(null);
+    showFeedback({ message: t("event.delete.saved"), variant: "success" });
+    router.push(basePath);
     router.refresh();
   }
 
@@ -484,6 +678,8 @@ export function TeamDashboard({
   const activeModule = view === "admin" ? undefined : viewModule[view];
   const moduleVisible = !activeModule || moduleOn(activeModule);
   const lineupAllowed = moduleOn(FRONTEND_MODULE_KEYS.gameLayout);
+  const roster = activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : MEMBERS;
+  const knownRsvp = Boolean(activeTeam && !activeTeam.demo && activeTeam.id);
   const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
   const lineupBlocked = lineup && !lineupAllowed;
   const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? MEMBERS.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
@@ -508,6 +704,69 @@ export function TeamDashboard({
     window.scrollTo({ top: 0 });
   }
 
+  const now = useNow();
+  useEffect(() => {
+    if (basePath !== "/demo") return;
+    let changed = false;
+    for (const event of calendarEvents) {
+      const cost = event.type === "game" && event.expense != null ? Math.round(event.expense * 100) / 100 : 0;
+      const existing = demoEventCharges.find((line) => line.eventId === event.id);
+      if (!eventHasEnded(event, now) || cost <= 0) {
+        if (!existing) continue;
+        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - existing.amount) * 100) / 100;
+        demoEventCharges.splice(demoEventCharges.indexOf(existing), 1);
+        changed = true;
+        continue;
+      }
+      if (existing) {
+        if (existing.amount === -cost && existing.eventDate === event.date && existing.eventType === event.type) continue;
+        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - existing.amount - cost) * 100) / 100;
+        existing.amount = -cost;
+        existing.eventDate = event.date;
+        existing.eventType = event.type;
+        changed = true;
+        continue;
+      }
+      demoEventCharges.push({
+        id: `charge-${event.id}`,
+        amount: -cost,
+        at: new Date().toISOString(),
+        eventId: event.id,
+        eventDate: event.date,
+        eventType: event.type,
+      });
+      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - cost) * 100) / 100;
+      changed = true;
+    }
+    if (!changed) return;
+    setDemoCharges(demoEventCharges.slice());
+    setDemoTeamDelta(demoAttendanceMoney.team);
+  }, [basePath, calendarEvents, now]);
+  const voteTraining = activeTeam?.trainingVotingHours ?? 24;
+  const voteGame = activeTeam?.gameVotingHours ?? 72;
+  const selfMember = !activeTeam || showStart
+    ? null
+    : !account || activeTeam.demo
+      ? (() => {
+          const base = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? null;
+          if (!base) return null;
+          const delta = demoPlayerDelta[base.id] ?? 0;
+          return delta ? { ...base, balance: Math.round((base.balance + delta) * 100) / 100 } : base;
+        })()
+      : (activeTeam.members ?? []).find((member) => member.id === profile?.id) ?? null;
+  const pendingVoteEvents = selfMember
+    ? calendarEvents
+        .filter((event) => {
+          if (!eventVotingOpen(event, voteTraining, voteGame, now)) return false;
+          if (!eventAudienceIncludes(event, selfMember)) return false;
+          const people = membersForEvent(event, roster);
+          const index = people.findIndex((member) => member.id === selfMember.id);
+          if (index < 0) return false;
+          return memberRsvp(event.id, selfMember.id, index, rsvp[event.id], knownRsvp) === "pending";
+        })
+        .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+    : [];
+  const pendingVoteIds = new Set(pendingVoteEvents.map((event) => event.id));
   const cells = monthCells(year, month);
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
@@ -618,10 +877,29 @@ export function TeamDashboard({
         onSettingsOpenChange={setSettingsOpen}
         onAccountChange={setProfile}
         onOpenAdmin={account?.isAdmin ? () => setAdminNavOpen(true) : undefined}
+        balanceMember={financeAllowed ? selfMember : null}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {account && ownedTeam && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
           <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
+        ) : null}
+        {!showStart && pendingVoteEvents.length ? (
+          <div role="status" className="mb-4 rounded-2xl bg-game-soft px-4 py-3 ring-1 ring-line">
+            <p className="text-sm font-medium">{t("event.vote.needed")}</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {pendingVoteEvents.slice(0, 6).map((event) => (
+                <li key={event.id}>
+                  <button
+                    type="button"
+                    onClick={() => showEvent(event, parseIsoDate(event.date))}
+                    className="rounded-lg bg-paper px-2.5 py-1 text-sm tabular-nums hover:ring-1 hover:ring-line"
+                  >
+                    {formatDisplayDate(event.date)} {event.start} {t(event.type === "game" ? "legend.game" : "legend.training")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
         {showStart ? <NoTeamStart onCreate={createTeam} onJoin={joinTeam} /> : null}
         {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart ? (
@@ -631,6 +909,10 @@ export function TeamDashboard({
           <EventLineup
             key={lineupEvent.id}
             event={lineupEvent}
+            members={membersForEvent(lineupEvent, roster)}
+            venueName={venueSource.find((item) => item.id === lineupEvent.venueId)?.name ?? ""}
+            subteamName={filterSubteams.find((item) => item.id === lineupEvent.subteamId)?.name ?? ""}
+            knownRsvp={knownRsvp}
             rsvp={rsvp[lineupEvent.id]}
             savedSlots={savedSlots[lineupEvent.id] ?? {}}
             savedSides={savedSides[lineupEvent.id] ?? {}}
@@ -649,7 +931,14 @@ export function TeamDashboard({
             teamId={activeTeam.id ?? null}
             leaderId={activeTeam.leaderId ?? null}
             accountId={profile?.id ?? null}
-            initialMembers={activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]}
+            trainingVotingHours={activeTeam.trainingVotingHours ?? 24}
+            gameVotingHours={activeTeam.gameVotingHours ?? 72}
+            onTeamSaved={rememberTeam}
+            initialMembers={(activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
+              const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
+              if (!delta) return member;
+              return { ...member, balance: Math.round((member.balance + delta) * 100) / 100 };
+            })}
             memberId={route.view === "team" ? route.memberId : null}
             onOpenMember={(id) => router.push(teamHref(basePath, id))}
             onCloseMember={() => router.push(teamHref(basePath))}
@@ -657,6 +946,16 @@ export function TeamDashboard({
             onMemberSaved={rememberMember}
             onMemberRemoved={forgetMember}
             finance={financeAllowed}
+            persistedBalance={activeTeam.demo ? demoTeamDelta : (activeTeam.balance ?? 0)}
+            persistedEntries={(activeTeam.demo ? demoCharges : (activeTeam.ledger ?? [])).map((line) => ({
+              id: line.id,
+              amount: line.amount,
+              at: line.at,
+              description: t("team.ledger.event", {
+                type: t(line.eventType === "game" ? "legend.game" : "legend.training"),
+                date: formatDisplayDate(line.eventDate),
+              }),
+            }))}
           />
         ) : null}
         {view === "subteams" && !showStart && moduleVisible ? (
@@ -792,15 +1091,7 @@ export function TeamDashboard({
                       onClick={() => selectDay(date)}
                       className={`flex min-h-16 cursor-pointer flex-col border-grid px-1.5 py-1.5 text-left sm:min-h-[104px] sm:px-2 ${
                         column < 6 ? "border-r" : ""
-                      } ${lastRow ? "" : "border-b"} ${
-                        selected
-                          ? isToday
-                            ? "bg-[#e7eef4]"
-                            : "bg-[#e7eef4] shadow-[inset_0_0_0_2px_#102433]"
-                          : inMonth
-                            ? "bg-paper hover:bg-ice"
-                            : "bg-[#f6f8fa] hover:bg-ice"
-                      }`}
+                      } ${lastRow ? "" : "border-b"} ${selected ? "bg-[#e7eef4]" : inMonth ? "bg-paper hover:bg-ice" : "bg-[#f6f8fa] hover:bg-ice"}`}
                     >
                       <button
                         type="button"
@@ -828,14 +1119,13 @@ export function TeamDashboard({
                               type="button"
                               onClick={(click) => {
                                 click.stopPropagation();
-                                if (event.titleId) showEvent(event, date);
-                                else selectDay(date);
+                                showEvent(event, date);
                               }}
                               className={`truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 max-[499px]:text-clip ${
                                 event.type === "game"
                                   ? "border-game bg-game-soft text-game"
                                   : "border-train bg-train-soft text-train"
-                              } ${openEventId === event.id ? "ring-1 ring-navy" : ""}`}
+                              } ${openEventId === event.id ? "ring-1 ring-navy" : ""} ${pendingVoteIds.has(event.id) ? "vote-pulse" : ""}`}
                             >
                               <span className="max-[499px]:hidden">{label}</span>
                               <span className="hidden tabular-nums max-[499px]:inline">{event.start}</span>
@@ -880,7 +1170,7 @@ export function TeamDashboard({
                   const game = event.type === "game";
                   return (
                     <li key={event.id} className={`rounded-xl bg-ice p-3 ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
-                      {lineupAllowed && event.titleId ? (
+                      {lineupAllowed ? (
                         <button type="button" onClick={() => openLineup(event)} className="w-full text-left">
                           <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
                         </button>
@@ -903,6 +1193,7 @@ export function TeamDashboard({
                           {formatDuration(hoursBetween(event.start, event.end))} × {formatMoney(venue?.pricePerHour ?? 0)}/h
                         </p>
                       ) : null}
+                      <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} className="mt-2" />
                     </li>
                   );
                 })}
@@ -911,24 +1202,52 @@ export function TeamDashboard({
           </aside>
           </div>
         </section>
-        {addingEvent ? (
+        {addingEvent || editingEvent ? (
           <EventFormDialog
-            key={selectedIso}
-            initialDate={selectedIso}
+            key={editingEvent?.id ?? selectedIso}
+            initialDate={editingEvent?.date ?? selectedIso}
+            event={editingEvent}
             venues={venueSource.filter((item) => !item.hidden)}
             subteams={filterSubteams}
             pending={savingEvent}
-            onClose={() => setAddingEvent(false)}
+            onClose={() => {
+              setAddingEvent(false);
+              setEditingEvent(null);
+            }}
             onCreate={(input) => void addEvent(input)}
           />
         ) : null}
         {openEvent ? (
           <EventDetails
             event={openEvent}
+            members={membersForEvent(openEvent, roster)}
+            venueName={venueSource.find((item) => item.id === openEvent.venueId)?.name ?? ""}
+            fee={venueSource.find((item) => item.id === openEvent.venueId)?.pricePerHour ?? 0}
+            voteDeadline={eventVotingDeadline(openEvent, voteTraining, voteGame)}
+            knownRsvp={knownRsvp}
+            actorId={profile && activeTeam && !activeTeam.demo ? profile.id : null}
+            leader={Boolean(profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id)}
+            votingOpen={eventVotingOpen(openEvent, activeTeam?.trainingVotingHours ?? 24, activeTeam?.gameVotingHours ?? 72)}
             rsvp={rsvp[openEvent.id]}
             onRsvp={setMemberRsvp}
+            onLineup={lineupAllowed ? () => openLineup(openEvent) : undefined}
+            onEdit={basePath === "/demo" || (profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id) ? () => setEditingEvent(openEvent) : undefined}
+            onDelete={basePath === "/demo" || (profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id) ? () => setDeleteTarget(openEvent) : undefined}
             onClose={() => router.push(basePath)}
           />
+        ) : null}
+        {deleteTarget ? (
+          <AdminDialog open title={t("event.delete.title")} onClose={() => { if (!savingEvent) setDeleteTarget(null); }}>
+            <p className="text-sm text-muted">{t("event.delete.confirm")}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" disabled={savingEvent} onClick={() => setDeleteTarget(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+                {t("actions.cancel")}
+              </button>
+              <button type="button" disabled={savingEvent} onClick={() => void removeEvent(deleteTarget)} className="rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {t("actions.delete")}
+              </button>
+            </div>
+          </AdminDialog>
         ) : null}
         </div>
       </main>

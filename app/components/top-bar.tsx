@@ -5,11 +5,13 @@ import { AccountSettingsDialog } from "@/app/components/account-settings-dialog"
 import { ChangePasswordDialog } from "@/app/components/change-password-dialog";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
 import { LanguageMenu } from "@/app/components/language-menu";
+import { PlayerBalanceDialog } from "@/app/components/player-profile";
 import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
 import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
-import { CURRENT_USER_ID, MEMBERS } from "@/app/lib/demo-data";
+import { CURRENT_USER_ID, MEMBERS, type Member } from "@/app/lib/demo-data";
+import { formatMoney } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 function initials(name: string): string {
@@ -32,6 +34,7 @@ export function TopBar({
   onSettingsOpenChange,
   onAccountChange,
   onOpenAdmin,
+  balanceMember = null,
 }: {
   onHome: () => void;
   account?: AccountProfile | null;
@@ -43,6 +46,7 @@ export function TopBar({
   onSettingsOpenChange?: (open: boolean) => void;
   onAccountChange?: (account: AccountProfile) => void;
   onOpenAdmin?: () => void;
+  balanceMember?: Member | null;
 }) {
   const { t } = useLanguage();
   const demo = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? MEMBERS[0];
@@ -50,6 +54,7 @@ export function TopBar({
   const name = profile ? accountName(profile) : demo.name;
 
   const photoUrl = teamPlayer(profile, team?.code)?.photoUrl ?? null;
+  const [balanceOpen, setBalanceOpen] = useState(false);
 
   function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers">) {
     setProfile((current) => (current ? { ...current, ...next } : current));
@@ -73,6 +78,16 @@ export function TopBar({
       />
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <LanguageMenu />
+        {balanceMember ? (
+          <button
+            type="button"
+            aria-label={t("roster.balance")}
+            onClick={() => setBalanceOpen(true)}
+            className={`rounded-lg px-2 py-1 text-sm font-semibold tabular-nums hover:bg-ice ${balanceMember.balance < 0 ? "text-game" : balanceMember.balance > 0 ? "text-[#1b7a46]" : "text-muted"}`}
+          >
+            {formatMoney(balanceMember.balance)}
+          </button>
+        ) : null}
         <UserMenu
           name={name}
           account={profile}
@@ -87,6 +102,7 @@ export function TopBar({
           <IconLogout />
         </IconTipButton>
       </div>
+      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} onClose={() => setBalanceOpen(false)} /> : null}
     </header>
   );
 }

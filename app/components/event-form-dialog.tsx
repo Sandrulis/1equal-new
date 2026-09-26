@@ -2,8 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
-import type { EventType, Subteam, Venue } from "@/app/lib/demo-data";
-import { formatDisplayDate, isoDate, parseIsoDate } from "@/app/lib/format";
+import { IconChevronLeft, IconChevronRight } from "@/app/components/icon-tip-button";
+import type { EventType, Subteam, TeamEvent, Venue } from "@/app/lib/demo-data";
+import { formatDisplayDate, formatMonthTitle, isoDate, parseIsoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 export type NewEventInput = {
@@ -18,6 +19,7 @@ export type NewEventInput = {
 
 export function EventFormDialog({
   initialDate,
+  event,
   venues,
   subteams,
   pending,
@@ -25,6 +27,7 @@ export function EventFormDialog({
   onCreate,
 }: {
   initialDate: string;
+  event?: TeamEvent | null;
   venues: Venue[];
   subteams: Subteam[];
   pending: boolean;
@@ -32,24 +35,23 @@ export function EventFormDialog({
   onCreate: (input: NewEventInput) => void;
 }) {
   const { t } = useLanguage();
-  const [date, setDate] = useState(initialDate ? formatDisplayDate(initialDate) : "");
-  const [type, setType] = useState<EventType | "">("");
-  const [start, setStart] = useState("");
-  const [venueId, setVenueId] = useState("");
-  const [subteamId, setSubteamId] = useState("");
-  const [expense, setExpense] = useState("");
-  const [withCoach, setWithCoach] = useState(false);
-  const parsedDate = parseDisplayDate(date);
+  const [dateIso, setDateIso] = useState(event?.date || initialDate || "");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [type, setType] = useState<EventType | "">(event?.type ?? "");
+  const [start, setStart] = useState(event?.start ?? "");
+  const [venueId, setVenueId] = useState(event?.venueId ?? "");
+  const [subteamId, setSubteamId] = useState(event?.subteamId ?? "");
+  const [expense, setExpense] = useState(event?.expense != null ? String(event.expense) : "");
+  const [withCoach, setWithCoach] = useState(Boolean(event?.withCoach));
   const parsedExpense = Number(expense.replace(",", "."));
   const expenseOk = expense.trim() !== "" && Number.isFinite(parsedExpense) && parsedExpense >= 0;
-  const dateInvalid = date.trim() !== "" && !parsedDate;
-  const canSave = Boolean(parsedDate && type && start && venueId && venues.length > 0 && (type === "training" || expenseOk) && !pending);
+  const canSave = Boolean(dateIso && type && start && venueId && venues.length > 0 && (type === "training" || expenseOk) && !pending);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!canSave || !parsedDate || !type) return;
+    if (!canSave || !dateIso || !type) return;
     onCreate({
-      date: parsedDate,
+      date: dateIso,
       start: start.slice(0, 5),
       type,
       venueId,
@@ -60,22 +62,20 @@ export function EventFormDialog({
   }
 
   return (
-    <AdminDialog open title={t("event.add")} onClose={onClose}>
+    <AdminDialog open title={event ? t("event.edit") : t("event.add")} onClose={onClose}>
       <form noValidate onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 items-end gap-3">
-          <label className="block text-sm">
+          <div className="block text-sm">
             <span className="text-muted">{t("event.date")}</span>
-            <input
-              required
-              value={date}
-              inputMode="numeric"
-              placeholder="dd.mm.yyyy"
-              autoComplete="off"
-              onChange={(event) => setDate(event.target.value)}
-              className="mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring-line outline-none focus:ring-train"
-            />
-            {dateInvalid ? <span className="mt-1 block text-game">{t("event.add.date.invalid")}</span> : null}
-          </label>
+            <button
+              type="button"
+              aria-expanded={pickerOpen}
+              onClick={() => setPickerOpen((open) => !open)}
+              className="mt-1 flex w-full items-center rounded-lg bg-ice px-3 py-2 text-left ring-1 ring-line"
+            >
+              <span className={dateIso ? "text-ink" : "text-muted"}>{dateIso ? formatDisplayDate(dateIso) : "dd.mm.yyyy"}</span>
+            </button>
+          </div>
           <fieldset className="min-w-0 border-0 p-0">
             <legend className="text-sm text-muted">{t("event.type")}</legend>
             <div className="mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ring-line" role="group" aria-label={t("event.type")}>
@@ -93,6 +93,15 @@ export function EventFormDialog({
             </div>
           </fieldset>
         </div>
+        {pickerOpen ? (
+          <EventDatePicker
+            value={dateIso}
+            onChange={(iso) => {
+              setDateIso(iso);
+              setPickerOpen(false);
+            }}
+          />
+        ) : null}
         <div className={type === "training" ? "grid grid-cols-2 items-end gap-3" : ""}>
           <label className="block text-sm">
             <span className="text-muted">{t("event.add.start")}</span>
@@ -178,7 +187,7 @@ export function EventFormDialog({
             {t("actions.cancel")}
           </button>
           <button type="submit" disabled={!canSave} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
-            {t("actions.add")}
+            {event ? t("actions.save") : t("actions.add")}
           </button>
         </div>
       </form>
@@ -186,13 +195,68 @@ export function EventFormDialog({
   );
 }
 
-function parseDisplayDate(value: string): string | null {
-  const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return isoDate(parseIsoDate(isoDate(date)));
+function EventDatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const { formatLang, t } = useLanguage();
+  const selected = value ? parseIsoDate(value) : new Date();
+  const [year, setYear] = useState(selected.getFullYear());
+  const [month, setMonth] = useState(selected.getMonth());
+  const today = isoDate(new Date());
+  const cells = monthCells(year, month);
+
+  function shift(delta: number) {
+    const next = new Date(year, month + delta, 1);
+    setYear(next.getFullYear());
+    setMonth(next.getMonth());
+  }
+
+  return (
+    <div className="rounded-xl bg-ice p-3 ring-1 ring-line">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <button type="button" aria-label={t("month.prev")} onClick={() => shift(-1)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-paper">
+          <IconChevronLeft />
+        </button>
+        <p className="text-sm font-medium">{formatMonthTitle(year, month, formatLang)}</p>
+        <button type="button" aria-label={t("month.next")} onClick={() => shift(1)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-paper">
+          <IconChevronRight />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 text-center text-[11px] text-muted">
+        {weekdayHeaders(formatLang).map((label) => (
+          <span key={label} className="py-1">
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((date) => {
+          const iso = isoDate(date);
+          const inMonth = date.getMonth() === month;
+          const picked = iso === value;
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onChange(iso)}
+              className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-sm ${
+                picked ? "bg-navy text-white" : iso === today ? "bg-train text-white" : inMonth ? "text-ink hover:bg-paper" : "text-muted hover:bg-paper"
+              }`}
+            >
+              {date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function monthCells(year: number, month: number): Date[] {
+  const first = new Date(year, month, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - offset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
 }

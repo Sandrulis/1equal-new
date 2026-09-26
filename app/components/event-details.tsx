@@ -1,11 +1,11 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { IconCheck, IconTipButton, IconX } from "@/app/components/icon-tip-button";
-import { MEMBERS, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
 import { formatDisplayDate, formatMoney, formatWeekday } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
-import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 export type Rsvp = "going" | "absent" | "pending";
 
@@ -21,48 +21,130 @@ export function defaultRsvp(eventId: string, index: number): Rsvp {
   return "pending";
 }
 
+export function memberRsvp(
+  eventId: string,
+  memberId: string,
+  index: number,
+  rsvp: Record<string, Rsvp> | undefined,
+  knownOnly: boolean,
+): Rsvp {
+  return rsvp?.[memberId] ?? (knownOnly ? "pending" : defaultRsvp(eventId, index));
+}
+
+export { eventVotingOpen };
+
+export function VoteCountdown({ deadline, align = "start", className = "" }: { deadline: number | null; align?: "start" | "end"; className?: string }) {
+  const { t } = useLanguage();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (deadline == null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
+  if (deadline == null || now >= deadline) return null;
+  const left = voteRemainingParts(deadline - now);
+  const bits = [
+    ...(left.days > 0 ? [{ value: String(left.days), unit: t("event.vote.unit.d") }] : []),
+    { value: String(left.hours).padStart(2, "0"), unit: t("event.vote.unit.h") },
+    { value: String(left.minutes).padStart(2, "0"), unit: t("event.vote.unit.min") },
+    { value: String(left.seconds).padStart(2, "0"), unit: t("event.vote.unit.s") },
+  ];
+  const end = align === "end";
+  return (
+    <div className={className}>
+      <p className={`text-xs text-muted ${end ? "text-right" : ""}`}>{t("event.vote.left")}</p>
+      <p className={`mt-1.5 flex flex-wrap gap-1 ${end ? "justify-end" : ""}`}>
+        {bits.map((bit) => (
+          <span key={bit.unit} className="inline-flex min-w-11 items-baseline justify-center gap-0.5 rounded-lg bg-paper px-1.5 py-1 ring-1 ring-line">
+            <span className="text-sm font-semibold tabular-nums text-ink">{bit.value}</span>
+            <span className="text-[10px] text-muted">{bit.unit}</span>
+          </span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
 export function EventDetails({
   event,
+  members,
+  venueName,
+  fee: feeProp,
+  voteDeadline = null,
+  knownRsvp = false,
+  actorId = null,
+  leader = false,
+  votingOpen = true,
   rsvp,
   onRsvp,
+  onLineup,
+  onEdit,
+  onDelete,
   onClose,
 }: {
   event: TeamEvent;
+  members: Member[];
+  venueName: string;
+  fee?: number;
+  voteDeadline?: number | null;
+  knownRsvp?: boolean;
+  actorId?: string | null;
+  leader?: boolean;
+  votingOpen?: boolean;
   rsvp: Record<string, Rsvp> | undefined;
   onRsvp: (memberId: string, status: Rsvp) => void;
+  onLineup?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onClose: () => void;
 }) {
   const { formatLang, t } = useLanguage();
-  const { venueById } = useTeamCatalog();
-  const venue = venueById(event.venueId);
-  const members = MEMBERS.filter((member) => member.subteamId === event.subteamId).sort((a, b) =>
-    a.name.localeCompare(b.name, "lv"),
-  );
-  const fee = eventPlayerFee(event.type);
-  const requested = fee * members.length;
-  const statuses = members.map((member, index) => rsvp?.[member.id] ?? defaultRsvp(event.id, index));
+  const fee = feeProp ?? eventPlayerFee(event.type);
+  const billable = members.filter((member) => !member.feeExempt);
+  const requested = fee * billable.length;
+  const statuses = members.map((member, index) => memberRsvp(event.id, member.id, index, rsvp, knownRsvp));
   const going = members.filter((_, index) => statuses[index] === "going");
   const absent = members.filter((_, index) => statuses[index] === "absent");
   const pending = members.filter((_, index) => statuses[index] === "pending");
-  const collected = fee * going.length;
+  const collected = fee * going.filter((member) => !member.feeExempt).length;
   const percent = requested === 0 ? 0 : Math.round((collected / requested) * 100);
 
   return (
     <section id="event-details" className="mt-4 scroll-mt-4 rounded-2xl bg-paper ring-1 ring-line">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <h2 className="text-lg font-semibold">{t("event.details")}</h2>
-        <IconTipButton label={t("event.close")} tone="muted" onClick={onClose}>
-          <IconX />
-        </IconTipButton>
+        <span className="flex items-center gap-2">
+          {onEdit ? (
+            <button type="button" onClick={onEdit} className="rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-ice">
+              {t("actions.edit")}
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button type="button" onClick={onDelete} className="rounded-lg px-3 py-1.5 text-sm font-medium text-game hover:bg-game-soft">
+              {t("actions.delete")}
+            </button>
+          ) : null}
+          {onLineup ? (
+            <button type="button" onClick={onLineup} className="rounded-lg bg-navy px-3 py-1.5 text-sm font-medium text-white">
+              {t("frontend_modules.game_layout")}
+            </button>
+          ) : null}
+          <IconTipButton label={t("event.close")} tone="muted" onClick={onClose}>
+            <IconX />
+          </IconTipButton>
+        </span>
       </div>
 
-      <dl className="grid gap-2 px-4 py-4 text-sm sm:grid-cols-[8rem_minmax(0,1fr)] sm:px-5">
-        <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDisplayDate(event.date)}`} />
-        <Detail label={t("event.time")} value={`${event.start}-${event.end}`} />
-        <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
-        <Detail label={t("event.venue")} value={venue?.name ?? ""} />
-        <Detail label={t("event.price")} value={formatMoney(fee)} />
-      </dl>
+      <div className="flex flex-col gap-4 px-4 py-4 min-[600px]:flex-row min-[600px]:items-start min-[600px]:justify-between min-[600px]:px-5">
+        <dl className="order-2 grid min-w-0 flex-1 gap-2 text-sm min-[600px]:order-1 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
+          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDisplayDate(event.date)}`} />
+          <Detail label={t("event.time")} value={event.end ? `${event.start}-${event.end}` : event.start} />
+          <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
+          <Detail label={t("event.venue")} value={venueName} />
+          <Detail label={t("event.price")} value={formatMoney(fee)} />
+        </dl>
+        <VoteCountdown deadline={voteDeadline} align="end" className="order-1 shrink-0 min-[600px]:order-2" />
+      </div>
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -90,17 +172,17 @@ export function EventDetails({
         <div className="space-y-3">
           <AttendanceGroup title={t("event.going")} count={going.length} tone="going" empty={t("event.none")}>
             {going.map((member) => (
-              <PersonRow key={member.id} member={member} status="going" onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="going" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
           <AttendanceGroup title={t("event.absent")} count={absent.length} tone="absent" empty={t("event.none")}>
             {absent.map((member) => (
-              <PersonRow key={member.id} member={member} status="absent" onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="absent" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
           <AttendanceGroup title={t("event.pending")} count={pending.length} tone="pending" empty={t("event.none")}>
             {pending.map((member) => (
-              <PersonRow key={member.id} member={member} status="pending" onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="pending" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
         </div>
@@ -155,32 +237,46 @@ function AttendanceGroup({
 function PersonRow({
   member,
   status,
+  actorId,
+  leader,
+  votingOpen,
   onRsvp,
 }: {
   member: Member;
   status: Rsvp;
+  actorId: string | null;
+  leader: boolean;
+  votingOpen: boolean;
   onRsvp: (memberId: string, status: Rsvp) => void;
 }) {
   const { t } = useLanguage();
+  const mine = Boolean(actorId && member.id === actorId);
+  const managed = Boolean(actorId);
+  if (managed && !mine && !leader) {
+    return (
+      <li className="flex items-center justify-between gap-3 px-3 py-2">
+        <PersonName name={member.name} />
+      </li>
+    );
+  }
+  const locked = managed && !leader && !votingOpen;
+  const actionsClass = !managed || mine ? "flex shrink-0 gap-1" : "hidden shrink-0 gap-1 group-hover/player:flex max-[599px]:flex";
   return (
-    <li className="flex items-center justify-between gap-3 px-3 py-2">
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">
-          {initials(member.name)}
-        </span>
-        <span className="truncate text-sm font-medium">{member.name}</span>
-      </span>
-      <span className="flex shrink-0 gap-1">
+    <li className="group/player flex items-center justify-between gap-3 px-3 py-2">
+      <PersonName name={member.name} />
+      <span className={actionsClass}>
         <Choice
           label={t("event.going")}
           active={status === "going"}
           tone="going"
+          disabled={locked}
           onClick={() => onRsvp(member.id, status === "going" ? "pending" : "going")}
         />
         <Choice
           label={t("event.absent")}
           active={status === "absent"}
           tone="absent"
+          disabled={locked}
           onClick={() => onRsvp(member.id, status === "absent" ? "pending" : "absent")}
         />
       </span>
@@ -188,21 +284,32 @@ function PersonRow({
   );
 }
 
+function PersonName({ name }: { name: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(name)}</span>
+      <span className="truncate text-sm font-medium">{name}</span>
+    </span>
+  );
+}
+
 function Choice({
   label,
   active,
   tone,
+  disabled = false,
   onClick,
 }: {
   label: string;
   active: boolean;
   tone: "going" | "absent";
+  disabled?: boolean;
   onClick: () => void;
 }) {
   const activeClass = tone === "going" ? "bg-train text-white" : "bg-game text-white";
   const idleClass = tone === "going" ? "text-train hover:bg-train-soft" : "text-game hover:bg-game-soft";
   return (
-    <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${active ? activeClass : idleClass}`}>
+    <button type="button" onClick={onClick} aria-pressed={active} disabled={disabled} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${active ? activeClass : idleClass}`}>
       {tone === "going" ? <IconCheck /> : <IconX />}
       {label}
     </button>

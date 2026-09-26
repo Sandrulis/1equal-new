@@ -117,9 +117,14 @@ export function VenueAdmin({
             <span className="mt-1 flex items-center rounded-lg bg-ice ring-1 ring-line focus-within:ring-train">
               <input
                 inputMode="decimal"
+                placeholder="0,00"
                 value={price}
+                onFocus={() => {
+                  if (editingId !== "new") return;
+                  if (/^0+([.,]0*)?$/.test(price)) setPrice("");
+                }}
                 onChange={(event) => setPrice(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-ink outline-none"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-ink outline-none placeholder:text-muted"
               />
               <span className="shrink-0 pr-3 text-muted">€</span>
             </span>
