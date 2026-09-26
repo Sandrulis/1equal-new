@@ -3,7 +3,9 @@
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { getLegalDocument, type LegalId } from "@/app/lib/legal-documents";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { useLanguage } from "@/app/lib/language";
+import { applyBrandName } from "@/app/lib/site-brand";
 import type { MessageKey } from "@/app/lib/messages";
 
 const TITLE_KEYS: Record<LegalId, MessageKey> = {
@@ -13,8 +15,10 @@ const TITLE_KEYS: Record<LegalId, MessageKey> = {
 };
 
 export function LegalDocument({ id }: { id: LegalId }) {
-  const { lang, t } = useLanguage();
-  const document = getLegalDocument(id, lang);
+  const { formatLang, t } = useLanguage();
+  const brand = useSiteBrand();
+  const document = getLegalDocument(id, formatLang);
+  const text = (value: string) => applyBrandName(value, brand.name);
 
   return (
     <div className="flex min-h-screen flex-col bg-ice">
@@ -22,14 +26,14 @@ export function LegalDocument({ id }: { id: LegalId }) {
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
         <p className="text-sm text-muted">{t("legal.updated")}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t(TITLE_KEYS[id])}</h1>
-        <p className="mt-4 leading-7 text-muted">{document.intro}</p>
+        <p className="mt-4 leading-7 text-muted">{text(document.intro)}</p>
         <div className="mt-10 grid gap-8">
           {document.sections.map((section) => (
             <section key={section.heading}>
-              <h2 className="text-lg font-semibold">{section.heading}</h2>
+              <h2 className="text-lg font-semibold">{text(section.heading)}</h2>
               {section.paragraphs.map((paragraph) => (
                 <p key={paragraph} className="mt-2 text-sm leading-6 text-muted">
-                  {paragraph}
+                  {text(paragraph)}
                 </p>
               ))}
               {section.rows ? (
@@ -46,7 +50,7 @@ export function LegalDocument({ id }: { id: LegalId }) {
                       {section.rows.map((row) => (
                         <tr key={row.name} className="border-t border-line">
                           <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
-                          <td className="px-4 py-3 text-muted">{row.purpose}</td>
+                          <td className="px-4 py-3 text-muted">{text(row.purpose)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-muted">{row.duration}</td>
                         </tr>
                       ))}

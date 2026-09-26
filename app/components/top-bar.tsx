@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { useCookieConsent } from "@/app/components/cookie-consent";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AccountSettingsDialog } from "@/app/components/account-settings-dialog";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
-import type { ReactNode } from "react";
 import { LanguageMenu } from "@/app/components/language-menu";
-import { CURRENT_USER_ID, MEMBERS, TEAM_NAME } from "@/app/lib/demo-data";
+import { signOut } from "@/app/lib/auth/actions";
+import { accountName, type AccountProfile } from "@/app/lib/auth/profile";
+import { CURRENT_USER_ID, MEMBERS } from "@/app/lib/demo-data";
 import { useLanguage } from "@/app/lib/language";
 
 function initials(name: string): string {
@@ -18,28 +18,35 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-export function TopBar({ onHome }: { onHome: () => void }) {
+export function TopBar({ onHome, account = null, teamName = null }: { onHome: () => void; account?: AccountProfile | null; teamName?: string | null }) {
   const { t } = useLanguage();
-  const router = useRouter();
-  const user = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? MEMBERS[0];
+  const demo = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? MEMBERS[0];
+  const [profile, setProfile] = useState(account);
+  const name = profile ? accountName(profile) : demo.name;
 
   return (
     <header className="sticky top-0 z-30 order-1 flex h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 sm:px-6 lg:order-none lg:px-8">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <button
-          type="button"
-          aria-label={TEAM_NAME}
-          onClick={onHome}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white hover:bg-navy/90"
-        >
-          {initials(TEAM_NAME)}
-        </button>
-        <p className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{TEAM_NAME}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
+      {teamName ? (
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button
+            type="button"
+            aria-label={teamName}
+            onClick={onHome}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white hover:bg-navy/90"
+          >
+            {initials(teamName)}
+          </button>
+          <p className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{teamName}</p>
+        </div>
+      ) : null}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         <LanguageMenu />
-        <UserMenu name={user.name} />
-        <IconTipButton label={t("user.logout")} tone="game" onClick={() => router.push("/login")}>
+        <UserMenu
+          name={name}
+          account={profile}
+          onSaved={(next) => setProfile((current) => (current ? { ...current, ...next } : current))}
+        />
+        <IconTipButton label={t("user.logout")} tone="game" onClick={() => void signOut()}>
           <IconLogout />
         </IconTipButton>
       </div>
@@ -47,10 +54,18 @@ export function TopBar({ onHome }: { onHome: () => void }) {
   );
 }
 
-function UserMenu({ name }: { name: string }) {
+function UserMenu({
+  name,
+  account,
+  onSaved,
+}: {
+  name: string;
+  account: AccountProfile | null;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName">) => void;
+}) {
   const { t } = useLanguage();
-  const { openSettings } = useCookieConsent();
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,18 +104,20 @@ function UserMenu({ name }: { name: string }) {
           <div className="border-b border-line min-[600px]:hidden" />
           <div className="p-1.5">
             <MenuItem icon={<IconKey />} label={t("user.password")} onClick={() => setOpen(false)} />
-            <MenuItem icon={<IconSettings />} label={t("user.settings")} onClick={() => setOpen(false)} />
-            <MenuItem icon={<IconShield />} label={t("user.twoFactor")} onClick={() => setOpen(false)} />
             <MenuItem
-              icon={<IconCookie />}
-              label={t("cookie.settings")}
+              icon={<IconSettings />}
+              label={t("user.settings")}
               onClick={() => {
                 setOpen(false);
-                openSettings();
+                if (account) setSettingsOpen(true);
               }}
             />
+            <MenuItem icon={<IconShield />} label={t("user.twoFactor")} onClick={() => setOpen(false)} />
           </div>
         </div>
+      ) : null}
+      {settingsOpen && account ? (
+        <AccountSettingsDialog account={account} onClose={() => setSettingsOpen(false)} onSaved={onSaved} />
       ) : null}
     </div>
   );
@@ -142,12 +159,3 @@ function IconShield() {
   );
 }
 
-function IconCookie() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M12 3a9 9 0 1 0 8.2 12.6 3.2 3.2 0 0 1-3.4-4.4A3.2 3.2 0 0 1 12.6 8 3.2 3.2 0 0 1 12 3z" />
-      <circle cx="9" cy="13" r="0.8" fill="currentColor" />
-      <circle cx="13" cy="16" r="0.8" fill="currentColor" />
-    </svg>
-  );
-}

@@ -14,11 +14,13 @@ export function IconTipButton({
   label,
   tone = "train",
   onClick,
+  disabled = false,
   children,
 }: {
   label: string;
   tone?: Tone;
   onClick?: () => void;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   const [tip, setTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
@@ -35,6 +37,7 @@ export function IconTipButton({
       <button
         type="button"
         aria-label={label}
+        disabled={disabled}
         onClick={onClick}
         onMouseEnter={(event) => place(event.currentTarget)}
         onMouseLeave={() => setTip(null)}

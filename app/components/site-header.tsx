@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { useLanguage } from "@/app/lib/language";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 
 export function SiteHeader() {
   const { t } = useLanguage();
+  const brand = useSiteBrand();
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <div className="flex min-w-0 items-center gap-8">
-          <Link href="/" className="shrink-0 cursor-pointer text-lg font-semibold tracking-tight">
-            1equal
+          <Link href="/" className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-lg font-semibold tracking-tight">
+            {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-8 w-auto" /> : null}
+            {brand.name}
           </Link>
           <nav aria-label={t("nav.sections")} className="hidden items-center gap-6 text-sm text-muted md:flex">
             <Link href="/#iespejas" className="cursor-pointer hover:text-ink">

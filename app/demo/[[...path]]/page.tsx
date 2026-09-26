@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 
 export default async function DemoPage({ params }: { params: Promise<{ path?: string[] }> }) {
   const { path } = await params;
-  if (!parseDashboardPath(path)) redirect("/demo");
+  const route = parseDashboardPath(path);
+  if (!route || route.view === "admin") redirect("/demo");
   return <DashboardApp basePath="/demo" />;
 }

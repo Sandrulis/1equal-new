@@ -189,8 +189,8 @@ function Step({ n, title, text }: { n: string; title: string; text: string }) {
 }
 
 function ProductPreview() {
-  const { lang, t } = useLanguage();
-  const days = lang === "lv" ? ["Pr", "Ot", "Tr", "Ce", "Pk", "Se", "Sv"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const { formatLang, t } = useLanguage();
+  const days = formatLang === "lv" ? ["Pr", "Ot", "Tr", "Ce", "Pk", "Se", "Sv"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
   const year = 2026;
   const month = 8;
   const cells = previewMonth(year, month);

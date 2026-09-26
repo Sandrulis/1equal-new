@@ -205,11 +205,11 @@ function MemberBalance({ member }: { member: Member }) {
 }
 
 function MemberDates({ member }: { member: Member }) {
-  const { lang } = useLanguage();
+  const { formatLang } = useLanguage();
   return (
     <div>
       <span className="block tabular-nums" title={formatDisplayDateTime(member.updatedAt)}>
-        {formatRelativeUpdated(member.updatedAt, lang)}
+        {formatRelativeUpdated(member.updatedAt, formatLang)}
       </span>
       <span className="block text-xs text-muted tabular-nums">{formatDisplayDate(member.joined)}</span>
     </div>

@@ -2,15 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLanguage } from "@/app/lib/language";
-import type { Lang } from "@/app/lib/messages";
-
-const LANGUAGES: { id: Lang; name: string }[] = [
-  { id: "lv", name: "Latviešu" },
-  { id: "en", name: "English" },
-];
 
 export function LanguageMenu() {
-  const { lang, setLang } = useLanguage();
+  const { lang, languages, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -30,7 +24,7 @@ export function LanguageMenu() {
     };
   }, [open]);
 
-  const current = LANGUAGES.find((item) => item.id === lang) ?? LANGUAGES[0];
+  const current = languages.find((item) => item.code === lang) ?? languages[0];
 
   return (
     <div ref={rootRef} className="relative">
@@ -43,7 +37,7 @@ export function LanguageMenu() {
           onClick={() => setOpen((value) => !value)}
           className="inline-flex h-9 items-center rounded-lg bg-paper px-2 ring-1 ring-line hover:bg-ice"
         >
-          <Flag code={current.id} />
+          <Flag code={current.code} />
         </button>
       </FlagTip>
       {open ? (
@@ -52,21 +46,21 @@ export function LanguageMenu() {
           aria-label={current.name}
           className="absolute right-0 z-20 mt-1 flex min-w-36 flex-col gap-0.5 rounded-xl bg-paper p-1 ring-1 ring-line"
         >
-          {LANGUAGES.map((item) => (
+          {languages.map((item) => (
             <button
-              key={item.id}
+              key={item.code}
               type="button"
               role="option"
-              aria-selected={item.id === lang}
+              aria-selected={item.code === lang}
               onClick={() => {
-                setLang(item.id);
+                setLang(item.code);
                 setOpen(false);
               }}
               className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${
-                item.id === lang ? "bg-ice ring-1 ring-train" : "hover:bg-ice"
+                item.code === lang ? "bg-ice ring-1 ring-train" : "hover:bg-ice"
               }`}
             >
-              <Flag code={item.id} />
+              <Flag code={item.code} />
               <span>{item.name}</span>
             </button>
           ))}
@@ -99,7 +93,7 @@ function FlagTip({ name, children }: { name: string; children: ReactNode }) {
         ref={tipRef}
         role="tooltip"
         style={{ transform: `translateX(calc(-50% + ${shift}px))` }}
-        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1 rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 group-hover:opacity-100"
+        className="pointer-events-none absolute top-full left-1/2 z-30 mt-1 rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 group-hover:opacity-100"
       >
         {name}
       </span>
@@ -107,10 +101,10 @@ function FlagTip({ name, children }: { name: string; children: ReactNode }) {
   );
 }
 
-function Flag({ code }: { code: Lang }) {
+function Flag({ code }: { code: string }) {
   return (
-    <span className="inline-block h-[12.6px] w-[22.68px] shrink-0 overflow-hidden rounded-[2px]">
-      {code === "lv" ? <FlagLv /> : <FlagGb />}
+    <span className="inline-grid h-[12.6px] w-[22.68px] shrink-0 place-items-center overflow-hidden rounded-[2px] bg-ice text-[8px] font-semibold text-ink">
+      {code === "lv" ? <FlagLv /> : code === "en" ? <FlagGb /> : code.slice(0, 2).toUpperCase()}
     </span>
   );
 }

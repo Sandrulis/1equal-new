@@ -1,9 +1,20 @@
 import { ImageResponse } from "next/og";
+import { brandInitial } from "@/app/lib/site-brand";
+import { getSiteBrand } from "@/app/lib/site-admin/repository";
 
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
-export default function Icon() {
+export default async function Icon() {
+  const brand = await getSiteBrand();
+  if (brand.faviconUrl) {
+    return new ImageResponse(
+      (
+        <img src={brand.faviconUrl} width="32" height="32" alt="" />
+      ),
+      size,
+    );
+  }
   return new ImageResponse(
     (
       <div
@@ -19,7 +30,7 @@ export default function Icon() {
           fontWeight: 700,
         }}
       >
-        1
+        {brandInitial(brand.name)}
       </div>
     ),
     size,

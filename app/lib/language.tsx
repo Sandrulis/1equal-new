@@ -1,46 +1,86 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { translate, type Lang, type MessageKey } from "@/app/lib/messages";
+import { messages, translate, type Lang, type MessageKey } from "@/app/lib/messages";
+import { applyBrandName } from "@/app/lib/site-brand";
+import type { PublicI18n } from "@/app/lib/site-admin/types";
 
 const STORAGE_KEY = "1equal-lang";
 
+const FALLBACK_I18N: PublicI18n = {
+  languages: [
+    { code: "lv", name: "Latviešu", isDefault: true },
+    { code: "en", name: "English", isDefault: false },
+  ],
+  defaultCode: "lv",
+  overrides: {},
+};
+
 type LanguageValue = {
-  lang: Lang;
-  setLang: (lang: Lang) => void;
+  lang: string;
+  formatLang: Lang;
+  languages: PublicI18n["languages"];
+  setLang: (lang: string) => void;
   t: (key: MessageKey, params?: Record<string, string | number>) => string;
 };
 
 const LanguageContext = createContext<LanguageValue | null>(null);
 
-function readStoredLang(): Lang {
-  if (typeof window === "undefined") return "lv";
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === "en" ? "en" : "lv";
+function builtinLang(lang: string, defaultCode: string): Lang {
+  if (lang === "en" || lang === "lv") return lang;
+  if (defaultCode === "en") return "en";
+  return "lv";
 }
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("lv");
+function readStoredLang(languages: PublicI18n["languages"], defaultCode: string): string {
+  if (typeof window === "undefined") return defaultCode;
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored && languages.some((language) => language.code === stored)) return stored;
+  return defaultCode;
+}
+
+export function LanguageProvider({
+  children,
+  i18n = FALLBACK_I18N,
+  brandName,
+}: {
+  children: ReactNode;
+  i18n?: PublicI18n;
+  brandName: string;
+}) {
+  const [lang, setLangState] = useState(i18n.defaultCode);
 
   useEffect(() => {
-    const stored = readStoredLang();
+    const stored = readStoredLang(i18n.languages, i18n.defaultCode);
     setLangState(stored);
     document.documentElement.lang = stored;
-  }, []);
+  }, [i18n.defaultCode, i18n.languages]);
 
   const value = useMemo<LanguageValue>(() => {
+    const formatLang = builtinLang(lang, i18n.defaultCode);
     return {
       lang,
+      formatLang,
+      languages: i18n.languages,
       setLang(next) {
+        if (!i18n.languages.some((language) => language.code === next)) return;
         setLangState(next);
         window.localStorage.setItem(STORAGE_KEY, next);
         document.documentElement.lang = next;
       },
       t(key, params) {
-        return translate(lang, key, params);
+        const builtIn = messages[key];
+        const built = lang === "en" || lang === "lv" ? builtIn[lang] : undefined;
+        const fallback = i18n.defaultCode === "en" ? builtIn.en : builtIn.lv;
+        let value = i18n.overrides[key]?.[lang] || built || i18n.overrides[key]?.[i18n.defaultCode] || fallback || builtIn.lv;
+        if (!value) value = translate(formatLang, key, params);
+        else if (params) {
+          for (const [name, param] of Object.entries(params)) value = value.replaceAll(`{${name}}`, String(param));
+        }
+        return applyBrandName(value, brandName);
       },
     };
-  }, [lang]);
+  }, [brandName, i18n.defaultCode, i18n.languages, i18n.overrides, lang]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

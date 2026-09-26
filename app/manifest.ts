@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
-import { siteDescription, siteName } from "@/app/lib/site";
+import { getSiteBrand } from "@/app/lib/site-admin/repository";
+import { siteDescription } from "@/app/lib/site";
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const brand = await getSiteBrand();
   return {
-    name: siteName,
-    short_name: siteName,
+    name: brand.name,
+    short_name: brand.name,
     description: siteDescription,
     start_url: "/",
     display: "standalone",

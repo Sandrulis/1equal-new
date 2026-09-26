@@ -10,9 +10,8 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-line bg-paper">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-6 text-sm text-muted">
-        <p className="shrink-0 font-medium text-ink">1equal</p>
-        <nav aria-label={t("legal.nav")} className="flex flex-wrap justify-end gap-x-4 gap-y-2 text-right">
+      <div className="flex w-full items-center px-4 py-6 text-sm text-muted sm:px-6 lg:px-8">
+        <nav aria-label={t("legal.nav")} className="flex w-full flex-wrap justify-end gap-x-4 gap-y-2 text-right">
           <Link href="/privacy" className="cursor-pointer hover:text-ink">
             {t("legal.privacy")}
           </Link>

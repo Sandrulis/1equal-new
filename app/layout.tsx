@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans } from "next/font/google";
 import { CookieConsentProvider } from "@/app/components/cookie-consent";
+import { FeedbackToastProvider } from "@/app/components/feedback-toast";
+import { SiteBrandProvider } from "@/app/components/site-brand-provider";
+import { UmamiScript } from "@/app/components/umami-script";
 import { LanguageProvider } from "@/app/lib/language";
-import { getSiteUrl, siteDescription, siteName } from "@/app/lib/site";
+import { getPublicI18n, getPublicUmami, getSiteBrand } from "@/app/lib/site-admin/repository";
+import { getSiteUrl, siteDescription } from "@/app/lib/site";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -10,28 +14,38 @@ const dmSans = DM_Sans({
   variable: "--font-dm",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(getSiteUrl()),
-  title: {
-    default: siteName,
-    template: `%s · ${siteName}`,
-  },
-  description: siteDescription,
-  applicationName: siteName,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getSiteBrand();
+  return {
+    metadataBase: new URL(getSiteUrl()),
+    title: {
+      default: brand.name,
+      template: `%s · ${brand.name}`,
+    },
+    description: siteDescription,
+    applicationName: brand.name,
+    icons: brand.faviconUrl ? { icon: brand.faviconUrl } : undefined,
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#102433",
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [brand, i18n, umami] = await Promise.all([getSiteBrand(), getPublicI18n(), getPublicUmami()]);
   return (
-    <html lang="lv" className={dmSans.variable}>
+    <html lang={i18n.defaultCode} className={dmSans.variable}>
       <body className="font-sans antialiased">
-        <LanguageProvider>
-          <CookieConsentProvider>{children}</CookieConsentProvider>
-        </LanguageProvider>
+        <SiteBrandProvider brand={brand}>
+          <LanguageProvider i18n={i18n} brandName={brand.name}>
+            <CookieConsentProvider>
+              <UmamiScript websiteId={umami?.websiteId ?? null} scriptUrl={umami?.scriptUrl ?? null} />
+              <FeedbackToastProvider>{children}</FeedbackToastProvider>
+            </CookieConsentProvider>
+          </LanguageProvider>
+        </SiteBrandProvider>
       </body>
     </html>
   );

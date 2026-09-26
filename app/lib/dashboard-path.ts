@@ -2,11 +2,20 @@ import { EVENTS, MEMBERS } from "@/app/lib/demo-data";
 
 export type DashboardBase = "/dashboard" | "/demo";
 
+export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "integrations", "languages", "translations"] as const;
+
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
 export type DashboardRoute =
   | { view: "home"; eventId: string | null; lineup: boolean }
   | { view: "team"; memberId: string | null }
   | { view: "subteams" }
-  | { view: "venues" };
+  | { view: "venues" }
+  | { view: "admin"; section: AdminSection };
+
+function adminSection(value: string): AdminSection | null {
+  return ADMIN_SECTIONS.find((section) => section === value) ?? null;
+}
 
 export function parseDashboardPath(path: string[] | undefined): DashboardRoute | null {
   const parts = path ?? [];
@@ -17,6 +26,10 @@ export function parseDashboardPath(path: string[] | undefined): DashboardRoute |
   }
   if (parts[0] === "subteams" && parts.length === 1) return { view: "subteams" };
   if (parts[0] === "venues" && parts.length === 1) return { view: "venues" };
+  if (parts[0] === "admin" && parts.length === 2) {
+    const section = adminSection(parts[1]);
+    if (section) return { view: "admin", section };
+  }
   const eventKnown = parts[0] === "events" && EVENTS.some((event) => event.id === parts[1]);
   if (eventKnown && parts.length === 2) return { view: "home", eventId: parts[1], lineup: false };
   if (eventKnown && parts.length === 3 && parts[2] === "lineup") return { view: "home", eventId: parts[1], lineup: true };

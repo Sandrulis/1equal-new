@@ -32,7 +32,7 @@ export function EventDetails({
   onRsvp: (memberId: string, status: Rsvp) => void;
   onClose: () => void;
 }) {
-  const { lang, t } = useLanguage();
+  const { formatLang, t } = useLanguage();
   const { venueById } = useTeamCatalog();
   const venue = venueById(event.venueId);
   const members = MEMBERS.filter((member) => member.subteamId === event.subteamId).sort((a, b) =>
@@ -57,7 +57,7 @@ export function EventDetails({
       </div>
 
       <dl className="grid gap-2 px-4 py-4 text-sm sm:grid-cols-[8rem_minmax(0,1fr)] sm:px-5">
-        <Detail label={t("event.date")} value={`${formatWeekday(event.date, lang)}, ${formatDisplayDate(event.date)}`} />
+        <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDisplayDate(event.date)}`} />
         <Detail label={t("event.time")} value={`${event.start}-${event.end}`} />
         <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
         <Detail label={t("event.venue")} value={venue?.name ?? ""} />

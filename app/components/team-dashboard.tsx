@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { EVENTS, type EventType, type TeamEvent } from "@/app/lib/demo-data";
+import { EVENTS, TEAM_NAME, type EventType, type TeamEvent } from "@/app/lib/demo-data";
 import {
   formatDisplayDate,
   formatDuration,
@@ -19,11 +19,22 @@ import type { MessageKey } from "@/app/lib/messages";
 import { EventDetails, type Rsvp } from "@/app/components/event-details";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
+import { SiteFooter } from "@/app/components/site-footer";
+import { AdminIntegrationsPage } from "@/app/components/admin-integrations-page";
+import { AdminLanguagesForm } from "@/app/components/admin-languages-form";
+import { AdminSettingsForm } from "@/app/components/admin-settings-form";
+import { AdminSubteamsList } from "@/app/components/admin-subteams-list";
+import { AdminTeamsList } from "@/app/components/admin-teams-list";
+import { AdminTranslationsManager } from "@/app/components/admin-translations-manager";
+import { AdminUsersList } from "@/app/components/admin-users-list";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { TopBar } from "@/app/components/top-bar";
+import type { AccountProfile } from "@/app/lib/auth/profile";
+import type { AdminConsole } from "@/app/lib/site-admin/types";
 import { SubteamAdmin } from "@/app/components/subteam-admin";
 import { TeamRoster } from "@/app/components/team-roster";
 import { VenueAdmin } from "@/app/components/venue-admin";
-import { eventHref, routeFromPathname, teamHref, type DashboardBase } from "@/app/lib/dashboard-path";
+import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 type TypeFilter = "all" | EventType;
@@ -49,8 +60,17 @@ function eventTitleKey(titleId: string): MessageKey {
   return `event.${titleId}` as MessageKey;
 }
 
-export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
-  const { lang, t } = useLanguage();
+export function TeamDashboard({
+  basePath,
+  account = null,
+  admin = null,
+}: {
+  basePath: DashboardBase;
+  account?: AccountProfile | null;
+  admin?: AdminConsole | null;
+}) {
+  const { formatLang, t } = useLanguage();
+  const brand = useSiteBrand();
   const pathname = usePathname();
   const router = useRouter();
   const route = routeFromPathname(pathname, basePath);
@@ -219,6 +239,12 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
     window.scrollTo({ top: 0 });
   }
 
+  function showAdmin(section: AdminSection) {
+    collapseIfNarrow();
+    router.push(`${basePath}/admin/${section}`);
+    window.scrollTo({ top: 0 });
+  }
+
   const cells = monthCells(year, month);
   const openEvent = openEventId ? EVENTS.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? EVENTS.find((event) => event.id === openEventId) ?? null : null;
@@ -249,10 +275,15 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
           >
             {sidebarCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
           </button>
-          {sidebarCollapsed ? null : <p className="min-w-0 truncate text-base font-semibold tracking-wide">1equal</p>}
+          {sidebarCollapsed ? null : (
+            <span className="flex min-w-0 items-center gap-2">
+              {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-7 w-auto" /> : null}
+              <p className="min-w-0 truncate text-base font-semibold tracking-wide">{brand.name}</p>
+            </span>
+          )}
         </div>
         <nav
-          className={`flex flex-wrap gap-1 px-3 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:items-center min-[600px]:px-2" : "min-[600px]:items-stretch min-[600px]:px-0"}`}
+          className={`flex flex-wrap gap-1 px-3 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:overflow-y-auto min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:items-center min-[600px]:px-2" : "min-[600px]:items-stretch min-[600px]:px-0"}`}
           aria-label={t("nav.sections")}
         >
           <SideItem label={t("nav.calendar")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
@@ -260,12 +291,30 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
           <SideItem label={t("nav.subteams")} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} />
           <SideItem label={t("nav.venues")} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} />
         </nav>
+        {account?.isAdmin ? (
+          <nav
+            aria-label={t("nav.admin")}
+            className={`mt-auto hidden shrink-0 flex-col gap-1 border-t border-white/15 pt-3 pb-4 min-[600px]:flex ${sidebarCollapsed ? "items-center px-2" : ""}`}
+          >
+            <p className="sr-only">{t("nav.admin")}</p>
+            {ADMIN_NAV.map((item) => (
+              <SideItem
+                key={item.section}
+                label={t(item.label)}
+                icon={item.icon}
+                compact={sidebarCollapsed}
+                active={route.view === "admin" && route.section === item.section}
+                onClick={() => showAdmin(item.section)}
+              />
+            ))}
+          </nav>
+        ) : null}
       </aside>
       </div>
 
-      <div className="min-w-0 max-[599px]:contents">
-      <TopBar onHome={() => showHome()} />
-      <main className="order-3 px-4 py-5 max-[599px]:pb-24 sm:px-6 lg:order-none lg:px-8 lg:py-7">
+      <div className="flex min-h-screen min-w-0 flex-col max-[599px]:contents">
+      <TopBar account={account} teamName={account ? null : TEAM_NAME} onHome={() => showHome()} />
+      <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {view === "home" && lineupEvent ? (
           <EventLineup
             key={lineupEvent.id}
@@ -287,15 +336,33 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
         ) : null}
         {view === "subteams" ? <SubteamAdmin /> : null}
         {view === "venues" ? <VenueAdmin /> : null}
+        {route.view === "admin" ? (
+          <div className="space-y-6">
+            {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams") ? null : (
+              <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
+            )}
+            {route.section === "users" && admin ? <AdminUsersList users={admin.users} /> : null}
+            {route.section === "teams" && admin ? <AdminTeamsList teams={admin.teams} subteams={admin.subteams} /> : null}
+            {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
+            {route.section === "integrations" && admin ? (
+              <AdminIntegrationsPage integrations={admin.integrations} googleRedirectUrl={admin.googleRedirectUrl} />
+            ) : null}
+            {route.section === "settings" && admin ? <AdminSettingsForm initial={admin.brand} /> : null}
+            {route.section === "languages" && admin ? <AdminLanguagesForm initialLanguages={admin.languages} /> : null}
+            {route.section === "translations" && admin ? (
+              <AdminTranslationsManager translations={admin.translations} languages={admin.languages} />
+            ) : null}
+          </div>
+        ) : null}
         <div className={view === "home" && !lineupEvent ? undefined : "hidden"}>
         <section id="kalendars" className="scroll-mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <IconButton label={t("month.prev")} onClick={() => shiftMonth(-1)}>
                   <Chevron direction="left" />
                 </IconButton>
-                <h2 className="min-w-40 text-center text-lg font-semibold">{formatMonthTitle(year, month, lang)}</h2>
+                <h2 className="min-w-40 text-center text-lg font-semibold">{formatMonthTitle(year, month, formatLang)}</h2>
                 <IconButton label={t("month.next")} onClick={() => shiftMonth(1)}>
                   <Chevron direction="right" />
                 </IconButton>
@@ -307,7 +374,7 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
                   {t("today")}
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 max-[499px]:w-full max-[499px]:flex-nowrap max-[499px]:gap-1.5">
+              <div className="flex w-full items-center gap-2 max-[499px]:flex-nowrap max-[499px]:gap-1.5">
                 <TypeSwitch value={typeFilter} onChange={setTypeFilter} />
                 <label className="sr-only" htmlFor="subteam-filter">
                   {t("filter.subteam")}
@@ -316,7 +383,7 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
                   id="subteam-filter"
                   value={subteamId ?? ""}
                   onChange={(event) => setSubteamId(event.target.value || null)}
-                  className="w-fit max-w-full rounded-lg bg-ice px-3 py-2 text-sm text-ink ring-1 ring-line max-[499px]:px-2 max-[499px]:py-1 max-[499px]:text-xs"
+                  className="ml-auto w-fit max-w-full rounded-lg bg-ice px-3 py-2 text-sm text-ink ring-1 ring-line max-[499px]:px-2 max-[499px]:py-1 max-[499px]:text-xs"
                 >
                   <option value="">{t("filter.allSubteams")}</option>
                   {subteams.map((subteam) => (
@@ -347,7 +414,7 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
 
             <div className="overflow-hidden rounded-xl border border-grid">
               <div className="grid grid-cols-7 bg-[#f4f7fa]">
-                {weekdayHeaders(lang).map((label, index) => (
+                {weekdayHeaders(formatLang).map((label, index) => (
                   <div
                     key={label}
                     className={`border-b border-grid px-1 py-2 text-center text-xs font-medium text-muted ${
@@ -444,7 +511,7 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
             {t("event.add")}
           </button>
           <aside className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, lang)}</p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, formatLang)}</p>
             <h2 className="mt-1 text-lg font-semibold">{formatDisplayDate(selectedIso)}</h2>
             {selectedEvents.length === 0 ? (
               <p className="mt-4 text-sm text-muted">
@@ -504,10 +571,33 @@ export function TeamDashboard({ basePath }: { basePath: DashboardBase }) {
         ) : null}
         </div>
       </main>
+      <div className="order-4 max-[599px]:pb-24">
+        <SiteFooter />
+      </div>
       </div>
     </div>
   );
 }
+
+const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
+  users: "nav.admin.users",
+  teams: "nav.admin.teams",
+  subteams: "nav.subteams",
+  settings: "user.settings",
+  integrations: "nav.admin.integrations",
+  languages: "nav.admin.languages",
+  translations: "nav.admin.translations",
+};
+
+const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[] = [
+  { section: "users", label: ADMIN_LABEL.users, icon: <IconUsers /> },
+  { section: "teams", label: ADMIN_LABEL.teams, icon: <IconTeams /> },
+  { section: "subteams", label: ADMIN_LABEL.subteams, icon: <IconLayers /> },
+  { section: "settings", label: ADMIN_LABEL.settings, icon: <IconGear /> },
+  { section: "integrations", label: ADMIN_LABEL.integrations, icon: <IconPlug /> },
+  { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
+  { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
+];
 
 function SideItem({
   label,
@@ -643,6 +733,51 @@ function IconPin() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z" />
       <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function IconTeams() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M4 20V10l8-6 8 6v10" />
+      <path d="M9 20v-6h6v6" />
+    </svg>
+  );
+}
+
+function IconGear() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+    </svg>
+  );
+}
+
+function IconPlug() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 7v5a4 4 0 0 0 8 0V7" />
+      <path d="M9 3v4M15 3v4M12 16v5" />
+    </svg>
+  );
+}
+
+function IconLanguages() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  );
+}
+
+function IconTranslations() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M4 6h9M8.5 6c0 6-3 9-6 10M6 11c1.5 2 3.5 3.5 6 4" />
+      <path d="M14 20l4-10 4 10M15.5 17h5" />
     </svg>
   );
 }

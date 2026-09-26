@@ -1,0 +1,17 @@
+export const LANGUAGE_OPTIONS = [
+  { code: "lv", name: "Latviešu" },
+  { code: "en", name: "English" },
+  { code: "de", name: "Deutsch" },
+  { code: "fr", name: "Français" },
+  { code: "es", name: "Español" },
+  { code: "nl", name: "Nederlands" },
+  { code: "it", name: "Italiano" },
+  { code: "lt", name: "Lietuvių" },
+  { code: "et", name: "Eesti" },
+  { code: "sv", name: "Svenska" },
+  { code: "no", name: "Norsk bokmål" },
+  { code: "da", name: "Dansk" },
+  { code: "fi", name: "Suomi" },
+  { code: "pl", name: "Polski" },
+  { code: "ru", name: "Русский" },
+] as const;

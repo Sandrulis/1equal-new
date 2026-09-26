@@ -1,27 +1,32 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/app/components/landing-page";
-import { getSiteUrl, siteDescription, siteName, siteTitle } from "@/app/lib/site";
+import { getSiteBrand } from "@/app/lib/site-admin/repository";
+import { siteTitleFor } from "@/app/lib/site-brand";
+import { getSiteUrl, siteDescription } from "@/app/lib/site";
 
-export const metadata: Metadata = {
-  title: { absolute: siteTitle },
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await getSiteBrand();
+  const title = siteTitleFor(brand.name);
+  return {
+  title: { absolute: title },
   description: siteDescription,
-  applicationName: siteName,
-  keywords: ["hokejs", "amatieru hokejs", "komandas kalendārs", "treniņi", "spēles", "1equal"],
-  authors: [{ name: siteName, url: "/" }],
-  creator: siteName,
+  applicationName: brand.name,
+  keywords: ["hokejs", "amatieru hokejs", "komandas kalendārs", "treniņi", "spēles", brand.name],
+  authors: [{ name: brand.name, url: "/" }],
+  creator: brand.name,
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "lv_LV",
     alternateLocale: ["en_US"],
     url: "/",
-    siteName,
-    title: siteTitle,
+    siteName: brand.name,
+    title,
     description: siteDescription,
   },
   twitter: {
     card: "summary_large_image",
-    title: siteTitle,
+    title,
     description: siteDescription,
   },
   robots: {
@@ -35,9 +40,12 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-};
+  };
+}
 
-export default function HomePage() {
+export default async function HomePage() {
+  const brand = await getSiteBrand();
+  const title = siteTitleFor(brand.name);
   const url = getSiteUrl();
   const jsonLd = {
     "@context": "https://schema.org",
@@ -45,13 +53,13 @@ export default function HomePage() {
       {
         "@type": "Organization",
         "@id": `${url}/#organization`,
-        name: siteName,
+        name: brand.name,
         url,
       },
       {
         "@type": "WebSite",
         "@id": `${url}/#website`,
-        name: siteName,
+        name: brand.name,
         url,
         description: siteDescription,
         inLanguage: "lv",
@@ -61,7 +69,7 @@ export default function HomePage() {
         "@type": "WebPage",
         "@id": `${url}/#webpage`,
         url,
-        name: siteTitle,
+        name: title,
         description: siteDescription,
         inLanguage: "lv",
         isPartOf: { "@id": `${url}/#website` },
@@ -70,7 +78,7 @@ export default function HomePage() {
       {
         "@type": "SoftwareApplication",
         "@id": `${url}/#app`,
-        name: siteName,
+        name: brand.name,
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         url,

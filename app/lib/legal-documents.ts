@@ -17,7 +17,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
   privacy: {
     lv: {
       intro:
-        "Šajā politikā ir aprakstīts, kādus datus 1equal apstrādā, kad tu lieto komandas paneli: kalendāru, sastāvu, dalību un laukumu maksu. Pašreizējā versija ir demo. Ievadītie dati netiek saglabāti serverī.",
+        "Šajā politikā ir aprakstīts, kādus datus 1equal apstrādā, kad tu lieto komandas paneli: kalendāru, sastāvu, dalību un laukumu maksu. Konts tiek saglabāts. Panelī redzamais sastāvs pagaidām ir paraugs.",
       sections: [
         {
           heading: "Kas mēs esam",
@@ -29,7 +29,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Kādus datus apstrādājam",
           paragraphs: [
-            "Vārds, e-pasts un parole ienākšanas un reģistrācijas laukos paliek šajā pārlūkā. Tie netiek nosūtīti un netiek saglabāti. Aizmirsušās paroles forma e-pastu nenosūta.",
+            "Reģistrējoties saglabājam vārdu un e-pastu. Paroli glabā autentifikācijas sistēma, nevis atklātā tekstā mūsu tabulā. Aizmirsušās paroles forma e-pastu vēl nenosūta.",
             "Panelī redzamie dalībnieki, spēles, treniņi un summas ir parauga dati. Izmaiņas ir tikai atvērtajā lapā un pazūd, kad to aizver vai pārlādē.",
             "Valoda saglabājas šajā pārlūkā (atslēga 1equal-lang). Sīkdatņu izvēle saglabājas sīkdatnē 1equal-consent.",
             "Serveris, kas izsniedz lapu, var īslaicīgi redzēt tehniskos pieprasījuma datus, piemēram, IP adresi un pārlūka veidu. Tos neizmantojam profilēšanai.",
@@ -39,7 +39,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           heading: "Kāpēc",
           paragraphs: [
             "Lai parādītu paneli, atcerētos valodu un tavu sīkdatņu izvēli.",
-            "Obligātā sīkdatne ir vajadzīga, lai izvēli atcerētos. Preferenču, statistikas un mārketinga kategorijas ieslēdzam tikai pēc piekrišanas. Pašlaik statistikas un mārketinga rīki nav pieslēgti.",
+            "Obligātā sīkdatne ir vajadzīga, lai izvēli atcerētos. Preferenču, statistikas un mārketinga kategorijas ieslēdzam tikai pēc piekrišanas. Umami statistikas skripts ielādējas tikai tad, ja administrators to ieslēdz un tu atļauj statistiku. Mārketinga rīki nav pieslēgti.",
           ],
         },
         {
@@ -53,7 +53,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Kam datus nododam",
           paragraphs: [
-            "Datus nepārdodam un nenododam reklāmas tīkliem. Statistikas un mārketinga rīki šobrīd nav pieslēgti.",
+            "Datus nepārdodam un nenododam reklāmas tīkliem. Umami saņem anonīmu lapas skatījumu tikai ar statistikas piekrišanu un ieslēgtu integrāciju. Mārketinga rīki nav pieslēgti.",
             "Ja tādu rīku pievienosim, tas darbosies tikai ar tavu piekrišanu, un šo politiku atjaunināsim.",
           ],
         },
@@ -77,7 +77,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
     },
     en: {
       intro:
-        "This policy describes what data 1equal processes when you use the team panel: the calendar, roster, attendance and rink fees. The current version is a demo. What you type is not stored on a server.",
+        "This policy describes what data 1equal processes when you use the team panel: the calendar, roster, attendance and rink fees. The account is stored. The roster shown in the panel is still a sample.",
       sections: [
         {
           heading: "Who we are",
@@ -89,7 +89,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "What data we process",
           paragraphs: [
-            "Name, email and password in the log-in and sign-up fields stay in this browser. They are not sent and not stored. The forgot-password form does not send email.",
+            "When you sign up we store your name and email. The password is kept by the authentication system, not as plain text in our table. The forgot-password form still does not send email.",
             "Members, games, practices and amounts in the panel are sample data. Changes exist only on the open page and disappear when you close or reload it.",
             "Language is saved in this browser (key 1equal-lang). The cookie choice is saved in the cookie 1equal-consent.",
             "The server that delivers the page may briefly see technical request data, such as an IP address and browser type. We do not use that for profiling.",
@@ -99,7 +99,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           heading: "Why",
           paragraphs: [
             "To show the panel and remember the language and your cookie choice.",
-            "The necessary cookie is required to remember that choice. Preference, analytics and marketing categories are enabled only after consent. Analytics and marketing tools are not connected yet.",
+            "The necessary cookie is required to remember that choice. Preference, analytics and marketing categories are enabled only after consent. The Umami analytics script loads only when an administrator turns it on and you allow analytics. Marketing tools are not connected.",
           ],
         },
         {
@@ -113,7 +113,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Who we share data with",
           paragraphs: [
-            "We do not sell data and we do not pass it to advertising networks. Analytics and marketing tools are not connected.",
+            "We do not sell data and we do not pass it to advertising networks. Umami receives an anonymous page view only with analytics consent and the integration turned on. Marketing tools are not connected.",
             "If we add such a tool, it will run only with your consent, and we will update this policy.",
           ],
         },
@@ -143,7 +143,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Demo pakalpojums",
           paragraphs: [
-            "Šī ir demo versija. Ienākšana un reģistrācija neatver īstu kontu. Parole netiek pārbaudīta, un e-pasts netiek nosūtīts.",
+            "Reģistrācija izveido kontu, un ienākšana pārbauda paroli. Pirmais reģistrētais lietotājs ir administrators.",
             "Panelī redzamie cilvēki, spēles, treniņi un summas ir paraugs. Tie nav īstas komandas ieraksti.",
           ],
         },
@@ -188,7 +188,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Demo service",
           paragraphs: [
-            "This is a demo. Log in and sign up do not open a real account. The password is not checked, and no email is sent.",
+            "Sign up creates an account, and log in checks the password. The first registered user is the administrator.",
             "People, games, practices and amounts in the panel are a sample. They are not a real team's records.",
           ],
         },
@@ -252,7 +252,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Ko vēl nelietojam",
           paragraphs: [
-            "Statistikas un mārketinga sīkdatnes šobrīd netiek iestatītas, arī ja kategoriju atļauj. Kad rīks tiks pievienots, tas darbosies tikai ar attiecīgo piekrišanu, un šo sarakstu papildināsim.",
+            "Mārketinga sīkdatnes netiek iestatītas. Umami skripts ielādējas tikai tad, ja administrators integrāciju ieslēdz un tu atļauj statistiku.",
           ],
         },
         {
@@ -293,7 +293,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "What we do not use yet",
           paragraphs: [
-            "Analytics and marketing cookies are not set right now, even if you allow the category. When a tool is added, it will run only with that consent, and we will extend this list.",
+            "Marketing cookies are not set. The Umami script loads only when an administrator turns the integration on and you allow analytics.",
           ],
         },
         {
