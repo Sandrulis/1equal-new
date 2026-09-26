@@ -9,7 +9,7 @@ import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
 import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
-import { createOwnedTeam, joinOwnedTeam } from "@/app/lib/team-actions";
+import { createOwnedEvent, createOwnedTeam, joinOwnedTeam } from "@/app/lib/team-actions";
 import {
   formatDisplayDate,
   formatDuration,
@@ -24,6 +24,7 @@ import {
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { EventDetails, type Rsvp } from "@/app/components/event-details";
+import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
 import { SiteFooter } from "@/app/components/site-footer";
@@ -51,7 +52,9 @@ type TypeFilter = "all" | EventType;
 
 type DashboardView = "home" | "team" | "subteams" | "venues";
 
-function eventCost(event: TeamEvent, pricePerHour: number): number {
+function eventCost(event: TeamEvent, pricePerHour: number): number | null {
+  if (event.type === "game" && event.expense != null) return event.expense;
+  if (!event.end) return null;
   return hoursBetween(event.start, event.end) * pricePerHour;
 }
 
@@ -66,9 +69,10 @@ function monthCells(year: number, month: number): Date[] {
   });
 }
 
-function EventCardBody({ event, game, cost }: { event: TeamEvent; game: boolean; cost: number }) {
+function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; game: boolean; cost: number | null; subteamName?: string }) {
   const { t } = useLanguage();
-  const { subteamById } = useTeamCatalog();
+  const subteam = subteamName;
+  const hours = event.end ? hoursBetween(event.start, event.end) : null;
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -76,14 +80,15 @@ function EventCardBody({ event, game, cost }: { event: TeamEvent; game: boolean;
           <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
             {game ? t("legend.game") : t("legend.training")}
           </p>
-          <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p>
+          {event.titleId ? <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p> : null}
+          {!event.titleId && !game ? <p className="mt-0.5 text-sm">{event.withCoach ? t("event.add.coach") : t("event.add.coach.off")}</p> : null}
         </div>
-        <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p>
+        {cost != null ? <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p> : null}
       </div>
       <p className="mt-2 text-sm text-muted">
-        {event.start}-{event.end}, {formatDuration(hoursBetween(event.start, event.end))}
+        {hours != null ? `${event.start}-${event.end}, ${formatDuration(hours)}` : event.start}
       </p>
-      <p className="mt-1 text-sm">{subteamById(event.subteamId)?.name}</p>
+      {subteam ? <p className="mt-1 text-sm">{subteam}</p> : null}
     </>
   );
 }
@@ -113,7 +118,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${(team.events ?? []).map((item) => item.id).join(",")}`).join("|");
   const preferredCode = useRef<string | null>(null);
   preferredCode.current = ownedTeam?.code ?? preferredCode.current;
   useEffect(() => {
@@ -242,6 +247,9 @@ export function TeamDashboard({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [demoEvents, setDemoEvents] = useState<TeamEvent[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [adminNavOpen, setAdminNavOpen] = useState(false);
   const [compactRail, setCompactRail] = useState(false);
@@ -288,14 +296,19 @@ export function TeamDashboard({
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
+  const calendarEvents = useMemo(() => {
+    if (basePath === "/demo") return [...EVENTS, ...demoEvents];
+    return ownedTeam?.events ?? [];
+  }, [basePath, demoEvents, ownedTeam]);
+
   const filtered = useMemo(() => {
-    return EVENTS.filter((event) => {
+    return calendarEvents.filter((event) => {
       if (typeFilter !== "all" && event.type !== typeFilter) return false;
       if (activeSubteamId && event.subteamId !== activeSubteamId) return false;
       if (activeVenueId && event.venueId !== activeVenueId) return false;
       return true;
     });
-  }, [activeSubteamId, activeVenueId, typeFilter]);
+  }, [activeSubteamId, activeVenueId, calendarEvents, typeFilter]);
 
   const selectedEvents = filtered
     .filter((event) => event.date === selectedIso)
@@ -362,6 +375,52 @@ export function TeamDashboard({
     setVenueId(null);
   }
 
+  async function addEvent(input: NewEventInput) {
+    if (savingEvent) return;
+    if (basePath === "/demo" || !ownedTeam?.id) {
+      setDemoEvents((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          date: input.date,
+          start: input.start,
+          end: "",
+          type: input.type,
+          titleId: "",
+          subteamId: input.subteamId ?? "",
+          venueId: input.venueId,
+          expense: input.expense,
+          withCoach: input.withCoach,
+        },
+      ]);
+      const picked = parseIsoDate(input.date);
+      setYear(picked.getFullYear());
+      setMonth(picked.getMonth());
+      setSelectedIso(input.date);
+      setAddingEvent(false);
+      showFeedback({ message: t("event.add.saved"), variant: "success" });
+      return;
+    }
+    setSavingEvent(true);
+    const result = await createOwnedEvent({ teamId: ownedTeam.id, ...input });
+    setSavingEvent(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    const next = { ...ownedTeam, events: [...(ownedTeam.events ?? []), result.event] };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+    const picked = parseIsoDate(input.date);
+    setYear(picked.getFullYear());
+    setMonth(picked.getMonth());
+    setSelectedIso(input.date);
+    setAddingEvent(false);
+    showFeedback({ message: t("event.add.saved"), variant: "success" });
+    router.refresh();
+  }
+
   function openLineup(event: TeamEvent) {
     router.push(eventHref(basePath, event.id, true));
     window.scrollTo({ top: 0 });
@@ -396,7 +455,7 @@ export function TeamDashboard({
 
   useEffect(() => {
     if (!openEventId || lineup) return;
-    const event = EVENTS.find((item) => item.id === openEventId);
+    const event = calendarEvents.find((item) => item.id === openEventId);
     if (!event) return;
     const date = parseIsoDate(event.date);
     setYear(date.getFullYear());
@@ -406,7 +465,7 @@ export function TeamDashboard({
       document.getElementById("event-details")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [openEventId, lineup]);
+  }, [calendarEvents, openEventId, lineup]);
 
   function showView(next: Exclude<DashboardView, "home">) {
     collapseIfNarrow();
@@ -450,8 +509,8 @@ export function TeamDashboard({
   }
 
   const cells = monthCells(year, month);
-  const openEvent = openEventId ? EVENTS.find((event) => event.id === openEventId) ?? null : null;
-  const lineupEvent = lineup && openEventId ? EVENTS.find((event) => event.id === openEventId) ?? null : null;
+  const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
+  const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
 
   return (
     <div
@@ -760,7 +819,8 @@ export function TeamDashboard({
                       </button>
                       <span className="flex flex-col gap-1">
                         {events.slice(0, 2).map((event) => {
-                          const place = venueById(event.venueId)?.area.split(",")[0] ?? "";
+                          const venue = venueSource.find((item) => item.id === event.venueId);
+                          const place = venue?.area.split(",")[0] || venue?.name || "";
                           const label = `${event.start} ${place}`.trim();
                           return (
                             <button
@@ -768,7 +828,8 @@ export function TeamDashboard({
                               type="button"
                               onClick={(click) => {
                                 click.stopPropagation();
-                                showEvent(event, date);
+                                if (event.titleId) showEvent(event, date);
+                                else selectDay(date);
                               }}
                               className={`truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 max-[499px]:text-clip ${
                                 event.type === "game"
@@ -799,7 +860,7 @@ export function TeamDashboard({
           </div>
 
           <div className="flex flex-col gap-3 xl:sticky xl:top-5">
-          <button type="button" className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+          <button type="button" onClick={() => setAddingEvent(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
             <IconPlus />
             {t("event.add")}
           </button>
@@ -813,19 +874,19 @@ export function TeamDashboard({
             ) : (
               <ul className="mt-4 space-y-3">
                 {selectedEvents.map((event) => {
-                  const venue = venueById(event.venueId);
-                  const hours = hoursBetween(event.start, event.end);
+                  const venue = venueSource.find((item) => item.id === event.venueId);
                   const cost = eventCost(event, venue?.pricePerHour ?? 0);
+                  const subteamName = filterSubteams.find((item) => item.id === event.subteamId)?.name;
                   const game = event.type === "game";
                   return (
                     <li key={event.id} className={`rounded-xl bg-ice p-3 ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
-                      {lineupAllowed ? (
+                      {lineupAllowed && event.titleId ? (
                         <button type="button" onClick={() => openLineup(event)} className="w-full text-left">
-                          <EventCardBody event={event} game={game} cost={cost} />
+                          <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
                         </button>
                       ) : (
                         <div>
-                          <EventCardBody event={event} game={game} cost={cost} />
+                          <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
                         </div>
                       )}
                       {venue ? (
@@ -837,9 +898,11 @@ export function TeamDashboard({
                           {venue.name}
                         </button>
                       ) : null}
-                      <p className="mt-1 text-xs text-muted">
-                        {formatDuration(hours)} × {formatMoney(venue?.pricePerHour ?? 0)}/h
-                      </p>
+                      {event.end ? (
+                        <p className="mt-1 text-xs text-muted">
+                          {formatDuration(hoursBetween(event.start, event.end))} × {formatMoney(venue?.pricePerHour ?? 0)}/h
+                        </p>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -848,6 +911,17 @@ export function TeamDashboard({
           </aside>
           </div>
         </section>
+        {addingEvent ? (
+          <EventFormDialog
+            key={selectedIso}
+            initialDate={selectedIso}
+            venues={venueSource.filter((item) => !item.hidden)}
+            subteams={filterSubteams}
+            pending={savingEvent}
+            onClose={() => setAddingEvent(false)}
+            onCreate={(input) => void addEvent(input)}
+          />
+        ) : null}
         {openEvent ? (
           <EventDetails
             event={openEvent}

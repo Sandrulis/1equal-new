@@ -24,7 +24,7 @@ export default async function DashboardPage({
   if (!account) redirect("/login");
   const { path } = await params;
   const query = await searchParams;
-  const route = parseDashboardPath(path);
+  const route = parseDashboardPath(path, { demoEvents: false });
   if (!route || (route.view === "admin" && !account.isAdmin)) redirect("/dashboard");
   await touchUserLastSeen(account.id);
   const [admin, initialTeams, enabledModules] = await Promise.all([

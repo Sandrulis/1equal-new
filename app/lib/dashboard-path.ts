@@ -17,7 +17,7 @@ function adminSection(value: string): AdminSection | null {
   return ADMIN_SECTIONS.find((section) => section === value) ?? null;
 }
 
-export function parseDashboardPath(path: string[] | undefined): DashboardRoute | null {
+export function parseDashboardPath(path: string[] | undefined, options?: { demoEvents?: boolean }): DashboardRoute | null {
   const parts = path ?? [];
   if (parts.length === 0) return { view: "home", eventId: null, lineup: false };
   if (parts[0] === "team" && parts.length === 1) return { view: "team", memberId: null };
@@ -30,7 +30,8 @@ export function parseDashboardPath(path: string[] | undefined): DashboardRoute |
     const section = adminSection(parts[1]);
     if (section) return { view: "admin", section };
   }
-  const eventKnown = parts[0] === "events" && EVENTS.some((event) => event.id === parts[1]);
+  const demoEvents = options?.demoEvents ?? true;
+  const eventKnown = demoEvents && parts[0] === "events" && EVENTS.some((event) => event.id === parts[1]);
   if (eventKnown && parts.length === 2) return { view: "home", eventId: parts[1], lineup: false };
   if (eventKnown && parts.length === 3 && parts[2] === "lineup") return { view: "home", eventId: parts[1], lineup: true };
   return null;
@@ -40,7 +41,7 @@ export function routeFromPathname(pathname: string, basePath: DashboardBase): Da
   if (pathname === basePath) return { view: "home", eventId: null, lineup: false };
   const prefix = `${basePath}/`;
   if (!pathname.startsWith(prefix)) return { view: "home", eventId: null, lineup: false };
-  return parseDashboardPath(pathname.slice(prefix.length).split("/").filter(Boolean)) ?? { view: "home", eventId: null, lineup: false };
+  return parseDashboardPath(pathname.slice(prefix.length).split("/").filter(Boolean), { demoEvents: basePath === "/demo" }) ?? { view: "home", eventId: null, lineup: false };
 }
 
 export function teamHref(basePath: DashboardBase, memberId?: string | null): string {

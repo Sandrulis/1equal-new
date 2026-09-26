@@ -46,6 +46,8 @@ export type TeamEvent = {
   titleId: string;
   subteamId: string;
   venueId: string;
+  expense?: number | null;
+  withCoach?: boolean;
 };
 
 export function formatJersey(number: number | null | undefined): string | null {

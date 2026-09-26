@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { BalanceEntry, Member, Venue } from "@/app/lib/demo-data";
+import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
-import { memberFromRow, requireUserAdmin } from "@/app/lib/team-membership";
+import { eventFromRow, memberFromRow, requireUserAdmin } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { roleFromPosition } from "@/app/lib/team-creator";
@@ -120,7 +120,7 @@ export async function createOwnedTeam(input: { name: string; sourceUrl: string |
   revalidatePath("/", "layout");
   return {
     ok: true,
-    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, members: [member], subteams: [], venues: [] },
+    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, members: [member], subteams: [], venues: [], events: [] },
   };
 }
 
@@ -138,10 +138,11 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
     .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name)")
     .eq("team_id", found.data.id);
   if (members.error || !members.data) return { ok: false, error: "auth.error.generic" };
-  const [groups, links, places] = await Promise.all([
+  const [groups, links, places, events] = await Promise.all([
     gate.client.from("subteams").select("id, name, color, updated_at").eq("team_id", found.data.id),
     gate.client.from("team_member_subteams").select("user_id, subteam_id").eq("team_id", found.data.id),
     gate.client.from("venues").select("id, name, price_per_hour, hidden, updated_at").eq("team_id", found.data.id),
+    gate.client.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach").eq("team_id", found.data.id).order("event_date").order("start_time"),
   ]);
   const idsByUser = new Map<string, string[]>();
   for (const link of links.data ?? []) {
@@ -164,6 +165,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
       members: members.data.map((row) => memberFromRow(row, idsByUser.get(row.user_id) ?? [])),
       subteams: (groups.data ?? []).map((row) => ({ id: row.id, name: row.name, color: row.color, updatedAt: toLocalDateTimeStamp(row.updated_at) })),
       venues: (places.data ?? []).map(venueFromRow),
+      events: (events.data ?? []).map(eventFromRow),
     },
   };
 }
@@ -332,6 +334,50 @@ export async function hideOwnedVenue(teamId: string, venueId: string): Promise<{
   if (hidden.error) return { ok: false, error: "auth.error.generic" };
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+export async function createOwnedEvent(input: {
+  teamId: string;
+  date: string;
+  start: string;
+  type: "game" | "training";
+  venueId: string;
+  subteamId: string | null;
+  expense: number | null;
+  withCoach: boolean;
+}): Promise<{ ok: true; event: TeamEvent } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
+  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start)) return { ok: false, error: "auth.error.generic" };
+  if (input.type !== "game" && input.type !== "training") return { ok: false, error: "auth.error.generic" };
+  const venue = await gate.client.from("venues").select("id").eq("id", input.venueId).eq("team_id", input.teamId).eq("hidden", false).maybeSingle();
+  if (venue.error || !venue.data) return { ok: false, error: "auth.error.generic" };
+  const subteamId = input.subteamId || null;
+  if (subteamId) {
+    const group = await gate.client.from("subteams").select("id").eq("id", subteamId).eq("team_id", input.teamId).maybeSingle();
+    if (group.error || !group.data) return { ok: false, error: "auth.error.generic" };
+  }
+  const expense = input.type === "game" ? Math.round(Number(input.expense) * 100) / 100 : null;
+  if (input.type === "game" && (!Number.isFinite(expense) || expense == null || expense < 0 || expense > 1_000_000)) return { ok: false, error: "auth.error.generic" };
+  const inserted = await gate.client
+    .from("team_events")
+    .insert({
+      team_id: input.teamId,
+      event_date: input.date,
+      start_time: input.start,
+      event_type: input.type,
+      venue_id: input.venueId,
+      subteam_id: subteamId,
+      expense,
+      with_coach: input.type === "training" && input.withCoach,
+    })
+    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach")
+    .single();
+  if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
+  revalidatePath("/", "layout");
+  return { ok: true, event: eventFromRow(inserted.data) };
 }
 
 export async function deleteOwnedSubteam(teamId: string, subteamId: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {

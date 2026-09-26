@@ -1,4 +1,4 @@
-import { TEAM_NAME, type Member, type Subteam, type Venue } from "@/app/lib/demo-data";
+import { TEAM_NAME, type Member, type Subteam, type TeamEvent, type Venue } from "@/app/lib/demo-data";
 
 export const DEMO_INVITE_CODE = "RIGA4K";
 
@@ -13,6 +13,7 @@ export type IssuedTeam = {
   members?: Member[];
   subteams?: Subteam[];
   venues?: Venue[];
+  events?: TeamEvent[];
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

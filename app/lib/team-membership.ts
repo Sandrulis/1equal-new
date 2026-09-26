@@ -1,5 +1,5 @@
 import { getAccountProfile } from "@/app/lib/auth/session";
-import type { BalanceEntry, Member, Venue } from "@/app/lib/demo-data";
+import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { IssuedTeam } from "@/app/lib/invite-code";
@@ -31,6 +31,33 @@ type TeamRow = {
   leader_id: string | null;
   updated_at: string;
 };
+
+type EventRow = {
+  id: string;
+  team_id: string;
+  event_date: string;
+  start_time: string;
+  event_type: string;
+  venue_id: string;
+  subteam_id: string | null;
+  expense: number | string | null;
+  with_coach: boolean;
+};
+
+export function eventFromRow(row: EventRow): TeamEvent {
+  return {
+    id: row.id,
+    date: row.event_date.slice(0, 10),
+    start: row.start_time.slice(0, 5),
+    end: "",
+    type: row.event_type === "game" ? "game" : "training",
+    titleId: "",
+    subteamId: row.subteam_id ?? "",
+    venueId: row.venue_id,
+    expense: row.expense == null ? null : Number(row.expense),
+    withCoach: row.with_coach === true,
+  };
+}
 
 type EntryRow = {
   id: string;
@@ -81,7 +108,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
   const mine = await admin.from("team_members").select("team_id").eq("user_id", userId);
   if (mine.error || !mine.data?.length) return [];
   const teamIds = mine.data.map((row) => row.team_id);
-  const [teams, members, groups, links, entries, places] = await Promise.all([
+  const [teams, members, groups, links, entries, places, events] = await Promise.all([
     admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     admin
       .from("team_members")
@@ -91,6 +118,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     admin.from("team_member_subteams").select("team_id, user_id, subteam_id").in("team_id", teamIds),
     admin.from("balance_entries").select("id, team_id, user_id, amount, created_at").in("team_id", teamIds).order("created_at", { ascending: false }),
     admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").in("team_id", teamIds),
+    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach").in("team_id", teamIds).order("event_date").order("start_time"),
   ]);
   if (teams.error || !teams.data || members.error || !members.data) return [];
   const idsByMember = new Map<string, string[]>();
@@ -137,6 +165,12 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     });
     venuesByTeam.set(row.team_id, list);
   }
+  const eventsByTeam = new Map<string, TeamEvent[]>();
+  for (const row of (events.data ?? []) as EventRow[]) {
+    const list = eventsByTeam.get(row.team_id) ?? [];
+    list.push(eventFromRow(row));
+    eventsByTeam.set(row.team_id, list);
+  }
   return (teams.data as TeamRow[])
     .filter((team) => team.invite_code)
     .map((team) => ({
@@ -150,6 +184,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
       members: byTeam.get(team.id) ?? [],
       subteams: subteamsByTeam.get(team.id) ?? [],
       venues: venuesByTeam.get(team.id) ?? [],
+      events: eventsByTeam.get(team.id) ?? [],
     }));
 }
 

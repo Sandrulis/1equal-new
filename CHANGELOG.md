@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.1.5
 
-- (none)
+- Ielogotā komandas kalendārā vairs nerādās parauga spēles un treniņi
+- Notikumu pievieno un saglabā. Datums ar veidu, sākums ar treneri un vieta ar apakškomandu ir divās kolonnās. Apakškomanda nav obligāta. Spēlei ir izdevumi, treniņam slēdzis ar treneri
 
 ## v0.1.4
 
