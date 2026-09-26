@@ -1,9 +1,14 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { writeAudit } from "@/app/lib/security/audit";
+import { refreshSitePublic } from "@/app/lib/cache-tags";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
 import { messages, type MessageKey } from "@/app/lib/messages";
+import { listAdminTodos } from "@/app/lib/site-admin/repository";
+import { EMAIL_KINDS, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
+import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
+import { isCurrency, votingHours } from "@/app/lib/team-defaults";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const MAX_BYTES = 1_572_864;
@@ -12,7 +17,6 @@ const ALLOWED_TYPES = new Set([
   "image/jpeg",
   "image/webp",
   "image/gif",
-  "image/svg+xml",
   "image/x-icon",
   "image/vnd.microsoft.icon",
 ]);
@@ -20,7 +24,7 @@ const ALLOWED_TYPES = new Set([
 type ActionResult = { ok: true } | { ok: false; error: MessageKey };
 
 function refresh() {
-  revalidatePath("/", "layout");
+  refreshSitePublic();
 }
 
 async function adminClient() {
@@ -34,7 +38,6 @@ async function adminClient() {
 function extension(file: File): string {
   const fromName = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (fromName && /^[a-z0-9]{1,5}$/.test(fromName)) return fromName;
-  if (file.type === "image/svg+xml") return "svg";
   if (file.type === "image/jpeg") return "jpg";
   if (file.type === "image/webp") return "webp";
   if (file.type === "image/gif") return "gif";
@@ -99,14 +102,45 @@ export async function saveSiteSettings(formData: FormData): Promise<ActionResult
     faviconPath = null;
   }
 
+  const currency = String(formData.get("currency") ?? "");
+  const trainingVotingHours = votingHours(formData.get("trainingVotingHours"));
+  const gameVotingHours = votingHours(formData.get("gameVotingHours"));
+  if (!isCurrency(currency) || trainingVotingHours == null || gameVotingHours == null) return { ok: false, error: "site_settings.error.team_defaults" };
+
+  const contactEmail = String(formData.get("contactEmail") ?? "").trim().toLowerCase();
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) return { ok: false, error: "site_settings.error.contact_email" };
+
+  const weekStartDay = String(formData.get("weekStartDay") ?? "");
+  const dateFormat = String(formData.get("dateFormat") ?? "");
+  const dateSeparator = String(formData.get("dateSeparator") ?? "");
+  const timeFormat = String(formData.get("timeFormat") ?? "");
+  const timeZone = String(formData.get("timezone") ?? "").trim();
+  const displayOk =
+    normalizeWeekStartDay(weekStartDay) === weekStartDay &&
+    normalizeDateFormat(dateFormat) === dateFormat &&
+    normalizeDateSeparator(dateSeparator) === dateSeparator &&
+    normalizeTimeFormat(timeFormat) === timeFormat &&
+    isTimeZone(timeZone);
+  if (!displayOk) return { ok: false, error: "site_settings.error.display" };
+
   const { error } = await gate.client.from("site_settings").upsert({
     id: 1,
     name,
     logo_path: logoPath,
     favicon_path: faviconPath,
+    week_start_day: weekStartDay,
+    date_format: dateFormat,
+    date_separator: dateSeparator,
+    time_format: timeFormat,
+    timezone: timeZone,
+    currency,
+    training_voting_hours: trainingVotingHours,
+    game_voting_hours: gameVotingHours,
+    contact_email: contactEmail,
     updated_at: new Date().toISOString(),
   });
   if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("site_settings.save", "site_settings", "1");
   refresh();
   return { ok: true };
 }
@@ -249,11 +283,32 @@ export async function saveTeam(input: { id: string | null; name: string }): Prom
   return { ok: true };
 }
 
+export async function setAdminTeamWatch(teamId: string, watch: boolean): Promise<ActionResult> {
+  const account = await getAccountProfile();
+  if (!account?.isAdmin) return { ok: false, error: "admin.error.forbidden" };
+  const client = createAdminClient();
+  if (!client) return { ok: false, error: "auth.error.config" };
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
+  const team = await client.from("teams").select("id").eq("id", teamId).maybeSingle();
+  if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+  if (watch) {
+    const saved = await client.from("admin_team_watches").upsert({ user_id: account.id, team_id: teamId }, { onConflict: "user_id,team_id" });
+    if (saved.error) return { ok: false, error: "auth.error.generic" };
+  } else {
+    const removed = await client.from("admin_team_watches").delete().eq("user_id", account.id).eq("team_id", teamId);
+    if (removed.error) return { ok: false, error: "auth.error.generic" };
+  }
+  refresh();
+  await writeAudit(watch ? "team.watch" : "team.unwatch", "teams", teamId);
+  return { ok: true };
+}
+
 export async function deleteTeam(id: string): Promise<ActionResult> {
   const gate = await adminClient();
   if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
   const { error } = await gate.client.from("teams").delete().eq("id", id);
   if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("team.delete", "teams", id);
   refresh();
   return { ok: true };
 }
@@ -333,6 +388,106 @@ export async function deleteFrontendModule(moduleKey: string): Promise<ActionRes
   if (error) return { ok: false, error: "auth.error.generic" };
   refresh();
   return { ok: true };
+}
+
+function isEmailKind(value: string): value is EmailKind {
+  return EMAIL_KINDS.some((kind) => kind === value);
+}
+
+export async function saveEmailTemplates(templates: EmailTemplate[]): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const { data: languages } = await gate.client.from("site_languages").select("code");
+  const codes = new Set((languages ?? []).map((row) => row.code));
+  const rows = templates.flatMap((template) => {
+    if (!isEmailKind(template.kind)) return [];
+    const languageCodes = new Set([...Object.keys(template.subjects), ...Object.keys(template.bodies), ...Object.keys(template.buttons)]);
+    return [...languageCodes].flatMap((code) => {
+      if (!codes.has(code)) return [];
+      return [{
+        kind: template.kind,
+        language_code: code,
+        subject: (template.subjects[code] ?? "").slice(0, 200),
+        body: (template.bodies[code] ?? "").slice(0, 4000),
+        button_label: (template.buttons[code] ?? "").slice(0, 80),
+      }];
+    });
+  });
+  if (rows.length === 0) return { ok: false, error: "auth.error.generic" };
+  const { error } = await gate.client.from("email_templates").upsert(rows, { onConflict: "kind,language_code" });
+  if (error) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true };
+}
+
+async function todosForAdmin(): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey }> {
+  const account = await getAccountProfile();
+  if (!account?.isAdmin) return { ok: false, error: "admin.error.forbidden" };
+  return { ok: true, todos: await listAdminTodos(account.id) };
+}
+
+export async function addAdminTodo(title: string): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const account = await getAccountProfile();
+  if (!account) return { ok: false, error: "admin.error.forbidden" };
+  const trimmed = title.trim().slice(0, 500);
+  if (!trimmed) return { ok: false, error: "admin.todo.error.empty" };
+  const existing = await gate.client.from("user_todos").select("sort_order").eq("user_id", account.id).eq("is_done", false).order("sort_order", { ascending: false }).limit(1);
+  const sortOrder = Number(existing.data?.[0]?.sort_order ?? 0) + 1;
+  const { error } = await gate.client.from("user_todos").insert({ user_id: account.id, title: trimmed, sort_order: sortOrder });
+  if (error) return { ok: false, error: "admin.todo.error.save" };
+  refresh();
+  return todosForAdmin();
+}
+
+export async function setAdminTodoDone(id: string, done: boolean): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const account = await getAccountProfile();
+  if (!account) return { ok: false, error: "admin.error.forbidden" };
+  const { error } = await gate.client
+    .from("user_todos")
+    .update({ is_done: done, completed_at: done ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", account.id);
+  if (error) return { ok: false, error: "admin.todo.error.save" };
+  refresh();
+  return todosForAdmin();
+}
+
+export async function reorderAdminTodos(ids: string[]): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey; todos?: AdminTodo[] }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const account = await getAccountProfile();
+  if (!account) return { ok: false, error: "admin.error.forbidden" };
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return { ok: false, error: "admin.todo.error.save" };
+  const ordered = [...new Set(ids)];
+  const existing = await gate.client.from("user_todos").select("id").eq("user_id", account.id).eq("is_done", false);
+  if (existing.error) return { ok: false, error: "admin.todo.error.save" };
+  const openIds = new Set((existing.data ?? []).map((row) => row.id));
+  if (ordered.length !== openIds.size || ordered.some((id) => !openIds.has(id))) return { ok: false, error: "admin.todo.error.save" };
+  const updatedAt = new Date().toISOString();
+  for (let index = 0; index < ordered.length; index += 1) {
+    const saved = await gate.client.from("user_todos").update({ sort_order: index, updated_at: updatedAt }).eq("id", ordered[index]).eq("user_id", account.id).eq("is_done", false);
+    if (saved.error) {
+      const current = await todosForAdmin();
+      return current.ok ? { ok: false, error: "admin.todo.error.save", todos: current.todos } : { ok: false, error: "admin.todo.error.save" };
+    }
+  }
+  refresh();
+  return todosForAdmin();
+}
+
+export async function deleteAdminTodo(id: string): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const account = await getAccountProfile();
+  if (!account) return { ok: false, error: "admin.error.forbidden" };
+  const { error } = await gate.client.from("user_todos").delete().eq("id", id).eq("user_id", account.id);
+  if (error) return { ok: false, error: "admin.todo.error.save" };
+  refresh();
+  return todosForAdmin();
 }
 
 export async function deleteSiteTranslation(key: string): Promise<ActionResult> {

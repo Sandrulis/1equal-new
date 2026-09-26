@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { IconChevronLeft, IconChevronRight } from "@/app/components/icon-tip-button";
 import type { EventType, Subteam, TeamEvent, Venue } from "@/app/lib/demo-data";
-import { formatDisplayDate, formatMonthTitle, isoDate, parseIsoDate, weekdayHeaders } from "@/app/lib/format";
+import { useDisplayFormat } from "@/app/components/display-preferences";
+import { formatMonthTitle, isoDate, monthGrid, parseIsoDate } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 export type NewEventInput = {
@@ -35,6 +36,7 @@ export function EventFormDialog({
   onCreate: (input: NewEventInput) => void;
 }) {
   const { t } = useLanguage();
+  const { formatDate } = useDisplayFormat();
   const [dateIso, setDateIso] = useState(event?.date || initialDate || "");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [type, setType] = useState<EventType | "">(event?.type ?? "");
@@ -73,7 +75,7 @@ export function EventFormDialog({
               onClick={() => setPickerOpen((open) => !open)}
               className="mt-1 flex w-full items-center rounded-lg bg-ice px-3 py-2 text-left ring-1 ring-line"
             >
-              <span className={dateIso ? "text-ink" : "text-muted"}>{dateIso ? formatDisplayDate(dateIso) : "dd.mm.yyyy"}</span>
+              <span className={dateIso ? "text-ink" : "text-muted"}>{dateIso ? formatDate(dateIso) : formatDate("2026-08-19")}</span>
             </button>
           </div>
           <fieldset className="min-w-0 border-0 p-0">
@@ -197,11 +199,12 @@ export function EventFormDialog({
 
 function EventDatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const { formatLang, t } = useLanguage();
+  const { display, headers } = useDisplayFormat();
   const selected = value ? parseIsoDate(value) : new Date();
   const [year, setYear] = useState(selected.getFullYear());
   const [month, setMonth] = useState(selected.getMonth());
   const today = isoDate(new Date());
-  const cells = monthCells(year, month);
+  const cells = monthGrid(year, month, display.weekStartDay);
 
   function shift(delta: number) {
     const next = new Date(year, month + delta, 1);
@@ -221,7 +224,7 @@ function EventDatePicker({ value, onChange }: { value: string; onChange: (iso: s
         </button>
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-muted">
-        {weekdayHeaders(formatLang).map((label) => (
+        {headers.map((label) => (
           <span key={label} className="py-1">
             {label}
           </span>
@@ -250,13 +253,3 @@ function EventDatePicker({ value, onChange }: { value: string; onChange: (iso: s
   );
 }
 
-function monthCells(year: number, month: number): Date[] {
-  const first = new Date(year, month, 1);
-  const offset = (first.getDay() + 6) % 7;
-  const start = new Date(year, month, 1 - offset);
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(start);
-    day.setDate(start.getDate() + index);
-    return day;
-  });
-}

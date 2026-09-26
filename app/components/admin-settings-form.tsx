@@ -2,10 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DisplayPreferencesFields } from "@/app/components/display-preferences";
+import { MoneyVotingFields } from "@/app/components/money-voting-fields";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { displaySettingsEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
+import { isCurrency, votingHours } from "@/app/lib/team-defaults";
 import { saveSiteSettings } from "@/app/lib/site-admin/actions";
 import type { SiteBrand } from "@/app/lib/site-admin/types";
 import { useLanguage } from "@/app/lib/language";
+
+function displayDraft(initial: SiteBrand): UserDisplayPreferences {
+  return {
+    weekStartDay: initial.display.weekStartDay,
+    dateFormat: initial.display.dateFormat,
+    dateSeparator: initial.display.dateSeparator,
+    timeFormat: initial.display.timeFormat,
+    timezone: initial.display.timeZone,
+  };
+}
 
 export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
   const { t } = useLanguage();
@@ -16,6 +30,11 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
   const [faviconFile, setFaviconFile] = useState<File | null>(null);
   const [removeLogo, setRemoveLogo] = useState(false);
   const [removeFavicon, setRemoveFavicon] = useState(false);
+  const [display, setDisplay] = useState(() => displayDraft(initial));
+  const [currency, setCurrency] = useState(initial.currency);
+  const [trainingHours, setTrainingHours] = useState(String(initial.trainingVotingHours));
+  const [gameHours, setGameHours] = useState(String(initial.gameVotingHours));
+  const [contactEmail, setContactEmail] = useState(initial.contactEmail);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -24,10 +43,28 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
     setFaviconFile(null);
     setRemoveLogo(false);
     setRemoveFavicon(false);
+    setDisplay(displayDraft(initial));
+    setCurrency(initial.currency);
+    setTrainingHours(String(initial.trainingVotingHours));
+    setGameHours(String(initial.gameVotingHours));
+    setContactEmail(initial.contactEmail);
   }, [initial]);
 
-  const dirty = name !== initial.name || logoFile !== null || faviconFile !== null || removeLogo || removeFavicon;
-  const canSave = dirty && name.trim() !== "" && !pending;
+  const displayDirty = !displaySettingsEqual(
+    {
+      weekStartDay: display.weekStartDay ?? initial.display.weekStartDay,
+      dateFormat: display.dateFormat ?? initial.display.dateFormat,
+      dateSeparator: display.dateSeparator ?? initial.display.dateSeparator,
+      timeFormat: display.timeFormat ?? initial.display.timeFormat,
+      timeZone: display.timezone ?? initial.display.timeZone,
+    },
+    initial.display,
+  );
+  const trainingValue = votingHours(trainingHours);
+  const gameValue = votingHours(gameHours);
+  const defaultsDirty = currency !== initial.currency || trainingValue !== initial.trainingVotingHours || gameValue !== initial.gameVotingHours;
+  const dirty = name !== initial.name || contactEmail !== initial.contactEmail || logoFile !== null || faviconFile !== null || removeLogo || removeFavicon || displayDirty || defaultsDirty;
+  const canSave = dirty && name.trim() !== "" && trainingValue != null && gameValue != null && !pending;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +98,19 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
           className="mt-2 w-full rounded-xl bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy"
         />
       </label>
+      <label className="block text-sm font-medium">
+        {t("site_settings.form.contact_email")}
+        <input
+          name="contactEmail"
+          type="email"
+          value={contactEmail}
+          maxLength={200}
+          autoComplete="email"
+          onChange={(event) => setContactEmail(event.target.value.trim())}
+          className="mt-2 w-full rounded-xl bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy"
+        />
+        <span className="mt-1.5 block text-xs font-normal text-muted">{t("site_settings.form.contact_email_hint")}</span>
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <ImageField
           label={t("site_settings.form.logo")}
@@ -93,6 +143,25 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
             setFaviconFile(null);
             setRemoveFavicon(true);
           }}
+        />
+      </div>
+      <div className="space-y-3 border-t border-line pt-5">
+        <h2 className="text-base font-semibold">{t("site_settings.form.display")}</h2>
+        <DisplayPreferencesFields idPrefix="site-display" values={display} onChange={setDisplay} system={initial.display} />
+      </div>
+      <div className="space-y-3 border-t border-line pt-5">
+        <h2 className="text-base font-semibold">{t("site_settings.form.defaults")}</h2>
+        <MoneyVotingFields
+          idPrefix="site-defaults"
+          currency={currency}
+          trainingHours={trainingHours}
+          gameHours={gameHours}
+          systemCurrency={initial.currency}
+          onCurrency={(value) => {
+            if (value && isCurrency(value)) setCurrency(value);
+          }}
+          onTrainingHours={setTrainingHours}
+          onGameHours={setGameHours}
         />
       </div>
       <div className="flex justify-end">
@@ -183,7 +252,7 @@ function ImageField({
           {chooseLabel}
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon,.ico"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,.ico"
             className="sr-only"
             onChange={(event) => {
               takeFile(event.target.files?.[0]);

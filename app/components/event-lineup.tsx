@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { IconCheck, IconChevronLeft } from "@/app/components/icon-tip-button";
 import { type Member, type TeamEvent } from "@/app/lib/demo-data";
-import { formatDisplayDate } from "@/app/lib/format";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 
 export type SlotMap = Record<number, string>;
@@ -154,6 +154,7 @@ function GameLineup({
   onBack: () => void;
 }) {
   const { t } = useLanguage();
+  const { formatDate, formatTime } = useDisplayFormat();
   const [slots, setSlots] = useState<SlotMap>(saved);
   const [baseline, setBaseline] = useState(slotKey(saved));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -189,7 +190,7 @@ function GameLineup({
     <div className="mx-auto flex w-full max-w-lg flex-col items-center pb-8">
       <h1 className="text-2xl font-semibold tracking-tight">{subteamName}</h1>
       <p className="mt-1 text-sm text-muted">
-        {formatDisplayDate(event.date)} {event.start}
+        {formatDate(event.date)} {formatTime(event.start)}
       </p>
       <p className="text-sm text-muted">{venueName}</p>
 

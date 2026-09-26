@@ -1,3 +1,4 @@
+import type { UserDisplayPreferences } from "@/app/lib/display-preferences";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 
 export type AccountProfile = {
@@ -7,6 +8,7 @@ export type AccountProfile = {
   lastName: string;
   isAdmin: boolean;
   ehlPlayers: Record<string, EhlPlayerProfile>;
+  display: UserDisplayPreferences;
 };
 
 export function teamPlayer(account: AccountProfile | null | undefined, teamCode: string | null | undefined): EhlPlayerProfile | null {

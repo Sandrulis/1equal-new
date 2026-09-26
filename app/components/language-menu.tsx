@@ -104,7 +104,7 @@ function FlagTip({ name, children }: { name: string; children: ReactNode }) {
 function Flag({ code }: { code: string }) {
   return (
     <span className="inline-grid h-[12.6px] w-[22.68px] shrink-0 place-items-center overflow-hidden rounded-[2px] bg-ice text-[8px] font-semibold text-ink">
-      {code === "lv" ? <FlagLv /> : code === "en" ? <FlagGb /> : code.slice(0, 2).toUpperCase()}
+      {code === "lv" ? <FlagLv /> : code === "en" ? <FlagGb /> : code === "ru" ? <FlagRu /> : code.slice(0, 2).toUpperCase()}
     </span>
   );
 }
@@ -114,6 +114,16 @@ function FlagLv() {
     <svg viewBox="0 0 30 15" className="block h-full w-full" aria-hidden="true">
       <rect width="30" height="15" fill="#9E3039" />
       <rect y="6" width="30" height="3" fill="#fff" />
+    </svg>
+  );
+}
+
+function FlagRu() {
+  return (
+    <svg viewBox="0 0 30 15" className="block h-full w-full" aria-hidden="true">
+      <rect width="30" height="5" fill="#fff" />
+      <rect y="5" width="30" height="5" fill="#0039A6" />
+      <rect y="10" width="30" height="5" fill="#D52B1E" />
     </svg>
   );
 }

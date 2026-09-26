@@ -5,7 +5,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { ColorField } from "@/app/components/color-field";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
-import { formatDisplayDateTime } from "@/app/lib/format";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import { deleteOwnedSubteam, saveOwnedSubteam } from "@/app/lib/team-actions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
@@ -15,12 +15,15 @@ export function SubteamAdmin({
   teamId = null,
   subteams: ownedSubteams,
   onChange,
+  readOnly = false,
 }: {
   teamId?: string | null;
   subteams?: Subteam[];
   onChange?: (subteams: Subteam[]) => void;
+  readOnly?: boolean;
 }) {
   const { t } = useLanguage();
+  const { formatDateTime } = useDisplayFormat();
   const { showFeedback } = useFeedbackToast();
   const catalog = useTeamCatalog();
   const subteams = teamId ? (ownedSubteams ?? []) : catalog.subteams;
@@ -87,10 +90,12 @@ export function SubteamAdmin({
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{t("subteams.title")}</h1>
-        <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
-          <IconPlus />
-          {t("actions.add")}
-        </button>
+        {readOnly ? null : (
+          <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+            <IconPlus />
+            {t("actions.add")}
+          </button>
+        )}
       </div>
 
       <AdminDialog
@@ -136,17 +141,19 @@ export function SubteamAdmin({
                 <span className="h-8 w-8 shrink-0 rounded-md" style={{ background: subteam.color }} />
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{subteam.name}</span>
-                  <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(subteam.updatedAt)}</span>
+                  <span className="block text-xs text-muted tabular-nums">{formatDateTime(subteam.updatedAt)}</span>
                 </span>
               </span>
-              <span className="flex shrink-0 gap-1">
-                <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(subteam)}>
-                  <IconPencil />
-                </IconTipButton>
-                <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(subteam.id)}>
-                  <IconTrash />
-                </IconTipButton>
-              </span>
+              {readOnly ? null : (
+                <span className="flex shrink-0 gap-1">
+                  <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(subteam)}>
+                    <IconPencil />
+                  </IconTipButton>
+                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(subteam.id)}>
+                    <IconTrash />
+                  </IconTipButton>
+                </span>
+              )}
             </li>
           ))}
         </ul>

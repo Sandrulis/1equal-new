@@ -3,7 +3,8 @@
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
-import { formatDisplayDate, formatMoney } from "@/app/lib/format";
+import { useFormatMoney } from "@/app/components/currency-provider";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
@@ -98,6 +99,7 @@ export function PlayerBalanceDialog({ member, onClose }: { member: Member; onClo
 
 export function PlayerBalanceLog({ member }: { member: Member }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
   const usingLedger = member.ledger != null;
   const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
   const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
@@ -182,12 +184,14 @@ function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
 
 function ChargeRow({ charge }: { charge: PlayerCharge }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatDate, formatTime } = useDisplayFormat();
   const details = chargeDetails(charge, t);
   return (
     <li className="flex items-start justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
-        <p className="font-medium tabular-nums">{formatDisplayDate(charge.date)}</p>
-        <p className="text-xs text-muted tabular-nums">{charge.time}</p>
+        <p className="font-medium tabular-nums">{formatDate(charge.date)}</p>
+        <p className="text-xs text-muted tabular-nums">{formatTime(charge.time)}</p>
         <p className="mt-2 font-medium">{details.title}</p>
         {details.meta ? <p className="text-sm text-muted">{details.meta}</p> : null}
       </div>
@@ -200,12 +204,14 @@ function ChargeRow({ charge }: { charge: PlayerCharge }) {
 
 function ChargeTableRow({ charge }: { charge: PlayerCharge }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatDate, formatTime } = useDisplayFormat();
   const details = chargeDetails(charge, t);
   return (
     <tr className="border-b border-line">
       <td className="px-5 py-3 align-top">
-        <span className="block tabular-nums">{formatDisplayDate(charge.date)}</span>
-        <span className="block text-xs text-muted tabular-nums">{charge.time}</span>
+        <span className="block tabular-nums">{formatDate(charge.date)}</span>
+        <span className="block text-xs text-muted tabular-nums">{formatTime(charge.time)}</span>
       </td>
       <td className="px-5 py-3 align-top">
         <span className="block font-medium">{details.title}</span>
@@ -220,6 +226,7 @@ function ChargeTableRow({ charge }: { charge: PlayerCharge }) {
 
 function TotalRow({ total }: { total: number }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
   return (
     <li className="flex items-center justify-between gap-3 px-4 py-3">
       <span className="font-semibold">{t("player.total")}</span>

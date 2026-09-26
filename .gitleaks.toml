@@ -1,0 +1,15 @@
+# Gitleaks configuration. Keeps every default rule and only silences a known
+# class of false positives.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "i18n translation keys are not credentials"
+# The generic-api-key rule fires on long dotted keys such as
+# landing.contact.error.unavailable. Real credentials do not look like this:
+# the pattern requires the whole secret to be dot-separated lowercase
+# identifiers, which rules out JWTs, hex digests and provider tokens.
+regexes = [
+  '''^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$''',
+]

@@ -3,7 +3,7 @@ import { getSiteUrl } from "@/app/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const site = getSiteUrl();
-  const updated = new Date("2026-09-26");
+  const updated = new Date("2026-09-27");
   return [
     {
       url: site,

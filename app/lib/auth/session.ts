@@ -1,3 +1,4 @@
+import { EMPTY_USER_DISPLAY_PREFERENCES, readUserDisplayPreferences } from "@/app/lib/display-preferences";
 import { readStoredEhlPlayers } from "@/app/lib/ehl-player";
 import type { AccountProfile } from "@/app/lib/auth/profile";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
@@ -19,7 +20,11 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
   const user = data.user;
   if (!user) return null;
 
-  const profile = await supabase.from("users").select("first_name, last_name, name, is_admin, ehl_player").eq("id", user.id).maybeSingle();
+  const profile = await supabase
+    .from("users")
+    .select("first_name, last_name, name, is_admin, ehl_player, week_start_day, date_format, date_separator, time_format, timezone")
+    .eq("id", user.id)
+    .maybeSingle();
   const row = profile.data;
   if (row) {
     const storedName = typeof row.name === "string" ? row.name : "";
@@ -30,6 +35,7 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
       lastName: row.last_name || "",
       isAdmin: row.is_admin === true,
       ehlPlayers: readStoredEhlPlayers(row.ehl_player),
+      display: readUserDisplayPreferences(row),
     };
   }
 
@@ -42,5 +48,6 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
     lastName: typeof meta.last_name === "string" ? meta.last_name : "",
     isAdmin: false,
     ehlPlayers: {},
+    display: EMPTY_USER_DISPLAY_PREFERENCES,
   };
 }

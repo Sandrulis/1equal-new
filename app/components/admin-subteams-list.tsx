@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
-import { formatDisplayDateTime, toLocalDateTimeStamp } from "@/app/lib/format";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import { deleteSubteam, saveSubteam } from "@/app/lib/site-admin/actions";
 import type { SystemSubteam, SystemTeam } from "@/app/lib/site-admin/types";
 
 export function AdminSubteamsList({ teams, subteams }: { teams: SystemTeam[]; subteams: SystemSubteam[] }) {
   const { t } = useLanguage();
+  const { formatDateTime } = useDisplayFormat();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
   const [query, setQuery] = useState("");
@@ -163,7 +164,7 @@ export function AdminSubteamsList({ teams, subteams }: { teams: SystemTeam[]; su
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{subteam.name}</span>
                   <span className="block truncate text-xs text-muted">{subteam.teamName}</span>
-                  <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(toLocalDateTimeStamp(subteam.updatedAt))}</span>
+                  <span className="block text-xs text-muted tabular-nums">{formatDateTime(subteam.updatedAt)}</span>
                 </span>
               </span>
               <span className="flex shrink-0 gap-1">

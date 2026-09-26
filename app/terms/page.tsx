@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getSiteBrand();
   return {
     title: "Lietošanas noteikumi",
-    description: applyBrandName("Noteikumi 1equal demo panelim: kalendārs, sastāvs, dalība un laukumu maksa bez īsta konta.", brand.name),
+    description: applyBrandName("Noteikumi, kā lietot 1equal: komandas, kalendārs, dalība un maksājumi.", brand.name),
     alternates: { canonical: "/terms" },
   };
 }

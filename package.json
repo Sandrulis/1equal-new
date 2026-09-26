@@ -1,6 +1,6 @@
 {
   "name": "1equal-new",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -11,9 +11,11 @@
     "start": "node --max-http-header-size=65536 ./node_modules/next/dist/bin/next start -p 3130",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "audit:check": "node scripts/audit-check.mjs",
     "db:migrate": "node scripts/apply-migrations.mjs"
   },
   "dependencies": {
+    "@sentry/nextjs": "^11.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.3",

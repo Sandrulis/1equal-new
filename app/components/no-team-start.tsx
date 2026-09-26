@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { MoneyVotingFields } from "@/app/components/money-voting-fields";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
+import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { useLanguage } from "@/app/lib/language";
 import { normalizeInviteCode } from "@/app/lib/invite-code";
@@ -19,25 +22,37 @@ export function NoTeamStart({
   onCreate,
   onJoin,
 }: {
-  onCreate: (name: string, sourceUrl: string | null, logoUrl: string | null) => void;
+  onCreate: (input: CreateTeamInput) => void;
   onJoin: (code: string) => void;
 }) {
   const { t } = useLanguage();
+  const brand = useSiteBrand();
   const { showFeedback } = useFeedbackToast();
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState(false);
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
+  const [currency, setCurrency] = useState<string | null>(null);
+  const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
+  const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
   const [code, setCode] = useState("");
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const codeReady = normalizeInviteCode(code).length > 0;
+  const trainingValue = votingHours(trainingHours);
+  const gameValue = votingHours(gameHours);
+  const hoursOk = trainingValue != null && gameValue != null;
+
+  function emit(sourceUrl: string | null, logoUrl: string | null) {
+    if (trainingValue == null || gameValue == null) return;
+    onCreate({ name: name.trim(), sourceUrl, logoUrl, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+  }
 
   async function submitCreate() {
-    if (!nameReady || pending) return;
+    if (!nameReady || !hoursOk || pending) return;
     const source = link.trim();
     if (!source) {
-      onCreate(name.trim(), null, null);
+      emit(null, null);
       return;
     }
     setPending(true);
@@ -51,7 +66,7 @@ export function NoTeamStart({
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
       return;
     }
-    onCreate(name.trim(), result.url, result.logoUrl);
+    emit(result.url, result.logoUrl);
   }
 
   return (
@@ -96,6 +111,20 @@ export function NoTeamStart({
                 className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
               />
             </label>
+            <div className="text-left">
+              <MoneyVotingFields
+                idPrefix="start-team"
+                currency={currency}
+                trainingHours={trainingHours}
+                gameHours={gameHours}
+                systemCurrency={brand.currency}
+                allowSystemCurrency
+                disabled={pending}
+                onCurrency={setCurrency}
+                onTrainingHours={setTrainingHours}
+                onGameHours={setGameHours}
+              />
+            </div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -112,7 +141,7 @@ export function NoTeamStart({
               </button>
               <button
                 type="submit"
-                disabled={!nameReady || pending}
+                disabled={!nameReady || !hoursOk || pending}
                 className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? t("team.empty.checking") : t("team.empty.create")}
@@ -179,7 +208,7 @@ export function NoTeamStart({
               const url = mismatch?.url ?? null;
               const logoUrl = mismatch?.logoUrl ?? null;
               setMismatch(null);
-              onCreate(name.trim(), url, logoUrl);
+              emit(url, logoUrl);
             }}
             className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90"
           >

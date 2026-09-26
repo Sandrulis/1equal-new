@@ -119,6 +119,14 @@ export function readStoredEhlPlayers(value: unknown): Record<string, EhlPlayerPr
   return players;
 }
 
+export function mergeStoredEhlPlayer(stored: unknown, teamCode: string, player: EhlPlayerProfile | null): Record<string, EhlPlayerProfile> {
+  const next = readStoredEhlPlayers(stored);
+  if (!/^[A-Z0-9]{4,16}$/.test(teamCode)) return next;
+  if (player) next[teamCode] = player;
+  else delete next[teamCode];
+  return next;
+}
+
 function readPlayerPhoto(html: string, pageUrl: string): string | null {
   const tag = html.match(/<img\b[^>]*\bplayer-img\b[^>]*>/i)?.[0] ?? "";
   const src = tag.match(/\bsrc\s*=\s*"([^"]+)"/i)?.[1] ?? "";

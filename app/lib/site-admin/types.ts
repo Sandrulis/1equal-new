@@ -1,9 +1,16 @@
+import type { SiteDisplaySettings } from "@/app/lib/display-preferences";
 import type { FrontendModule } from "@/app/lib/frontend-modules";
+import type { CurrencyCode } from "@/app/lib/team-defaults";
 
 export type SiteBrand = {
   name: string;
   logoUrl: string | null;
   faviconUrl: string | null;
+  display: SiteDisplaySettings;
+  currency: CurrencyCode;
+  trainingVotingHours: number;
+  gameVotingHours: number;
+  contactEmail: string;
 };
 
 export type SiteLanguage = {
@@ -74,6 +81,30 @@ export type PublicUmami = {
   scriptUrl: string;
 };
 
+export type PublicSentry = {
+  dsn: string;
+  environment: string;
+};
+
+export const EMAIL_KINDS = ["signup", "password_reset", "invite", "event"] as const;
+
+export type EmailKind = (typeof EMAIL_KINDS)[number];
+
+export type EmailTemplate = {
+  kind: EmailKind;
+  subjects: Record<string, string>;
+  bodies: Record<string, string>;
+  buttons: Record<string, string>;
+};
+
+export type AdminTodo = {
+  id: string;
+  title: string;
+  isDone: boolean;
+  completedAt: string | null;
+  createdAt: string;
+};
+
 export type AdminConsole = {
   brand: SiteBrand;
   languages: SiteLanguage[];
@@ -85,6 +116,9 @@ export type AdminConsole = {
   modules: FrontendModule[];
   integrations: IntegrationStatus[];
   googleRedirectUrl: string;
+  emailTemplates: EmailTemplate[];
+  todos: AdminTodo[];
+  watchedTeamIds: string[];
 };
 
 export type PublicI18n = {

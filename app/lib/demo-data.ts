@@ -1,4 +1,5 @@
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { DEMO_EHL } from "@/app/lib/demo-ehl";
 
 export type EventType = "game" | "training";
 
@@ -71,7 +72,7 @@ export const SUBTEAMS: Subteam[] = [
   { id: "u18", name: "U18", color: "#b4332a", updatedAt: "2026-09-17T12:25" },
 ];
 
-export const MEMBERS: Member[] = [
+const ROSTER: Member[] = [
   { id: "m1", name: "Edgars Liepiņš", email: "edgars.liepins@example.com", phone: "+371 26 111 201", number: 30, position: "TR", role: "coach", subteamId: "virsliga", balance: -120, joined: "2025-08-12", updatedAt: "2026-09-20T18:10" },
   { id: "m2", name: "Kārlis Bērziņš", email: "karlis.berzins@example.com", phone: "+371 26 111 202", number: 91, position: "LW", role: "captain", subteamId: "virsliga", balance: -276, joined: "2025-09-02", updatedAt: "2026-09-24T21:05" },
   { id: "m3", name: "Mārtiņš Ozols", email: "martins.ozols@example.com", phone: "+371 26 111 203", number: 31, position: "G", role: "goalie", subteamId: "virsliga", balance: -40, joined: "2025-09-02", updatedAt: "2026-09-18T09:40" },
@@ -85,6 +86,12 @@ export const MEMBERS: Member[] = [
   { id: "m11", name: "Gustavs Reinis", email: "gustavs.reinis@example.com", phone: "+371 26 333 402", number: 17, position: "LW", role: "captain", subteamId: "u18", balance: -32, joined: "2025-09-18", updatedAt: "2026-09-25T07:55" },
   { id: "m12", name: "Elīna Kalna", email: "elina.kalna@example.com", phone: "+371 26 333 403", number: 11, position: "C", role: "forward", subteamId: "u18", balance: -96, joined: "2025-09-28", updatedAt: "2026-09-14T20:22" },
 ];
+
+export const MEMBERS: Member[] = ROSTER.map((member) => {
+  const ehl = DEMO_EHL[member.id];
+  if (!ehl) return member;
+  return { ...member, photoUrl: ehl.photoUrl, ehl };
+});
 
 export const EVENTS: TeamEvent[] = [
   { id: "e1", date: "2026-08-27", start: "20:00", end: "21:30", type: "training", titleId: "ice", subteamId: "virsliga", venueId: "volvo" },

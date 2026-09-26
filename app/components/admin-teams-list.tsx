@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { IconCheck, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
-import { formatDisplayDateTime, toLocalDateTimeStamp } from "@/app/lib/format";
+import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
-import { deleteTeam, saveTeam } from "@/app/lib/site-admin/actions";
+import { deleteTeam, saveTeam, setAdminTeamWatch } from "@/app/lib/site-admin/actions";
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 
 export function AdminTeamsList({
@@ -15,13 +15,18 @@ export function AdminTeamsList({
   subteams,
   members,
   openTeamId = null,
+  accountId,
+  watchedTeamIds,
 }: {
   teams: SystemTeam[];
   subteams: SystemSubteam[];
   members: SystemTeamMember[];
   openTeamId?: string | null;
+  accountId: string;
+  watchedTeamIds: string[];
 }) {
   const { t } = useLanguage();
+  const { formatDateTime } = useDisplayFormat();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
   const [query, setQuery] = useState("");
@@ -68,6 +73,19 @@ export function AdminTeamsList({
     }
     if (editingId === id) setEditingId(null);
     showFeedback({ message: t("admin.teams.deleted"), variant: "success" });
+    router.refresh();
+  }
+
+  async function toggleWatch(id: string, watch: boolean) {
+    if (pending) return;
+    setPending(true);
+    const result = await setAdminTeamWatch(id, watch);
+    setPending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    showFeedback({ message: t(watch ? "admin.teams.watched" : "admin.teams.unwatched"), variant: "success" });
     router.refresh();
   }
 
@@ -160,12 +178,22 @@ export function AdminTeamsList({
                         <button type="button" onClick={() => openRoster(team.id)} className="block max-w-full truncate text-left font-medium text-train">
                           {team.name}
                         </button>
-                        <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(toLocalDateTimeStamp(team.updatedAt))}</span>
+                        <span className="block text-xs text-muted tabular-nums">{formatDateTime(team.updatedAt)}</span>
                       </td>
                       <td className="px-4 py-3 text-center font-medium tabular-nums">{subteamCount}</td>
                       <td className="px-4 py-3 text-center font-medium tabular-nums">{playerCount}</td>
                       <td className="px-4 py-3">
                         <span className="flex justify-end gap-1">
+                          {members.some((member) => member.teamId === team.id && member.userId === accountId) ? null : (
+                            <IconTipButton
+                              label={t(watchedTeamIds.includes(team.id) ? "admin.teams.unwatch" : "admin.teams.watch")}
+                              tone={watchedTeamIds.includes(team.id) ? "game" : "train"}
+                              disabled={pending}
+                              onClick={() => void toggleWatch(team.id, !watchedTeamIds.includes(team.id))}
+                            >
+                              {watchedTeamIds.includes(team.id) ? <IconLogout /> : <IconLogin />}
+                            </IconTipButton>
+                          )}
                           <IconTipButton label={t("roster.edit")} tone="train" disabled={pending} onClick={() => openEdit(team)}>
                             <IconPencil />
                           </IconTipButton>

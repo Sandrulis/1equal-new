@@ -1,0 +1,164 @@
+name: Security smoke
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.13.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Lint check
+        run: npm run lint
+
+      - name: Build (production)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: "https://1equal.com"
+
+      - name: Security - auth guard on server actions
+        run: |
+          echo "Checking that server action files call getAccountProfile or requireUserAdmin..."
+          ACTIONS=$(find app -name "*actions.ts" 2>/dev/null || true)
+          if [ -z "$ACTIONS" ]; then
+            echo "OK: No server action files yet"
+            exit 0
+          fi
+          MISSING=0
+          for file in $ACTIONS; do
+            case "$file" in
+              # Public: sign-in, sign-up, password reset, sign-out.
+              app/lib/auth/actions.ts)
+                continue
+                ;;
+              # Public contact form. It does not read a session.
+              app/lib/contact/actions.ts)
+                continue
+                ;;
+            esac
+            if ! grep -qE "getAccountProfile|requireUserAdmin" "$file"; then
+              echo "FAIL: Missing auth guard in $file"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "$MISSING file(s) missing auth guard"
+            exit 1
+          fi
+          echo "OK: Action files have an auth guard"
+
+      - name: Security - no hardcoded secrets
+        run: |
+          echo "Checking for hardcoded secrets..."
+          PATTERNS=(
+            "sk_live_"
+            "sk_test_"
+            "SUPABASE_SERVICE_ROLE_KEY\s*=\s*\"ey"
+            "password\s*=\s*\"[^\"]{8}"
+            "secret\s*=\s*\"[^\"]{8}"
+          )
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -rE "$pattern" app/ --include="*.ts" --include="*.tsx" -l 2>/dev/null | grep -v "node_modules" | grep -v ".env"; then
+              echo "FAIL: Potential hardcoded secret pattern found: $pattern"
+              FOUND=$((FOUND + 1))
+            fi
+          done
+          if [ $FOUND -gt 0 ]; then
+            exit 1
+          fi
+          echo "OK: No hardcoded secrets found"
+
+      - name: Security - API routes have auth checks
+        run: |
+          echo "Checking that API routes have authentication..."
+          if [ ! -d app ]; then
+            echo "OK: No app routes"
+            exit 0
+          fi
+          ROUTES=$(find app -name "route.ts" 2>/dev/null || true)
+          if [ -z "$ROUTES" ]; then
+            echo "OK: No API routes yet"
+            exit 0
+          fi
+          for file in $ROUTES; do
+            if grep -qE "export async function (GET|POST|PUT|DELETE|PATCH)" "$file"; then
+              case "$file" in
+                # Google start: Turnstile, then OAuth redirect.
+                app/auth/google/sign-in/route.ts)
+                  if ! grep -q "requireTurnstileToken" "$file"; then
+                    echo "FAIL: No Turnstile check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
+                # OAuth return: state cookie or Supabase code exchange.
+                app/auth/callback/route.ts)
+                  if ! grep -qE "googleOAuthStatesMatch|exchangeCodeForSession" "$file"; then
+                    echo "FAIL: No OAuth check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
+                # Email vote link: hashed token, not a session cookie.
+                app/v/\[token\]/\[choice\]/route.ts)
+                  if ! grep -q "voteFromEmailLink" "$file"; then
+                    echo "FAIL: No vote token check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
+                # Calendar feed: secret token in the path.
+                app/cal/\[token\]/route.ts)
+                  if ! grep -q "calendarFeedIcs" "$file"; then
+                    echo "FAIL: No calendar token check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
+              esac
+              if ! grep -qE "getAccountProfile|requireUserAdmin" "$file"; then
+                echo "FAIL: No auth check in $file"
+                exit 1
+              fi
+            fi
+          done
+          echo "OK: API auth check complete"
+
+      - name: Security - no eval() in production code
+        run: |
+          echo "Checking for unsafe eval() usage in app code..."
+          if grep -rn "\beval(" app/ --include="*.ts" --include="*.tsx" | grep -v "node_modules" | grep -v "// "; then
+            echo "FAIL: eval() found in application code"
+            exit 1
+          fi
+          echo "OK: No eval() in app code"
+
+      - name: Security - headers configured
+        run: |
+          echo "Checking security headers in next.config.ts..."
+          for header in "X-Frame-Options" "X-Content-Type-Options" "Referrer-Policy" "Permissions-Policy"; do
+            if ! grep -q "$header" next.config.ts; then
+              echo "FAIL: Missing security header: $header"
+              exit 1
+            fi
+          done
+          echo "OK: Security headers present"

@@ -1,7 +1,7 @@
 export const DEFAULT_SITE_NAME = "1equal";
 
 export function siteTitleFor(name: string): string {
-  return `${name} · Komandas sezona vienā vietā`;
+  return `${name} · Komandas vadība vienuviet`;
 }
 
 export function applyBrandName(text: string, name: string): string {

@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import { TeamMark } from "@/app/components/team-mark";
+import { MoneyVotingFields } from "@/app/components/money-voting-fields";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
+import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { useLanguage } from "@/app/lib/language";
@@ -24,17 +28,20 @@ export function TeamSwitcher({
   onHome,
   onSelect,
   onCreate,
+  onUnwatch,
 }: {
   team: Pick<IssuedTeam, "name" | "code" | "logoUrl"> | null;
   teams: IssuedTeam[];
   canSwitch: boolean;
   onHome: () => void;
   onSelect: (code: string) => void;
-  onCreate: (name: string, sourceUrl: string | null, logoUrl: string | null) => void;
+  onCreate: (input: CreateTeamInput) => void;
+  onUnwatch?: (teamId: string) => void | Promise<void>;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [unwatchingId, setUnwatchingId] = useState<string | null>(null);
   const [wide, setWide] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -91,19 +98,38 @@ export function TeamSwitcher({
       {open && canSwitch && wide ? (
         <div role="menu" aria-label={t("team.switch.label")} className="absolute top-full left-0 z-40 mt-1 w-72 rounded-xl bg-paper p-1.5 ring-1 ring-line">
           {teams.map((item) => (
-            <button
-              key={item.code}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                onSelect(item.code);
-              }}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${item.code === team.code ? "bg-ice" : "hover:bg-ice"}`}
-            >
-              <TeamMark name={item.name} logoUrl={item.logoUrl} className="h-8 w-8 shrink-0 overflow-hidden rounded-lg" />
-              <span className="min-w-0 truncate font-medium">{item.name}</span>
-            </button>
+            <div key={item.code} className={`flex items-center rounded-lg ${item.code === team.code ? "bg-ice" : ""}`}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onSelect(item.code);
+                }}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-ice"
+              >
+                <TeamMark name={item.name} logoUrl={item.logoUrl} className="h-8 w-8 shrink-0 overflow-hidden rounded-lg" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{item.name}</span>
+                  {item.watching ? <span className="block text-xs text-muted">{t("team.watching")}</span> : null}
+                </span>
+              </button>
+              {item.watching && item.id && onUnwatch ? (
+                <IconTipButton
+                  label={t("admin.teams.unwatch")}
+                  tone="muted"
+                  disabled={unwatchingId !== null}
+                  onClick={() => {
+                    const teamId = item.id;
+                    if (!teamId || !onUnwatch || unwatchingId) return;
+                    setUnwatchingId(teamId);
+                    void Promise.resolve(onUnwatch(teamId)).finally(() => setUnwatchingId(null));
+                  }}
+                >
+                  <IconX />
+                </IconTipButton>
+              ) : null}
+            </div>
           ))}
           <div className="my-1 border-t border-line" />
           <button
@@ -123,9 +149,9 @@ export function TeamSwitcher({
       <CreateTeamDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onCreate={(name, sourceUrl, logoUrl) => {
+        onCreate={(input) => {
           setCreating(false);
-          onCreate(name, sourceUrl, logoUrl);
+          onCreate(input);
         }}
       />
     </div>
@@ -174,29 +200,44 @@ function CreateTeamDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, sourceUrl: string | null, logoUrl: string | null) => void;
+  onCreate: (input: CreateTeamInput) => void;
 }) {
   const { t } = useLanguage();
+  const brand = useSiteBrand();
   const { showFeedback } = useFeedbackToast();
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
+  const [currency, setCurrency] = useState<string | null>(null);
+  const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
+  const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
   const [pending, setPending] = useState(false);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
+  const trainingValue = votingHours(trainingHours);
+  const gameValue = votingHours(gameHours);
+  const hoursOk = trainingValue != null && gameValue != null;
 
   useEffect(() => {
     if (!open) {
       setName("");
       setLink("");
+      setCurrency(null);
+      setTrainingHours(String(brand.trainingVotingHours));
+      setGameHours(String(brand.gameVotingHours));
       setMismatch(null);
     }
-  }, [open]);
+  }, [open, brand.trainingVotingHours, brand.gameVotingHours]);
+
+  function emit(sourceUrl: string | null, logoUrl: string | null) {
+    if (trainingValue == null || gameValue == null) return;
+    onCreate({ name: name.trim(), sourceUrl, logoUrl, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+  }
 
   async function submit() {
-    if (!nameReady || pending) return;
+    if (!nameReady || !hoursOk || pending) return;
     const source = link.trim();
     if (!source) {
-      onCreate(name.trim(), null, null);
+      emit(null, null);
       return;
     }
     setPending(true);
@@ -210,7 +251,7 @@ function CreateTeamDialog({
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
       return;
     }
-    onCreate(name.trim(), result.url, result.logoUrl);
+    emit(result.url, result.logoUrl);
   }
 
   return (
@@ -248,11 +289,23 @@ function CreateTeamDialog({
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
             />
           </label>
+          <MoneyVotingFields
+            idPrefix="create-team"
+            currency={currency}
+            trainingHours={trainingHours}
+            gameHours={gameHours}
+            systemCurrency={brand.currency}
+            allowSystemCurrency
+            disabled={pending}
+            onCurrency={setCurrency}
+            onTrainingHours={setTrainingHours}
+            onGameHours={setGameHours}
+          />
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed disabled:opacity-60">
               {t("actions.cancel")}
             </button>
-            <button type="submit" disabled={!nameReady || pending} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="submit" disabled={!nameReady || !hoursOk || pending} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
               {pending ? t("team.empty.checking") : t("team.empty.create")}
             </button>
           </div>
@@ -274,7 +327,7 @@ function CreateTeamDialog({
               const url = mismatch?.url ?? null;
               const logoUrl = mismatch?.logoUrl ?? null;
               setMismatch(null);
-              onCreate(name.trim(), url, logoUrl);
+              emit(url, logoUrl);
             }}
             className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90"
           >

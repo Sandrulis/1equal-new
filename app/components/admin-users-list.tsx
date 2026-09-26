@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatDisplayDateTime, formatRelativeUpdated, toLocalDateTimeStamp } from "@/app/lib/format";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import type { SystemUser } from "@/app/lib/site-admin/types";
@@ -75,7 +75,6 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
                 </tr>
               ) : (
                 visible.map((user) => {
-                  const registered = toLocalDateTimeStamp(user.createdAt);
                   return (
                     <tr key={user.id} className="border-b border-line last:border-b-0">
                       <td className="w-full max-w-0 px-4 py-3">
@@ -112,10 +111,10 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
                         )}
                       </td>
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
-                        <WhenCell value={registered} />
+                        <WhenCell value={user.createdAt} />
                       </td>
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
-                        {user.lastSeenAt ? <WhenCell value={toLocalDateTimeStamp(user.lastSeenAt)} /> : <span className="text-muted">{t("admin.users.last_seen.never")}</span>}
+                        {user.lastSeenAt ? <WhenCell value={user.lastSeenAt} /> : <span className="text-muted">{t("admin.users.last_seen.never")}</span>}
                       </td>
                     </tr>
                   );
@@ -130,13 +129,13 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
 }
 
 function WhenCell({ value }: { value: string }) {
-  const { formatLang } = useLanguage();
+  const { formatDate, formatDateTime, formatRelative } = useDisplayFormat();
   return (
     <>
-      <span className="block tabular-nums" title={formatDisplayDateTime(value)}>
-        {formatRelativeUpdated(value, formatLang)}
+      <span className="block tabular-nums" title={formatDateTime(value)}>
+        {formatRelative(value)}
       </span>
-      <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(value).split(" ")[0]}</span>
+      <span className="block text-xs text-muted tabular-nums">{formatDate(value)}</span>
     </>
   );
 }

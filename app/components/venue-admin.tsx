@@ -5,7 +5,8 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import type { Venue } from "@/app/lib/demo-data";
-import { formatDisplayDateTime, formatMoney } from "@/app/lib/format";
+import { useFormatMoney } from "@/app/components/currency-provider";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import { hideOwnedVenue, saveOwnedVenue } from "@/app/lib/team-actions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
@@ -14,12 +15,16 @@ export function VenueAdmin({
   teamId = null,
   venues: ownedVenues,
   onChange,
+  readOnly = false,
 }: {
   teamId?: string | null;
   venues?: Venue[];
   onChange?: (venues: Venue[]) => void;
+  readOnly?: boolean;
 }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatDateTime } = useDisplayFormat();
   const { showFeedback } = useFeedbackToast();
   const catalog = useTeamCatalog();
   const source = teamId ? (ownedVenues ?? []) : catalog.venues;
@@ -90,10 +95,12 @@ export function VenueAdmin({
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{t("venues.title")}</h1>
-        <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
-          <IconPlus />
-          {t("actions.add")}
-        </button>
+        {readOnly ? null : (
+          <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+            <IconPlus />
+            {t("actions.add")}
+          </button>
+        )}
       </div>
 
       <AdminDialog open={editingId !== null} title={editingId === "new" ? t("catalog.venues.add") : t("catalog.venues.edit")} onClose={pending ? () => undefined : close}>
@@ -150,16 +157,18 @@ export function VenueAdmin({
                 <span className="block truncate font-medium">
                   {venue.name} <span className="text-train tabular-nums">{formatMoney(venue.pricePerHour)}</span>
                 </span>
-                <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(venue.updatedAt)}</span>
+                <span className="block text-xs text-muted tabular-nums">{formatDateTime(venue.updatedAt)}</span>
               </span>
-              <span className="flex shrink-0 gap-1">
-                <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(venue)}>
-                  <IconPencil />
-                </IconTipButton>
-                <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void hide(venue.id)}>
-                  <IconTrash />
-                </IconTipButton>
-              </span>
+              {readOnly ? null : (
+                <span className="flex shrink-0 gap-1">
+                  <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(venue)}>
+                    <IconPencil />
+                  </IconTipButton>
+                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void hide(venue.id)}>
+                    <IconTrash />
+                  </IconTipButton>
+                </span>
+              )}
             </li>
           ))}
         </ul>

@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await getSiteBrand();
   return {
     title: "Privātuma politika",
-    description: applyBrandName("Kādus datus 1equal demo panelis apstrādā, cik ilgi tie paliek pārlūkā un kādas ir tavas tiesības.", brand.name),
+    description: applyBrandName("Kādus datus 1equal apstrādā un kādas ir tavas tiesības.", brand.name),
     alternates: { canonical: "/privacy" },
   };
 }

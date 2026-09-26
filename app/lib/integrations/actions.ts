@@ -1,6 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refreshSitePublic } from "@/app/lib/cache-tags";
+import { writeAudit } from "@/app/lib/security/audit";
+import { openIntegrationSecret, sealIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { MessageKey } from "@/app/lib/messages";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -11,7 +13,7 @@ const DEFAULT_UMAMI_SCRIPT_URL = "https://cloud.umami.is/script.js";
 type ActionResult = { ok: true } | { ok: false; error: MessageKey };
 
 function refresh() {
-  revalidatePath("/", "layout");
+  refreshSitePublic();
 }
 
 async function adminClient() {
@@ -28,6 +30,15 @@ function isKey(value: string): value is IntegrationKey {
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isUmamiScript(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "cloud.umami.is";
+  } catch {
+    return false;
+  }
 }
 
 function isHttpsUrl(value: string): boolean {
@@ -54,7 +65,7 @@ export async function saveIntegration(
 
   const clientId = input.clientId.trim();
   const typedSecret = input.secret.trim();
-  const secret = typedSecret || current?.client_secret?.trim() || "";
+  const secret = typedSecret || openIntegrationSecret(current?.client_secret);
   const replyTo = input.replyTo.trim();
 
   if (key === "turnstile") {
@@ -78,13 +89,13 @@ export async function saveIntegration(
   }
 
   const storedSecret = key === "umami" ? secret || DEFAULT_UMAMI_SCRIPT_URL : secret;
-  if (key === "umami" && !isHttpsUrl(storedSecret)) return { ok: false, error: "integrations.umami.error.script" };
+  if (key === "umami" && !isUmamiScript(storedSecret)) return { ok: false, error: "integrations.umami.error.script" };
 
   const { error } = await gate.client.from("site_integrations").upsert(
     {
       integration_key: key,
       client_id: clientId,
-      client_secret: storedSecret,
+      client_secret: sealIntegrationSecret(storedSecret),
       configured_account_email: key === "resend" ? replyTo : "",
       is_configured: true,
       updated_at: new Date().toISOString(),
@@ -92,6 +103,7 @@ export async function saveIntegration(
     { onConflict: "integration_key" },
   );
   if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("integration.save", "site_integrations", key);
   refresh();
   return { ok: true };
 }
@@ -107,6 +119,7 @@ export async function setIntegrationEnabled(key: string, enabled: boolean): Prom
     .update({ is_enabled: enabled, updated_at: new Date().toISOString() })
     .eq("integration_key", key);
   if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("integration.enabled", "site_integrations", key, { enabled });
   refresh();
   return { ok: true };
 }
@@ -127,6 +140,7 @@ export async function resetIntegration(key: string): Promise<ActionResult> {
     })
     .eq("integration_key", key);
   if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("integration.reset", "site_integrations", key);
   refresh();
   return { ok: true };
 }

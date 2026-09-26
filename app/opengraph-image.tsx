@@ -1,35 +1,31 @@
 import { ImageResponse } from "next/og";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
-import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
-import { siteDescription } from "@/app/lib/site";
 
-export const alt = DEFAULT_SITE_NAME;
+export const alt = "Komandas vadība vienuviet";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function OpenGraphImage() {
   const brand = await getSiteBrand();
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          background: "#102433",
-          color: "#ffffff",
-          padding: "72px",
-        }}
-      >
-        <div style={{ fontSize: 36, fontWeight: 700 }}>{brand.name}</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 860 }}>
-          <div style={{ fontSize: 68, fontWeight: 700, lineHeight: 1.1 }}>Komandas sezona vienā vietā</div>
-          <div style={{ fontSize: 28, lineHeight: 1.4, color: "#d5e4ea" }}>{siteDescription}</div>
-        </div>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        background: "#102433",
+        color: "#eef3f6",
+        padding: "72px 80px",
+      }}
+    >
+      <div style={{ display: "flex", fontSize: 28, letterSpacing: 1, color: "#9fd4c8" }}>Komandas vadība</div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", fontSize: 84, fontWeight: 650, lineHeight: 1 }}>{brand.name}</div>
+        <div style={{ display: "flex", marginTop: 20, fontSize: 36, color: "#c5d4de" }}>Vienuviet</div>
       </div>
-    ),
-    size,
+    </div>,
+    { ...size },
   );
 }

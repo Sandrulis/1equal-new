@@ -29,7 +29,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Kādus datus apstrādājam",
           paragraphs: [
-            "Reģistrējoties saglabājam vārdu un e-pastu. Paroli glabā autentifikācijas sistēma, nevis atklātā tekstā mūsu tabulā. Aizmirsušās paroles forma e-pastu vēl nenosūta.",
+            "Reģistrējoties saglabājam vārdu un e-pastu. Paroli glabā autentifikācijas sistēma, nevis atklātā tekstā mūsu tabulā. Aizmirsušās paroles saiti nosūtām uz e-pastu.",
             "Panelī redzamie dalībnieki, spēles, treniņi un summas ir parauga dati. Izmaiņas ir tikai atvērtajā lapā un pazūd, kad to aizver vai pārlādē.",
             "Valoda saglabājas šajā pārlūkā (atslēga 1equal-lang). Sīkdatņu izvēle saglabājas sīkdatnē 1equal-consent.",
             "Serveris, kas izsniedz lapu, var īslaicīgi redzēt tehniskos pieprasījuma datus, piemēram, IP adresi un pārlūka veidu. Tos neizmantojam profilēšanai.",
@@ -89,7 +89,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "What data we process",
           paragraphs: [
-            "When you sign up we store your name and email. The password is kept by the authentication system, not as plain text in our table. The forgot-password form still does not send email.",
+            "When you sign up we store your name and email. The password is kept by the authentication system, not as plain text in our table. The forgot-password link is sent by email.",
             "Members, games, practices and amounts in the panel are sample data. Changes exist only on the open page and disappear when you close or reload it.",
             "Language is saved in this browser (key 1equal-lang). The cookie choice is saved in the cookie 1equal-consent.",
             "The server that delivers the page may briefly see technical request data, such as an IP address and browser type. We do not use that for profiling.",
@@ -132,6 +132,66 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Changes",
           paragraphs: ["We may update this policy. The new version will be on this page with a new date."],
+        },
+      ],
+    },
+    ru: {
+      intro:
+        "В этой политике описано, какие данные обрабатывает 1equal, когда ты пользуешься панелью команды: календарём, составом, явкой и оплатой катка. Аккаунт сохраняется. Состав в панели пока показан как образец.",
+      sections: [
+        {
+          heading: "Кто мы",
+          paragraphs: [
+            "1equal - панель сезона команды. В этой демо-версии не указаны отдельный оператор, регистрационный номер или адрес, потому что аккаунт и данные команды у нас не хранятся.",
+            "Когда сервис станет полной версией, здесь будут оператор и адрес для связи. До тех пор эта страница объясняет, что остаётся в браузере.",
+          ],
+        },
+        {
+          heading: "Какие данные мы обрабатываем",
+          paragraphs: [
+            "При регистрации сохраняем имя и e-mail. Пароль хранит система аутентификации, а не открытый текст в нашей таблице. Ссылку для забытого пароля отправляем на e-mail.",
+            "Участники, игры, тренировки и суммы в панели - образец. Изменения есть только на открытой странице и пропадают, когда её закрываешь или обновляешь.",
+            "Язык сохраняется в этом браузере (ключ 1equal-lang). Выбор cookie сохраняется в cookie 1equal-consent.",
+            "Сервер, который отдаёт страницу, может кратко видеть технические данные запроса, например IP-адрес и тип браузера. Для профилирования мы их не используем.",
+          ],
+        },
+        {
+          heading: "Зачем",
+          paragraphs: [
+            "Чтобы показать панель и запомнить язык и твой выбор cookie.",
+            "Обязательная cookie нужна, чтобы запомнить этот выбор. Категории предпочтений, аналитики и маркетинга включаются только после согласия. Скрипт аналитики Umami загружается, только если администратор его включил и ты разрешил аналитику. Маркетинговые инструменты не подключены.",
+          ],
+        },
+        {
+          heading: "Как долго",
+          paragraphs: [
+            "Выбор cookie хранится 12 месяцев.",
+            "Язык остаётся, пока ты его не сменишь или не очистишь данные этого сайта в браузере.",
+            "Поля форм и изменения в панели не сохраняются.",
+          ],
+        },
+        {
+          heading: "Кому передаём данные",
+          paragraphs: [
+            "Данные не продаём и не передаём рекламным сетям. Umami получает анонимный просмотр страницы только при согласии на аналитику и включённой интеграции. Маркетинговые инструменты не подключены.",
+            "Если такой инструмент появится, он будет работать только с твоего согласия, и мы обновим эту политику.",
+          ],
+        },
+        {
+          heading: "Твои права",
+          paragraphs: [
+            "Если данные о тебе хранились бы, у тебя было бы право на доступ, исправление, удаление, ограничение обработки, возражение, копию и отзыв согласия.",
+            "В этом демо то, что страница сохраняет сама, можно удалить, очистив данные этого сайта в браузере. Выбор cookie можно изменить в настройках.",
+            "Жалобу можно подать в Государственную инспекцию данных Латвии (dvi.gov.lv).",
+          ],
+        },
+        {
+          heading: "Дети",
+          paragraphs: ["Панель не предназначена для детей младше 16 лет. Не вводи персональные данные детей."],
+        },
+        {
+          heading: "Изменения",
+          paragraphs: ["Политику можем уточнять. Новая редакция будет на этой странице с новой датой."],
         },
       ],
     },
@@ -221,6 +281,45 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         },
       ],
     },
+    ru: {
+      intro: "Эти условия относятся к использованию 1equal: календарю команды, составу, явке и оплате катка.",
+      sections: [
+        {
+          heading: "Демо-сервис",
+          paragraphs: [
+            "Регистрация создаёт аккаунт, а вход проверяет пароль. Первый зарегистрированный пользователь - администратор.",
+            "Люди, игры, тренировки и суммы в панели - образец. Это не записи настоящей команды.",
+          ],
+        },
+        {
+          heading: "Что можно",
+          paragraphs: [
+            "Смотреть панель, переключать язык и пробовать состав, календарь и явку.",
+            "Не вводи настоящие персональные данные других людей. Образца достаточно.",
+          ],
+        },
+        {
+          heading: "Что нельзя",
+          paragraphs: ["Не мешай работе страницы, не пытайся получить доступ, которого тебе не дали, и не используй панель, чтобы навредить другим."],
+        },
+        {
+          heading: "Оплата",
+          paragraphs: ["Демо бесплатное. Суммы в панели - образец, а не счёт и не требование оплаты."],
+        },
+        {
+          heading: "Ответственность",
+          paragraphs: ["Панель показывается как есть. Мы не гарантируем, что демо будет доступно без перерывов или что образец подойдёт настоящей команде."],
+        },
+        {
+          heading: "Изменения",
+          paragraphs: ["Демо можем изменить или остановить. Условия можем обновить на этой странице. Продолжай пользоваться панелью, если согласен с новой редакцией."],
+        },
+        {
+          heading: "Право",
+          paragraphs: ["К этим условиям применяется право Латвийской Республики. Если ты потребитель, остаются права, от которых закон не позволяет отказаться."],
+        },
+      ],
+    },
   },
   cookies: {
     lv: {
@@ -251,6 +350,16 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
               name: "1equal-player-hint",
               purpose: "Atceras, kurām komandām spēlētāja saites paziņojums ir aizvērts.",
               duration: "12 mēneši",
+            },
+            {
+              name: "1equal-remember-session",
+              purpose: "Atceras, ka ienākot tika atzīmēts Atcerēties mani.",
+              duration: "30 dienas",
+            },
+            {
+              name: "sb-…-auth-token",
+              purpose: "Uztur pieslēgšanās sesiju.",
+              duration: "30 dienas, ja atzīmēts Atcerēties mani. Citādi līdz pārlūka aizvēršanai.",
             },
           ],
         },
@@ -298,6 +407,16 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
               purpose: "Remembers for which teams the player-link notice was closed.",
               duration: "12 months",
             },
+            {
+              name: "1equal-remember-session",
+              purpose: "Remembers that Remember me was checked at login.",
+              duration: "30 days",
+            },
+            {
+              name: "sb-…-auth-token",
+              purpose: "Keeps the sign-in session.",
+              duration: "30 days when Remember me is checked. Otherwise until the browser closes.",
+            },
           ],
         },
         {
@@ -311,6 +430,58 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           paragraphs: [
             "On the first visit we show a bar with Customize, Reject optional and Accept all.",
             "Later you can change the choice with Cookie settings in the footer or in the user menu in the panel. You can also delete cookies in the browser.",
+          ],
+        },
+      ],
+    },
+    ru: {
+      intro: "Здесь описано, какие cookie и похожие технологии использует 1equal и как изменить выбор.",
+      sections: [
+        {
+          heading: "Что такое cookie",
+          paragraphs: ["Cookie - небольшой текст, который браузер сохраняет по просьбе страницы. Некоторые выборы хранятся в хранилище браузера, а не в cookie."],
+        },
+        {
+          heading: "Категории",
+          paragraphs: ["Обязательные cookie нужны, чтобы запомнить твой выбор. Cookie предпочтений, аналитики и маркетинга используются, только если ты их разрешил."],
+        },
+        {
+          heading: "Что используем сейчас",
+          paragraphs: [
+            "Язык (1equal-lang) хранится в браузере, а не в cookie. Он сохраняется, когда выбираешь язык, даже если категория предпочтений выключена. Позже свяжем это с переключателем.",
+          ],
+          rows: [
+            {
+              name: "1equal-consent",
+              purpose: "Хранит, какие необязательные категории ты разрешил и когда сделан выбор.",
+              duration: "12 месяцев",
+            },
+            {
+              name: "1equal-player-hint",
+              purpose: "Помнит, для каких команд закрыто уведомление о ссылке игрока.",
+              duration: "12 месяцев",
+            },
+            {
+              name: "1equal-remember-session",
+              purpose: "Помнит, что при входе было отмечено Запомнить меня.",
+              duration: "30 дней",
+            },
+            {
+              name: "sb-…-auth-token",
+              purpose: "Держит сессию входа.",
+              duration: "30 дней, если отмечено Запомнить меня. Иначе до закрытия браузера.",
+            },
+          ],
+        },
+        {
+          heading: "Чего ещё нет",
+          paragraphs: ["Маркетинговые cookie не ставятся. Скрипт Umami загружается, только если администратор включил интеграцию и ты разрешил аналитику."],
+        },
+        {
+          heading: "Как изменить выбор",
+          paragraphs: [
+            "При первом визите показываем полосу с действиями Настроить, Отклонить необязательные и Принять все.",
+            "Позже выбор можно изменить через Настройки cookie в подвале или в меню пользователя в панели. Cookie можно удалить и в самом браузере.",
           ],
         },
       ],

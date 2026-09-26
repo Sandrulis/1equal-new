@@ -30,6 +30,9 @@ export function SiteHeader() {
             <Link href="/#soli" className="cursor-pointer hover:text-ink">
               {t("landing.nav.how")}
             </Link>
+            <Link href="/#kontakti" className="cursor-pointer hover:text-ink">
+              {t("landing.nav.contact")}
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-2">

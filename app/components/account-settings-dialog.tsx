@@ -2,9 +2,12 @@
 
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { DisplayPreferencesFields } from "@/app/components/display-preferences";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { updateProfile } from "@/app/lib/auth/actions";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
+import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useLanguage } from "@/app/lib/language";
 
@@ -19,20 +22,22 @@ export function AccountSettingsDialog({
   teamCode?: string | null;
   teamName?: string | null;
   onClose: () => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers">) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "display">) => void;
 }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
+  const brand = useSiteBrand();
   const titleId = useId();
   const savedPlayer = teamPlayer(account, teamCode);
   const [mounted, setMounted] = useState(false);
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
   const [playerUrl, setPlayerUrl] = useState(savedPlayer?.sourceUrl ?? "");
+  const [display, setDisplay] = useState<UserDisplayPreferences>(account.display);
   const [pending, setPending] = useState(false);
   const savedUrl = savedPlayer?.sourceUrl ?? "";
   const hasTeam = Boolean(teamCode);
-  const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl);
+  const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display);
   const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && !pending;
 
   useEffect(() => {
@@ -58,6 +63,7 @@ export function AccountSettingsDialog({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       ehlPlayers,
+      display: result.display ?? display,
     });
     showFeedback({ message: t("user.settings.saved"), variant: "success" });
     onClose();
@@ -68,7 +74,7 @@ export function AccountSettingsDialog({
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <form onSubmit={(event) => void onSubmit(event)} className="relative w-full max-w-lg rounded-2xl bg-paper p-6 ring-1 ring-line">
+      <form onSubmit={(event) => void onSubmit(event)} className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-paper p-6 ring-1 ring-line">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold tracking-tight">
@@ -106,6 +112,9 @@ export function AccountSettingsDialog({
             {savedPlayer && playerUrl.trim() === savedUrl ? <PlayerSummary player={savedPlayer} /> : null}
           </label>
         ) : null}
+        <div className="mt-6 border-t border-line pt-5">
+          <DisplayPreferencesFields idPrefix="user-display" values={display} onChange={setDisplay} system={brand.display} allowSystemDefault />
+        </div>
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg bg-paper px-4 py-2.5 text-sm font-medium ring-1 ring-line hover:bg-ice">
             {t("actions.cancel")}

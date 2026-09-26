@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
+import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { EVENTS, VENUES, type EventType } from "@/app/lib/demo-data";
-import { isoDate } from "@/app/lib/format";
+import { sendContactMessage } from "@/app/lib/contact/actions";
+import { isoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -25,7 +27,7 @@ export function LandingPage() {
       <main id="saturs">
         <section className="relative overflow-hidden" aria-labelledby="hero-title">
           <div className="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-train-soft blur-3xl" />
-          <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:py-24">
+          <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:py-16">
             <div>
               <h1 id="hero-title" className="max-w-xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
                 {t("landing.hero.title")}
@@ -45,7 +47,7 @@ export function LandingPage() {
         </section>
 
         <section id="iespejas" aria-labelledby="features-title" className="scroll-mt-20 border-t border-line bg-paper">
-          <div className="mx-auto max-w-6xl px-4 py-16">
+          <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="features-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.features.title")}
             </h2>
@@ -59,8 +61,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="prieksrocibas" aria-labelledby="advantages-title" className="scroll-mt-20">
-          <div className="mx-auto max-w-6xl px-4 py-16">
+        <section id="prieksrocibas" aria-labelledby="advantages-title" className="scroll-mt-20 border-t border-line">
+          <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="advantages-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.advantages.title")}
             </h2>
@@ -77,7 +79,7 @@ export function LandingPage() {
         </section>
 
         <section id="soli" aria-labelledby="steps-title" className="scroll-mt-20">
-          <div className="mx-auto max-w-6xl px-4 py-16">
+          <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="steps-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.steps.title")}
             </h2>
@@ -91,7 +93,9 @@ export function LandingPage() {
 
         <FaqSection />
 
-        <section aria-labelledby="cta-title" className="px-5 pt-10 pb-16 sm:px-8 sm:pt-14">
+        <ContactSection />
+
+        <section aria-labelledby="cta-title" className="px-5 pt-8 pb-12 sm:px-8 sm:pt-10">
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-4 rounded-3xl bg-navy px-6 py-10 text-white sm:px-10">
             <h2 id="cta-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.cta.title")}
@@ -137,7 +141,64 @@ const FAQ: { q: MessageKey; a: MessageKey }[] = [
   { q: "landing.faq.3.q", a: "landing.faq.3.a" },
   { q: "landing.faq.4.q", a: "landing.faq.4.a" },
   { q: "landing.faq.5.q", a: "landing.faq.5.a" },
+  { q: "landing.faq.6.q", a: "landing.faq.6.a" },
 ];
+
+function ContactSection() {
+  const { t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    const form = event.currentTarget;
+    const result = await sendContactMessage(new FormData(form));
+    setPending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    form.reset();
+    showFeedback({ message: t("landing.contact.sent"), variant: "success" });
+  }
+
+  return (
+    <section id="kontakti" aria-labelledby="contact-title" className="scroll-mt-20 border-t border-line">
+      <div className="mx-auto max-w-xl px-4 py-12">
+        <h2 id="contact-title" className="text-2xl font-semibold tracking-tight">
+          {t("landing.contact.title")}
+        </h2>
+        <p className="mt-2 text-muted">{t("landing.contact.lead")}</p>
+        <form className="mt-8 grid gap-4" onSubmit={(event) => void onSubmit(event)}>
+          <input name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute h-0 w-0 opacity-0" />
+          <div className="grid grid-cols-2 gap-4">
+            <label className="grid gap-1.5 text-sm font-medium">
+              {t("landing.contact.name")}
+              <input required name="name" maxLength={80} autoComplete="name" className="h-11 w-full rounded-lg bg-paper px-3 text-sm font-normal ring-1 ring-line" />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              {t("auth.email")}
+              <input required name="email" type="email" maxLength={200} autoComplete="email" className="h-11 w-full rounded-lg bg-paper px-3 text-sm font-normal ring-1 ring-line" />
+            </label>
+          </div>
+          <label className="grid gap-1.5 text-sm font-medium">
+            {t("admin.email.subject")}
+            <input required name="subject" maxLength={120} className="h-11 w-full rounded-lg bg-paper px-3 text-sm font-normal ring-1 ring-line" />
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            {t("landing.contact.message")}
+            <textarea required name="message" rows={5} maxLength={2000} className="rounded-lg bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line" />
+          </label>
+          <button type="submit" disabled={pending} className="justify-self-start rounded-lg bg-navy px-5 py-3 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
+            {t("landing.contact.send")}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
 
 function FaqSection() {
   const { t } = useLanguage();
@@ -155,7 +216,7 @@ function FaqSection() {
   return (
     <section id="jautajumi" aria-labelledby="faq-title" className="scroll-mt-20 border-t border-line bg-paper">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-      <div className="mx-auto max-w-3xl px-4 py-16">
+      <div className="mx-auto max-w-3xl px-4 py-12">
         <h2 id="faq-title" className="text-2xl font-semibold tracking-tight">
           {t("landing.faq.title")}
         </h2>
@@ -190,7 +251,7 @@ function Step({ n, title, text }: { n: string; title: string; text: string }) {
 
 function ProductPreview() {
   const { formatLang, t } = useLanguage();
-  const days = formatLang === "lv" ? ["Pr", "Ot", "Tr", "Ce", "Pk", "Se", "Sv"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const days = weekdayHeaders(formatLang);
   const year = 2026;
   const month = 8;
   const cells = previewMonth(year, month);

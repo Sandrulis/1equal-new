@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/app/components/landing-page";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { siteTitleFor } from "@/app/lib/site-brand";
-import { getSiteUrl, siteDescription } from "@/app/lib/site";
+import { getSiteUrl, siteDescription, siteSocialDescription } from "@/app/lib/site";
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getSiteBrand();
@@ -11,23 +11,22 @@ export async function generateMetadata(): Promise<Metadata> {
   title: { absolute: title },
   description: siteDescription,
   applicationName: brand.name,
-  keywords: ["hokejs", "amatieru hokejs", "komandas kalendārs", "treniņi", "spēles", brand.name],
-  authors: [{ name: brand.name, url: "/" }],
+  authors: [{ name: brand.name, url: getSiteUrl() }],
   creator: brand.name,
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "lv_LV",
-    alternateLocale: ["en_US"],
+    alternateLocale: ["en_US", "ru_RU"],
     url: "/",
     siteName: brand.name,
     title,
-    description: siteDescription,
+    description: siteSocialDescription,
   },
   twitter: {
     card: "summary_large_image",
     title,
-    description: siteDescription,
+    description: siteSocialDescription,
   },
   robots: {
     index: true,
@@ -55,6 +54,7 @@ export default async function HomePage() {
         "@id": `${url}/#organization`,
         name: brand.name,
         url,
+        ...(brand.logoUrl ? { logo: brand.logoUrl } : {}),
       },
       {
         "@type": "WebSite",
@@ -79,11 +79,12 @@ export default async function HomePage() {
         "@type": "SoftwareApplication",
         "@id": `${url}/#app`,
         name: brand.name,
-        applicationCategory: "BusinessApplication",
+        applicationCategory: "SportsApplication",
         operatingSystem: "Web",
         url,
         description: siteDescription,
         inLanguage: "lv",
+        ...(brand.logoUrl ? { image: brand.logoUrl } : {}),
         publisher: { "@id": `${url}/#organization` },
       },
     ],

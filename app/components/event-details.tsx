@@ -4,7 +4,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { IconCheck, IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import { type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
-import { formatDisplayDate, formatMoney, formatWeekday } from "@/app/lib/format";
+import { useFormatMoney } from "@/app/components/currency-provider";
+import { useDisplayFormat } from "@/app/components/display-preferences";
+import { formatWeekday } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 export type Rsvp = "going" | "absent" | "pending";
@@ -99,6 +101,8 @@ export function EventDetails({
   onClose: () => void;
 }) {
   const { formatLang, t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatDate, formatTime } = useDisplayFormat();
   const fee = feeProp ?? eventPlayerFee(event.type);
   const billable = members.filter((member) => !member.feeExempt);
   const requested = fee * billable.length;
@@ -137,8 +141,8 @@ export function EventDetails({
 
       <div className="flex flex-col gap-4 px-4 py-4 min-[600px]:flex-row min-[600px]:items-start min-[600px]:justify-between min-[600px]:px-5">
         <dl className="order-2 grid min-w-0 flex-1 gap-2 text-sm min-[600px]:order-1 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
-          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDisplayDate(event.date)}`} />
-          <Detail label={t("event.time")} value={event.end ? `${event.start}-${event.end}` : event.start} />
+          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)}`} />
+          <Detail label={t("event.time")} value={event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)} />
           <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
           <Detail label={t("event.venue")} value={venueName} />
           <Detail label={t("event.price")} value={formatMoney(fee)} />

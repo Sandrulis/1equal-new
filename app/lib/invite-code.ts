@@ -21,6 +21,7 @@ export type IssuedTeam = {
   leaderId?: string | null;
   trainingVotingHours?: number;
   gameVotingHours?: number;
+  currency?: string | null;
   balance?: number;
   ledger?: TeamLedgerLine[];
   rsvps?: { eventId: string; userId: string; status: "going" | "absent" }[];
@@ -28,6 +29,7 @@ export type IssuedTeam = {
   subteams?: Subteam[];
   venues?: Venue[];
   events?: TeamEvent[];
+  watching?: boolean;
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

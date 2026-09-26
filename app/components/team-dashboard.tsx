@@ -10,8 +10,15 @@ import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
 import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam, type TeamLedgerLine } from "@/app/lib/invite-code";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { SiteContactDialog } from "@/app/components/site-contact-dialog";
+import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
+import type { FeedbackKind } from "@/app/lib/feedback/actions";
 import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, setEventAttendance, updateOwnedEvent } from "@/app/lib/team-actions";
+import { setAdminTeamWatch } from "@/app/lib/site-admin/actions";
+import { mergeDisplayPreferences } from "@/app/lib/display-preferences";
+import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/team-defaults";
 import {
+  formatClock,
   formatDisplayDate,
   formatDuration,
   formatMoney,
@@ -19,6 +26,7 @@ import {
   formatWeekday,
   hoursBetween,
   isoDate,
+  monthGrid,
   parseIsoDate,
   weekdayHeaders,
 } from "@/app/lib/format";
@@ -26,7 +34,7 @@ import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
-import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/app/components/icon-tip-button";
+import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
 import { SiteFooter } from "@/app/components/site-footer";
 import { AdminIntegrationsPage } from "@/app/components/admin-integrations-page";
@@ -36,7 +44,11 @@ import { AdminSettingsForm } from "@/app/components/admin-settings-form";
 import { AdminSubteamsList } from "@/app/components/admin-subteams-list";
 import { AdminTeamsList } from "@/app/components/admin-teams-list";
 import { AdminTranslationsManager } from "@/app/components/admin-translations-manager";
+import { AdminEmailDesign } from "@/app/components/admin-email-design";
+import { AdminTodoPage } from "@/app/components/admin-todo-page";
 import { AdminUsersList } from "@/app/components/admin-users-list";
+import { CurrencyProvider, useFormatMoney } from "@/app/components/currency-provider";
+import { DisplayPreferencesProvider, useDisplayFormat } from "@/app/components/display-preferences";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { TopBar } from "@/app/components/top-bar";
 import type { AccountProfile } from "@/app/lib/auth/profile";
@@ -60,19 +72,11 @@ function eventCost(event: TeamEvent, pricePerHour: number): number | null {
   return hoursBetween(event.start, event.end) * pricePerHour;
 }
 
-function monthCells(year: number, month: number): Date[] {
-  const first = new Date(year, month, 1);
-  const offset = (first.getDay() + 6) % 7;
-  const start = new Date(year, month, 1 - offset);
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(start);
-    day.setDate(start.getDate() + index);
-    return day;
-  });
-}
 
 function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; game: boolean; cost: number | null; subteamName?: string }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatTime } = useDisplayFormat();
   const subteam = subteamName;
   const hours = event.end ? hoursBetween(event.start, event.end) : null;
   return (
@@ -88,7 +92,7 @@ function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; g
         {cost != null ? <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p> : null}
       </div>
       <p className="mt-2 text-sm text-muted">
-        {hours != null ? `${event.start}-${event.end}, ${formatDuration(hours)}` : event.start}
+        {hours != null ? `${formatTime(event.start)}-${formatTime(event.end)}, ${formatDuration(hours)}` : formatTime(event.start)}
       </p>
       {subteam ? <p className="mt-1 text-sm">{subteam}</p> : null}
     </>
@@ -141,11 +145,18 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}`).join("|");
   const preferredCode = useRef<string | null>(null);
   preferredCode.current = ownedTeam?.code ?? preferredCode.current;
   useEffect(() => {
-    if (!account || !initialTeams.length) return;
+    if (!account) return;
+    if (!initialTeams.length) {
+      replaceMyTeams([]);
+      setOwnedTeam(null);
+      setTeams([]);
+      setRsvp({});
+      return;
+    }
     replaceMyTeams(initialTeams);
     const preferred = preferredCode.current && initialTeams.some((team) => team.code === preferredCode.current) ? preferredCode.current : initialTeams[0].code;
     const next = selectMyTeam(preferred);
@@ -166,12 +177,12 @@ export function TeamDashboard({
   const view = route.view;
   const showStart = needsTeam && (view === "home" || view === "team" || view === "subteams" || view === "venues");
 
-  async function createTeam(name: string, sourceUrl: string | null, logoUrl: string | null) {
+  async function createTeam(input: CreateTeamInput) {
     if (creating.current) return;
     creating.current = true;
     let result: Awaited<ReturnType<typeof createOwnedTeam>>;
     try {
-      result = await createOwnedTeam({ name, sourceUrl, logoUrl });
+      result = await createOwnedTeam(input);
     } catch {
       creating.current = false;
       showFeedback({ message: t("auth.error.generic"), variant: "error" });
@@ -196,7 +207,23 @@ export function TeamDashboard({
     setOwnedTeam(team);
   }
 
-  function rememberTeam(patch: { name: string; trainingVotingHours: number; gameVotingHours: number }) {
+  async function unwatchTeam(teamId: string) {
+    const target = teams.find((item) => item.id === teamId);
+    if (!target?.watching) return;
+    const result = await setAdminTeamWatch(teamId, false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    forgetTeam(target.code);
+    const next = getCurrentTeam();
+    setTeams(listMyTeams());
+    setOwnedTeam(next);
+    showFeedback({ message: t("admin.teams.unwatched"), variant: "success" });
+    router.refresh();
+  }
+
+  function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) {
     if (!ownedTeam) return;
     const next = { ...ownedTeam, ...patch };
     setCurrentTeam(next);
@@ -281,6 +308,8 @@ export function TeamDashboard({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
+  const [homeView, setHomeView] = useState<"calendar" | "poll" | null>(null);
+  const [votingId, setVotingId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
@@ -290,7 +319,10 @@ export function TeamDashboard({
   const [hiddenEventIds, setHiddenEventIds] = useState<string[]>(() => demoHiddenEventIds.slice());
   const [demoCharges, setDemoCharges] = useState<TeamLedgerLine[]>(() => demoEventCharges.slice());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [adminNavOpen, setAdminNavOpen] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [compactRail, setCompactRail] = useState(false);
   const overlay = compactRail && !sidebarCollapsed;
 
@@ -300,6 +332,7 @@ export function TeamDashboard({
     function sync() {
       setCompactRail(railQuery.matches);
       setSidebarCollapsed(narrowQuery.matches);
+      if (window.matchMedia("(min-width: 600px)").matches) setAdminOpen(false);
     }
     sync();
     narrowQuery.addEventListener("change", sync);
@@ -311,22 +344,14 @@ export function TeamDashboard({
   }, []);
 
   useEffect(() => {
-    const wide = window.matchMedia("(min-width: 600px)");
-    function close() {
-      if (wide.matches) setAdminNavOpen(false);
-    }
-    wide.addEventListener("change", close);
-    return () => wide.removeEventListener("change", close);
-  }, []);
-
-  useEffect(() => {
-    if (!adminNavOpen) return;
+    if (!menuOpen) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setAdminNavOpen(false);
+      if (event.key === "Escape") setMenuOpen(false);
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [adminNavOpen]);
+  }, [menuOpen]);
+
   const [savedSlots, setSavedSlots] = useState<Record<string, SlotMap>>({});
   const [savedSides, setSavedSides] = useState<Record<string, SideMap>>({});
   const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>(() => {
@@ -404,9 +429,9 @@ export function TeamDashboard({
     }, 0);
   }
 
-  async function setMemberRsvp(memberId: string, status: Rsvp) {
-    if (!openEventId) return;
-    const eventId = openEventId;
+  async function setMemberRsvp(memberId: string, status: Rsvp, targetEventId?: string) {
+    const eventId = targetEventId ?? openEventId;
+    if (!eventId) return;
     const previous = rsvp[eventId]?.[memberId] ?? demoAttendanceRsvp[eventId]?.[memberId] ?? "pending";
     demoAttendanceRsvp[eventId] = { ...demoAttendanceRsvp[eventId], [memberId]: status };
     setRsvp((current) => ({
@@ -695,6 +720,8 @@ export function TeamDashboard({
         integrations: admin.integrations.length,
         languages: admin.languages.length,
         translations: admin.translations.length,
+        email: admin.emailTemplates.length,
+        todo: admin.todos.filter((item) => !item.isDone).length,
       }
     : {};
 
@@ -742,8 +769,8 @@ export function TeamDashboard({
     setDemoCharges(demoEventCharges.slice());
     setDemoTeamDelta(demoAttendanceMoney.team);
   }, [basePath, calendarEvents, now]);
-  const voteTraining = activeTeam?.trainingVotingHours ?? 24;
-  const voteGame = activeTeam?.gameVotingHours ?? 72;
+  const voteTraining = activeTeam?.trainingVotingHours ?? brand.trainingVotingHours;
+  const voteGame = activeTeam?.gameVotingHours ?? brand.gameVotingHours;
   const selfMember = !activeTeam || showStart
     ? null
     : !account || activeTeam.demo
@@ -767,44 +794,25 @@ export function TeamDashboard({
         .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
     : [];
   const pendingVoteIds = new Set(pendingVoteEvents.map((event) => event.id));
-  const cells = monthCells(year, month);
+  const resolvedHomeView = homeView ?? (pendingVoteEvents.length > 0 ? "poll" : "calendar");
+  const showPoll = resolvedHomeView === "poll" && pendingVoteEvents.length > 0;
+  const display = mergeDisplayPreferences(brand.display, profile?.display);
+  const currencyCode = activeTeam?.currency && isCurrency(activeTeam.currency) ? activeTeam.currency : normalizeCurrency(brand.currency);
+  const money = (value: number) => formatMoney(value, currencyCode);
+  const formatDate = (value: string) => formatDisplayDate(value, display);
+  const formatTime = (value: string) => formatClock(value, display.timeFormat);
+  const dayHeaders = weekdayHeaders(formatLang, display.weekStartDay);
+  const cells = monthGrid(year, month, display.weekStartDay);
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
 
   return (
+    <CurrencyProvider currency={currencyCode}>
+    <DisplayPreferencesProvider value={display}>
     <div
-      className="flex min-h-screen flex-col min-[600px]:grid min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)] min-[600px]:transition-[grid-template-columns] min-[600px]:duration-200"
-      style={{ "--side": overlay || sidebarCollapsed ? "4.5rem" : "15rem" } as CSSProperties}
+      className={`flex min-h-dvh flex-col min-[600px]:grid min-[600px]:min-h-screen min-[600px]:transition-[grid-template-columns] min-[600px]:duration-200 ${account?.isAdmin ? "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)_3.5rem]" : "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)]"}`}
+      style={{ "--side": overlay || sidebarCollapsed ? "3.5rem" : "15rem" } as CSSProperties}
     >
-      {account?.isAdmin && adminNavOpen ? (
-        <div className="fixed inset-0 z-50 min-[600px]:hidden">
-          <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={() => setAdminNavOpen(false)} />
-          <aside className="relative z-10 flex h-full w-60 flex-col bg-navy text-white shadow-xl">
-            <div className="flex items-center justify-between gap-2 px-3 py-3">
-              <p className="min-w-0 truncate text-sm font-semibold">{t("nav.admin")}</p>
-              <button type="button" aria-label={t("event.close")} onClick={() => setAdminNavOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/80 hover:bg-white/10">
-                <IconX />
-              </button>
-            </div>
-            <nav aria-label={t("nav.admin")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-4">
-              {ADMIN_NAV.map((item) => (
-                <SideItem
-                  key={item.section}
-                  label={t(item.label)}
-                  count={adminCounts[item.section]}
-                  icon={item.icon}
-                  row
-                  active={route.view === "admin" && route.section === item.section}
-                  onClick={() => {
-                    setAdminNavOpen(false);
-                    showAdmin(item.section);
-                  }}
-                />
-              ))}
-            </nav>
-          </aside>
-        </div>
-      ) : null}
       {overlay ? (
         <button
           type="button"
@@ -814,8 +822,8 @@ export function TeamDashboard({
         />
       ) : null}
       <div className={overlay ? "relative z-40" : "contents"}>
-      <aside className={overlay ? "fixed top-0 left-0 z-40 flex h-screen w-60 flex-col bg-navy text-white shadow-xl" : "order-2 bg-navy text-white max-[599px]:fixed max-[599px]:inset-x-0 max-[599px]:bottom-0 max-[599px]:z-40 max-[599px]:flex max-[599px]:h-auto max-[599px]:flex-row max-[599px]:pb-[env(safe-area-inset-bottom)] min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col"}>
-        <div className={`hidden items-center gap-2 py-4 min-[600px]:flex ${sidebarCollapsed ? "min-[600px]:flex-col min-[600px]:px-2" : "pr-4 pl-[18px]"}`}>
+      <aside className={overlay ? "fixed top-0 left-0 z-40 flex h-screen w-60 flex-col overflow-hidden bg-navy text-white shadow-xl" : `order-2 overflow-hidden bg-navy text-white max-[599px]:fixed max-[599px]:bottom-0 max-[599px]:left-0 max-[599px]:z-50 max-[599px]:flex max-[599px]:h-auto max-[599px]:w-full max-[599px]:flex-row max-[599px]:overflow-visible max-[599px]:pb-[env(safe-area-inset-bottom)] min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
+        <div className="hidden items-center gap-2 overflow-hidden px-2.5 py-4 min-[600px]:flex">
           <button
             type="button"
             aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
@@ -826,42 +834,47 @@ export function TeamDashboard({
           >
             {sidebarCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
           </button>
-          {sidebarCollapsed ? null : (
-            <span className="flex min-w-0 items-center gap-2">
-              {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-7 w-auto" /> : null}
-              <p className="min-w-0 truncate text-base font-semibold tracking-wide">{brand.name}</p>
-            </span>
-          )}
+          <span className={`min-w-0 items-center gap-2 whitespace-nowrap ${sidebarCollapsed ? "sr-only" : "flex"}`}>
+            {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-7 w-auto shrink-0" /> : null}
+            <p className="truncate text-base font-semibold tracking-wide">{brand.name}</p>
+          </span>
         </div>
         <nav
-          className={`flex flex-wrap gap-1 px-3 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:px-2 min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:items-center min-[600px]:overflow-visible" : "min-[600px]:items-stretch min-[600px]:overflow-y-auto"}`}
+          className={`flex flex-wrap gap-1 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:items-stretch min-[600px]:overflow-x-hidden min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:px-2.5" : "min-[600px]:overflow-y-auto min-[600px]:pr-4 min-[600px]:pl-2.5"}`}
           aria-label={t("nav.sections")}
         >
-          <SideItem label={t("nav.calendar")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
+          <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
           <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
           {moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
           <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} />
         </nav>
-        {account?.isAdmin ? (
+        {account ? (
           <nav
-            aria-label={t("nav.admin")}
-            className={`mt-auto hidden shrink-0 flex-col gap-1 border-t border-white/15 px-2 pt-3 pb-4 min-[600px]:flex ${sidebarCollapsed ? "items-center" : ""}`}
+            aria-label={t("nav.help")}
+            className={`mt-auto hidden shrink-0 flex-col gap-1 overflow-hidden border-t border-white/15 pt-3 pb-3 min-[600px]:flex ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}
           >
-            <p className="sr-only">{t("nav.admin")}</p>
-            {ADMIN_NAV.map((item) => (
-              <SideItem
-                key={item.section}
-                label={t(item.label)}
-                count={adminCounts[item.section]}
-                icon={item.icon}
-                compact={sidebarCollapsed}
-                active={route.view === "admin" && route.section === item.section}
-                onClick={() => showAdmin(item.section)}
-              />
-            ))}
+            <SideItem label={t("nav.report_bug")} icon={<IconBug />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("bug")} />
+            <SideItem label={t("nav.suggestions")} icon={<IconBulb />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("suggestion")} />
+            <SideItem label={t("nav.feedback")} icon={<IconComment />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("feedback")} />
+            <SideItem label={t("landing.nav.contact")} icon={<IconMail />} compact={sidebarCollapsed} onClick={() => setContactOpen(true)} />
           </nav>
         ) : null}
       </aside>
+      {account && menuOpen ? (
+        <div className="fixed top-14 right-0 bottom-0 left-0 z-40 min-[600px]:hidden">
+          <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute top-0 right-auto bottom-0 left-0 z-10 flex w-64 flex-col bg-navy text-white shadow-xl">
+            <nav aria-label={t("nav.help")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pt-3 pr-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+              <SideItem label={t("nav.report_bug")} icon={<IconBug />} row onClick={() => { setMenuOpen(false); setFeedbackKind("bug"); }} />
+              <SideItem label={t("nav.suggestions")} icon={<IconBulb />} row onClick={() => { setMenuOpen(false); setFeedbackKind("suggestion"); }} />
+              <SideItem label={t("nav.feedback")} icon={<IconComment />} row onClick={() => { setMenuOpen(false); setFeedbackKind("feedback"); }} />
+              <SideItem label={t("landing.nav.contact")} icon={<IconMail />} row onClick={() => { setMenuOpen(false); setContactOpen(true); }} />
+            </nav>
+          </aside>
+        </div>
+      ) : null}
+      <SiteFeedbackDialog kind={feedbackKind} onClose={() => setFeedbackKind(null)} />
+      {contactOpen && profile ? <SiteContactDialog account={profile} onClose={() => setContactOpen(false)} /> : null}
       </div>
 
       <div className="flex min-h-screen min-w-0 flex-col max-[599px]:contents">
@@ -872,15 +885,20 @@ export function TeamDashboard({
         teams={account ? teams : []}
         onHome={() => showHome()}
         onSelectTeam={selectTeam}
+        onUnwatchTeam={account?.isAdmin ? unwatchTeam : undefined}
         onCreateTeam={createTeam}
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
         onAccountChange={setProfile}
-        onOpenAdmin={account?.isAdmin ? () => setAdminNavOpen(true) : undefined}
+        onOpenFeedback={account ? setFeedbackKind : undefined}
+        onOpenContact={account ? () => setContactOpen(true) : undefined}
+        onOpenMenu={account ? () => { setAdminOpen(false); setMenuOpen((value) => !value); } : undefined}
+        onOpenAdmin={account?.isAdmin ? () => { setMenuOpen(false); setAdminOpen((value) => !value); } : undefined}
         balanceMember={financeAllowed ? selfMember : null}
+        calendarIntegration={Boolean(enabledModules?.includes(FRONTEND_MODULE_KEYS.calendar))}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
-        {account && ownedTeam && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
+        {account && ownedTeam && !ownedTeam.watching && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
           <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
         ) : null}
         {!showStart && pendingVoteEvents.length ? (
@@ -894,7 +912,7 @@ export function TeamDashboard({
                     onClick={() => showEvent(event, parseIsoDate(event.date))}
                     className="rounded-lg bg-paper px-2.5 py-1 text-sm tabular-nums hover:ring-1 hover:ring-line"
                   >
-                    {formatDisplayDate(event.date)} {event.start} {t(event.type === "game" ? "legend.game" : "legend.training")}
+                    {formatDate(event.date)} {formatTime(event.start)} {t(event.type === "game" ? "legend.game" : "legend.training")}
                   </button>
                 </li>
               ))}
@@ -931,8 +949,9 @@ export function TeamDashboard({
             teamId={activeTeam.id ?? null}
             leaderId={activeTeam.leaderId ?? null}
             accountId={profile?.id ?? null}
-            trainingVotingHours={activeTeam.trainingVotingHours ?? 24}
-            gameVotingHours={activeTeam.gameVotingHours ?? 72}
+            trainingVotingHours={activeTeam.trainingVotingHours ?? brand.trainingVotingHours}
+            gameVotingHours={activeTeam.gameVotingHours ?? brand.gameVotingHours}
+            currency={activeTeam.currency ?? null}
             onTeamSaved={rememberTeam}
             initialMembers={(activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
@@ -953,7 +972,7 @@ export function TeamDashboard({
               at: line.at,
               description: t("team.ledger.event", {
                 type: t(line.eventType === "game" ? "legend.game" : "legend.training"),
-                date: formatDisplayDate(line.eventDate),
+                date: formatDate(line.eventDate),
               }),
             }))}
           />
@@ -961,6 +980,7 @@ export function TeamDashboard({
         {view === "subteams" && !showStart && moduleVisible ? (
           <SubteamAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
+            readOnly={Boolean(activeTeam?.watching)}
             subteams={activeTeam?.subteams}
             onChange={(subteams) => {
               if (!ownedTeam) return;
@@ -974,6 +994,7 @@ export function TeamDashboard({
         {view === "venues" && !showStart && moduleVisible ? (
           <VenueAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
+            readOnly={Boolean(activeTeam?.watching)}
             venues={activeTeam?.venues}
             onChange={(venues) => {
               if (!ownedTeam) return;
@@ -991,7 +1012,7 @@ export function TeamDashboard({
             )}
             {route.section === "users" && admin ? <AdminUsersList users={admin.users} /> : null}
             {route.section === "teams" && admin ? (
-              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} openTeamId={openTeamId} />
+              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} openTeamId={openTeamId} accountId={account?.id ?? ""} watchedTeamIds={admin.watchedTeamIds} />
             ) : null}
             {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
             {route.section === "modules" && admin ? <AdminModulesPage initialModules={admin.modules} /> : null}
@@ -1003,11 +1024,71 @@ export function TeamDashboard({
             {route.section === "translations" && admin ? (
               <AdminTranslationsManager translations={admin.translations} languages={admin.languages} />
             ) : null}
+            {route.section === "email" && admin ? (
+              <AdminEmailDesign
+                systemName={admin.brand.name}
+                resendEnabled={admin.integrations.some((item) => item.key === "resend" && item.enabled)}
+                languages={admin.languages}
+                initialTemplates={admin.emailTemplates}
+              />
+            ) : null}
+            {route.section === "todo" && admin ? <AdminTodoPage initialTodos={admin.todos} /> : null}
           </div>
         ) : null}
         <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
-        <section id="kalendars" className="scroll-mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
+        {pendingVoteEvents.length ? (
+          <div className="mb-4">
+            <CalendarPollSwitch value={resolvedHomeView} onChange={setHomeView} />
+          </div>
+        ) : null}
+        <section id="kalendars" className={`scroll-mt-4 ${showPoll ? "space-y-4" : "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"}`}>
+          {showPoll ? (
+            <>
+              <ul className="space-y-4">
+                {pendingVoteEvents.map((event) => {
+                  const venue = venueSource.find((item) => item.id === event.venueId);
+                  const busy = votingId === event.id;
+                  return (
+                    <li key={event.id} className="rounded-2xl bg-paper p-5 ring-1 ring-line">
+                      <dl className="grid gap-3 min-[600px]:grid-cols-2">
+                        <PollField label={t("event.date")} value={`${formatWeekday(event.date, formatLang)} ${formatDate(event.date)} ${formatTime(event.start)}`} />
+                        <PollField label={t("event.price")} value={venue ? money(venue.pricePerHour) : ""} large />
+                        <PollField label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
+                        <PollField label={t("event.venue")} value={venue?.name ?? ""} />
+                      </dl>
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          disabled={busy || !selfMember}
+                          onClick={() => {
+                            if (!selfMember) return;
+                            setVotingId(event.id);
+                            void setMemberRsvp(selfMember.id, "going", event.id).finally(() => setVotingId(null));
+                          }}
+                          className="rounded-xl bg-[#178a45] px-4 py-4 text-lg font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {t("event.vote.going")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || !selfMember}
+                          onClick={() => {
+                            if (!selfMember) return;
+                            setVotingId(event.id);
+                            void setMemberRsvp(selfMember.id, "absent", event.id).finally(() => setVotingId(null));
+                          }}
+                          className="rounded-xl bg-game px-4 py-4 text-lg font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {t("event.vote.absent")}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
+          <div className={`rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5 ${showPoll ? "hidden" : ""}`}>
             <div className="mb-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <IconButton label={t("month.prev")} onClick={() => shiftMonth(-1)}>
@@ -1065,7 +1146,7 @@ export function TeamDashboard({
 
             <div className="overflow-hidden rounded-xl border border-grid">
               <div className="grid grid-cols-7 bg-[#f4f7fa]">
-                {weekdayHeaders(formatLang).map((label, index) => (
+                {dayHeaders.map((label, index) => (
                   <div
                     key={label}
                     className={`border-b border-grid px-1 py-2 text-center text-xs font-medium text-muted ${
@@ -1101,7 +1182,7 @@ export function TeamDashboard({
                         }}
                         aria-pressed={selected}
                         aria-current={isToday ? "date" : undefined}
-                        aria-label={formatDisplayDate(iso)}
+                        aria-label={formatDate(iso)}
                         className={`mb-1 grid h-6 w-6 place-items-center rounded-full text-xs font-medium ${
                           isToday ? "bg-train text-white" : inMonth ? "text-ink" : "text-muted"
                         }`}
@@ -1112,7 +1193,7 @@ export function TeamDashboard({
                         {events.slice(0, 2).map((event) => {
                           const venue = venueSource.find((item) => item.id === event.venueId);
                           const place = venue?.area.split(",")[0] || venue?.name || "";
-                          const label = `${event.start} ${place}`.trim();
+                          const label = `${formatTime(event.start)} ${place}`.trim();
                           return (
                             <button
                               key={event.id}
@@ -1128,7 +1209,7 @@ export function TeamDashboard({
                               } ${openEventId === event.id ? "ring-1 ring-navy" : ""} ${pendingVoteIds.has(event.id) ? "vote-pulse" : ""}`}
                             >
                               <span className="max-[499px]:hidden">{label}</span>
-                              <span className="hidden tabular-nums max-[499px]:inline">{event.start}</span>
+                              <span className="hidden tabular-nums max-[499px]:inline">{formatTime(event.start)}</span>
                             </button>
                           );
                         })}
@@ -1149,14 +1230,16 @@ export function TeamDashboard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 xl:sticky xl:top-5">
-          <button type="button" onClick={() => setAddingEvent(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
-            <IconPlus />
-            {t("event.add")}
-          </button>
+          <div className={`flex flex-col gap-3 xl:sticky xl:top-5 ${showPoll ? "hidden" : ""}`}>
+          {activeTeam?.watching ? null : (
+            <button type="button" onClick={() => setAddingEvent(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+              <IconPlus />
+              {t("event.add")}
+            </button>
+          )}
           <aside className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
             <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, formatLang)}</p>
-            <h2 className="mt-1 text-lg font-semibold">{formatDisplayDate(selectedIso)}</h2>
+            <h2 className="mt-1 text-lg font-semibold">{formatDate(selectedIso)}</h2>
             {selectedEvents.length === 0 ? (
               <p className="mt-4 text-sm text-muted">
                 {filtersActive ? t("day.emptyFiltered") : t("day.empty")}
@@ -1190,7 +1273,7 @@ export function TeamDashboard({
                       ) : null}
                       {event.end ? (
                         <p className="mt-1 text-xs text-muted">
-                          {formatDuration(hoursBetween(event.start, event.end))} × {formatMoney(venue?.pricePerHour ?? 0)}/h
+                          {formatDuration(hoursBetween(event.start, event.end))} × {money(venue?.pricePerHour ?? 0)}/h
                         </p>
                       ) : null}
                       <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} className="mt-2" />
@@ -1227,7 +1310,7 @@ export function TeamDashboard({
             knownRsvp={knownRsvp}
             actorId={profile && activeTeam && !activeTeam.demo ? profile.id : null}
             leader={Boolean(profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id)}
-            votingOpen={eventVotingOpen(openEvent, activeTeam?.trainingVotingHours ?? 24, activeTeam?.gameVotingHours ?? 72)}
+            votingOpen={eventVotingOpen(openEvent, voteTraining, voteGame)}
             rsvp={rsvp[openEvent.id]}
             onRsvp={setMemberRsvp}
             onLineup={lineupAllowed ? () => openLineup(openEvent) : undefined}
@@ -1251,11 +1334,41 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
-      <div className="order-4 max-[599px]:pb-24">
+      <div className="order-4 bg-paper max-[599px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         <SiteFooter />
       </div>
       </div>
+      {account?.isAdmin && adminOpen ? (
+        <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className="fixed top-14 right-0 bottom-0 left-0 z-20 bg-ink/40 min-[600px]:hidden" />
+      ) : null}
+      {account?.isAdmin ? (
+        <div className="max-[599px]:contents min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-40 min-[600px]:h-screen min-[600px]:self-start min-[600px]:overflow-visible">
+        <aside
+          aria-label={t("nav.admin")}
+          className={`group/admin z-40 flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 max-[599px]:fixed max-[599px]:top-14 max-[599px]:right-0 max-[599px]:bottom-0 max-[599px]:h-auto max-[599px]:w-72 max-[599px]:shadow-xl min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60 ${adminOpen ? "max-[599px]:flex" : "max-[599px]:hidden"}`}
+        >
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
+            {ADMIN_NAV.map((item) => (
+              <SideItem
+                key={item.section}
+                label={t(item.label)}
+                count={adminCounts[item.section]}
+                icon={item.icon}
+                active={route.view === "admin" && route.section === item.section}
+                flush
+                onClick={() => {
+                  setAdminOpen(false);
+                  showAdmin(item.section);
+                }}
+              />
+            ))}
+          </nav>
+        </aside>
+        </div>
+      ) : null}
     </div>
+    </DisplayPreferencesProvider>
+    </CurrencyProvider>
   );
 }
 
@@ -1268,6 +1381,8 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   integrations: "nav.admin.integrations",
   languages: "nav.admin.languages",
   translations: "nav.admin.translations",
+  email: "nav.admin.email",
+  todo: "nav.admin.todo",
 };
 
 const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[] = [
@@ -1279,6 +1394,8 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "integrations", label: ADMIN_LABEL.integrations, icon: <IconPlug /> },
   { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
   { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
+  { section: "email", label: ADMIN_LABEL.email, icon: <IconMail /> },
+  { section: "todo", label: ADMIN_LABEL.todo, icon: <IconTodo /> },
 ];
 
 function SideItem({
@@ -1288,6 +1405,7 @@ function SideItem({
   active,
   compact,
   row = false,
+  flush = false,
   onClick,
 }: {
   label: string;
@@ -1296,6 +1414,7 @@ function SideItem({
   active?: boolean;
   compact?: boolean;
   row?: boolean;
+  flush?: boolean;
   onClick: () => void;
 }) {
   const caption = count == null ? label : `${label} ${count}`;
@@ -1321,19 +1440,17 @@ function SideItem({
       onBlur={() => setTip(null)}
       aria-current={active ? "page" : undefined}
       aria-label={caption}
-      className={`group relative text-white/90 hover:bg-white/10 ${
-        row
-          ? "inline-flex w-full flex-none flex-row items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm"
-          : `flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight ${
-              compact
-                ? "min-[600px]:grid min-[600px]:h-9 min-[600px]:w-9 min-[600px]:flex-none min-[600px]:place-items-center min-[600px]:gap-0 min-[600px]:rounded-lg min-[600px]:px-0 min-[600px]:py-0"
-                : "min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:gap-2 min-[600px]:rounded-xl min-[600px]:px-2.5 min-[600px]:py-1.5 min-[600px]:text-left min-[600px]:text-sm"
-            }`
+      className={`relative text-white/90 hover:bg-white/10 ${
+        flush
+          ? "inline-flex w-full flex-none flex-row items-center gap-2 overflow-hidden rounded-xl py-0 text-left text-sm"
+          : row
+            ? "inline-flex w-full flex-none flex-row items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm"
+            : "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-start min-[600px]:gap-2 min-[600px]:overflow-hidden min-[600px]:rounded-xl min-[600px]:px-0 min-[600px]:py-0 min-[600px]:text-left min-[600px]:text-sm"
       } ${active ? "bg-white/15" : ""}`}
     >
-      <span className={`inline-grid shrink-0 place-items-center [&_svg]:h-[22px] [&_svg]:w-[22px] ${row ? "h-7 w-7 [&_svg]:h-4 [&_svg]:w-4" : `min-[600px]:[&_svg]:h-4 min-[600px]:[&_svg]:w-4 ${compact ? "" : "min-[600px]:h-7 min-[600px]:w-7"}`}`}>{icon}</span>
-      <span className={row ? "min-w-0 flex-1 truncate" : compact ? "min-[600px]:sr-only" : "min-[600px]:min-w-0 min-[600px]:flex-1 min-[600px]:truncate"}>{label}</span>
-      {count != null && !compact ? <span className={`shrink-0 text-xs tabular-nums text-white/55 ${row ? "" : "hidden min-[600px]:inline"}`}>{count}</span> : null}
+      <span className="inline-grid h-9 w-9 shrink-0 place-items-center [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
+      <span className={flush || row ? "min-w-0 flex-1 truncate" : `whitespace-nowrap min-[600px]:min-w-0 min-[600px]:flex-1 min-[600px]:truncate ${compact ? "min-[600px]:sr-only" : ""}`}>{label}</span>
+      {count != null ? <span className={`shrink-0 text-xs tabular-nums whitespace-nowrap text-white/55 ${flush || row ? "pr-4" : compact ? "sr-only" : "hidden pr-4 min-[600px]:inline"}`}>{count}</span> : null}
     </button>
     {tip
       ? createPortal(
@@ -1344,6 +1461,61 @@ function SideItem({
         )
       : null}
     </>
+  );
+}
+
+function CalendarPollSwitch({ value, onChange }: { value: "calendar" | "poll"; onChange: (value: "calendar" | "poll") => void }) {
+  const { t } = useLanguage();
+  const [tip, setTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
+  const options = [
+    { id: "calendar" as const, label: t("event.vote.calendar_view"), icon: <IconCalendar /> },
+    { id: "poll" as const, label: t("event.vote.poll_view"), icon: <IconPoll /> },
+  ];
+
+  function place(target: HTMLButtonElement, text: string) {
+    const box = target.getBoundingClientRect();
+    const below = box.top < 40;
+    const x = Math.min(window.innerWidth - 12, Math.max(12, box.left + box.width / 2));
+    setTip({ text, x, y: below ? box.bottom + 6 : box.top - 6, below });
+  }
+
+  return (
+    <div className="inline-flex w-fit rounded-lg bg-paper p-1 shadow-sm ring-1 ring-line" role="group" aria-label={t("event.vote.view")}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          aria-pressed={value === option.id}
+          aria-label={option.label}
+          onClick={() => onChange(option.id)}
+          onMouseEnter={(event) => place(event.currentTarget, option.label)}
+          onMouseLeave={() => setTip(null)}
+          onFocus={(event) => place(event.currentTarget, option.label)}
+          onBlur={() => setTip(null)}
+          className={`grid h-9 w-11 place-items-center rounded-md ${value === option.id ? "bg-navy text-white shadow-sm" : "text-muted hover:bg-ice hover:text-ink"}`}
+        >
+          {option.icon}
+        </button>
+      ))}
+      {tip ? (
+        <span
+          role="tooltip"
+          style={{ left: tip.x, top: tip.y, transform: tip.below ? "translateX(-50%)" : "translate(-50%, -100%)" }}
+          className="pointer-events-none fixed z-40 rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white"
+        >
+          {tip.text}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function PollField({ label, value, large = false }: { label: string; value: string; large?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className={large ? "mt-0.5 text-2xl font-semibold tabular-nums text-ink" : "mt-0.5 text-sm font-medium text-ink"}>{value || "—"}</dd>
+    </div>
   );
 }
 
@@ -1405,6 +1577,40 @@ function Chevron({ direction }: { direction: "left" | "right" }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       {direction === "left" ? <path d="M15 6l-6 6 6 6" /> : <path d="M9 6l6 6-6 6" />}
+    </svg>
+  );
+}
+
+function IconPoll() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M5 20V10M12 20V4M19 20v-7" />
+    </svg>
+  );
+}
+
+function IconBug() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 8a4 4 0 1 1 8 0v2a4 4 0 0 1-8 0V8z" />
+      <path d="M12 14v6M5 10H3M21 10h-2M6 18l-2 2M18 18l2 2M7 7 5 5M17 7l2-2" />
+    </svg>
+  );
+}
+
+function IconBulb() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M9 18h6M10 21h4" />
+      <path d="M8 14a6 6 0 1 1 8 0c-.8.8-1.5 1.6-1.7 2.5h-4.6C9.5 15.6 8.8 14.8 8 14z" />
+    </svg>
+  );
+}
+
+function IconComment() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M5 6h14v10H8l-3 3V6z" />
     </svg>
   );
 }
@@ -1489,6 +1695,24 @@ function IconLanguages() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <circle cx="12" cy="12" r="9" />
       <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 7 9-7" />
+    </svg>
+  );
+}
+
+function IconTodo() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M9 7h11M9 12h11M9 17h11" />
+      <path d="M4 7l1.5 1.5L8 6M4 12l1.5 1.5L8 11M4 17l1.5 1.5L8 16" />
     </svg>
   );
 }

@@ -11,6 +11,7 @@ const FALLBACK_I18N: PublicI18n = {
   languages: [
     { code: "lv", name: "Latviešu", isDefault: true },
     { code: "en", name: "English", isDefault: false },
+    { code: "ru", name: "Русский", isDefault: false },
   ],
   defaultCode: "lv",
   overrides: {},
@@ -27,8 +28,8 @@ type LanguageValue = {
 const LanguageContext = createContext<LanguageValue | null>(null);
 
 function builtinLang(lang: string, defaultCode: string): Lang {
-  if (lang === "en" || lang === "lv") return lang;
-  if (defaultCode === "en") return "en";
+  if (lang === "en" || lang === "lv" || lang === "ru") return lang;
+  if (defaultCode === "en" || defaultCode === "ru") return defaultCode;
   return "lv";
 }
 
@@ -70,8 +71,15 @@ export function LanguageProvider({
       },
       t(key, params) {
         const builtIn = messages[key];
-        const built = lang === "en" || lang === "lv" ? builtIn[lang] : undefined;
-        const fallback = i18n.defaultCode === "en" ? builtIn.en : builtIn.lv;
+        if (!builtIn) {
+          let missing = i18n.overrides[key]?.[lang] || i18n.overrides[key]?.[i18n.defaultCode] || key;
+          if (params) {
+            for (const [name, param] of Object.entries(params)) missing = missing.replaceAll(`{${name}}`, String(param));
+          }
+          return applyBrandName(missing, brandName);
+        }
+        const built = lang === "en" || lang === "lv" || lang === "ru" ? builtIn[lang] : undefined;
+        const fallback = i18n.defaultCode === "en" ? builtIn.en : i18n.defaultCode === "ru" ? builtIn.ru : builtIn.lv;
         let value = i18n.overrides[key]?.[lang] || built || i18n.overrides[key]?.[i18n.defaultCode] || fallback || builtIn.lv;
         if (!value) value = translate(formatLang, key, params);
         else if (params) {

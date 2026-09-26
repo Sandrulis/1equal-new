@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.7
+
+- Reģistrācija sūta apstiprinājuma vēstuli. Aizmirsi paroli sūta saiti ar Cloudflare pārbaudi, un parole mainās tikai pēc saites. Izlogošanās aizved uz sākumlapu
+- Admin var apskatīt komandu, neparādoties sastāvā. Kontaktu formai ir temats. Sānjoslā ir atsauksmes un kontakti
+- Mobilajā kreisā izvēlne ir apakšā, admina izvēlne pa labi ar burger pogu. Sakļautas ikonas paliek kvadrātā, kājene sniedzas līdz apakšai
+- Uzaicinājuma kodu var paslēpt un atvērt ar QR pogu. Daļai demo spēlētāju ir Entuziastu profils
+- Komandu dati ir tikai saviem dalībniekiem. E-pasta balss notiek ar pogu. Kalendāra saite glabājas kā hash
+- Integrāciju noslēpumi ir šifrēti. Ātruma limits un audita žurnāls ir datubāzē. Skriptu CSP izmanto nonce
+- Supabase tabulām bez politikas ir liegums, nevis atvērta piekļuve
+
 ## v0.1.6
 
 - Notikumu var labot un dzēst. Dzēšana atdod pieteikušos naudu un atgriež jau norautos spēles izdevumus

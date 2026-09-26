@@ -14,6 +14,7 @@ const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.subteams]: "nav.subteams",
   [FRONTEND_MODULE_KEYS.gameLayout]: "frontend_modules.game_layout",
   [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
+  [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
 };
 
 function sortModules(modules: FrontendModule[]): FrontendModule[] {

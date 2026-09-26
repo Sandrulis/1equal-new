@@ -1,16 +1,24 @@
-import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import { normalizeSiteDisplay } from "@/app/lib/display-preferences";
+import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, normalizeCurrency, votingHours } from "@/app/lib/team-defaults";
 import { messages } from "@/app/lib/messages";
 import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
 import { getSiteUrl } from "@/app/lib/site";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
-import { INTEGRATION_KEYS, type AdminConsole, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
+import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
+import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
+
+function cachedPublic<T>(key: string, load: () => Promise<T>) {
+  return unstable_cache(load, [key], { revalidate: 60, tags: ["site-public"] });
+}
 
 const FALLBACK_LANGUAGES: SiteLanguage[] = [
   { code: "lv", name: "Latviešu", isActive: true, isDefault: true, sortOrder: 0 },
   { code: "en", name: "English", isActive: true, isDefault: false, sortOrder: 1 },
+  { code: "ru", name: "Русский", isActive: true, isDefault: false, sortOrder: 2 },
 ];
 
 function publicAssetUrl(path: string | null): string | null {
@@ -36,18 +44,29 @@ function mapLanguage(row: {
   };
 }
 
-export const getSiteBrand = cache(async (): Promise<SiteBrand> => {
+export const getSiteBrand = cachedPublic("site-brand", async (): Promise<SiteBrand> => {
   const admin = createAdminClient();
-  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null };
-  const { data } = await admin.from("site_settings").select("name, logo_path, favicon_path").eq("id", 1).maybeSingle();
+  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null, display: normalizeSiteDisplay(null), currency: normalizeCurrency(null), trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS, gameVotingHours: DEFAULT_GAME_VOTING_HOURS, contactEmail: "" };
+  const { data } = await admin.from("site_settings").select("name, logo_path, favicon_path, week_start_day, date_format, date_separator, time_format, timezone, currency, training_voting_hours, game_voting_hours, contact_email").eq("id", 1).maybeSingle();
   return {
     name: data?.name?.trim() || DEFAULT_SITE_NAME,
     logoUrl: publicAssetUrl(data?.logo_path ?? null),
     faviconUrl: publicAssetUrl(data?.favicon_path ?? null),
+    display: normalizeSiteDisplay({
+      weekStartDay: data?.week_start_day,
+      dateFormat: data?.date_format,
+      dateSeparator: data?.date_separator,
+      timeFormat: data?.time_format,
+      timeZone: data?.timezone,
+    }),
+    currency: normalizeCurrency(data?.currency),
+    trainingVotingHours: votingHours(data?.training_voting_hours) ?? DEFAULT_TRAINING_VOTING_HOURS,
+    gameVotingHours: votingHours(data?.game_voting_hours) ?? DEFAULT_GAME_VOTING_HOURS,
+    contactEmail: data?.contact_email?.trim() ?? "",
   };
 });
 
-export const listSiteLanguages = cache(async (): Promise<SiteLanguage[]> => {
+export const listSiteLanguages = cachedPublic("site-languages", async (): Promise<SiteLanguage[]> => {
   const admin = createAdminClient();
   if (!admin) return FALLBACK_LANGUAGES;
   const { data, error } = await admin.from("site_languages").select("code, name, is_active, is_default, sort_order").order("sort_order").order("code");
@@ -55,12 +74,15 @@ export const listSiteLanguages = cache(async (): Promise<SiteLanguage[]> => {
   return data.map(mapLanguage);
 });
 
-export const getPublicI18n = cache(async (): Promise<PublicI18n> => {
-  const languages = await listSiteLanguages();
-  const active = languages.filter((language) => language.isActive);
-  const usable = active.length > 0 ? active : FALLBACK_LANGUAGES;
-  const defaultCode = usable.find((language) => language.isDefault)?.code ?? usable[0]?.code ?? "lv";
+export const getPublicI18n = cachedPublic("site-i18n", async (): Promise<PublicI18n> => {
   const admin = createAdminClient();
+  let usable = FALLBACK_LANGUAGES;
+  if (admin) {
+    const { data } = await admin.from("site_languages").select("code, name, is_active, is_default, sort_order").order("sort_order").order("code");
+    const mapped = (data ?? []).map(mapLanguage).filter((language) => language.isActive);
+    if (mapped.length > 0) usable = mapped;
+  }
+  const defaultCode = usable.find((language) => language.isDefault)?.code ?? usable[0]?.code ?? "lv";
   const overrides: Record<string, Record<string, string>> = {};
   if (admin) {
     const { data } = await admin.from("site_translations").select("translation_key, language_code, value");
@@ -220,7 +242,16 @@ export async function listIntegrations(): Promise<IntegrationStatus[]> {
   return INTEGRATION_KEYS.map((key) => byKey.get(key)!);
 }
 
-export async function getPublicUmami(): Promise<PublicUmami | null> {
+function isUmamiScript(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "cloud.umami.is";
+  } catch {
+    return false;
+  }
+}
+
+export const getPublicUmami = cachedPublic("public-umami", async (): Promise<PublicUmami | null> => {
   const admin = createAdminClient();
   if (!admin) return null;
   const { data } = await admin
@@ -230,10 +261,24 @@ export async function getPublicUmami(): Promise<PublicUmami | null> {
     .maybeSingle();
   if (!data?.is_configured || !data.is_enabled) return null;
   const websiteId = data.client_id?.trim() ?? "";
-  const scriptUrl = data.client_secret?.trim() ?? "";
-  if (!websiteId || !scriptUrl.startsWith("https://")) return null;
+  const scriptUrl = openIntegrationSecret(data.client_secret);
+  if (!websiteId || !isUmamiScript(scriptUrl)) return null;
   return { websiteId, scriptUrl };
-}
+});
+
+export const getPublicSentry = cachedPublic("public-sentry", async (): Promise<PublicSentry | null> => {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data } = await admin
+    .from("site_integrations")
+    .select("client_id, client_secret, is_configured, is_enabled")
+    .eq("integration_key", "sentry")
+    .maybeSingle();
+  if (!data?.is_configured || !data.is_enabled) return null;
+  const dsn = openIntegrationSecret(data.client_secret);
+  if (!dsn.startsWith("https://")) return null;
+  return { dsn, environment: data.client_id?.trim() || "production" };
+});
 
 type ModuleRow = { id: string; module_key: string; is_enabled: boolean; sort_order: number };
 
@@ -255,7 +300,37 @@ export async function listEnabledFrontendModuleKeys(): Promise<string[]> {
   return modules.filter((module) => module.isEnabled).map((module) => module.moduleKey);
 }
 
-export async function loadAdminConsole(): Promise<AdminConsole> {
+export async function listEmailTemplates(): Promise<EmailTemplate[]> {
+  const admin = createAdminClient();
+  const buckets = new Map<EmailKind, EmailTemplate>();
+  for (const kind of EMAIL_KINDS) buckets.set(kind, { kind, subjects: {}, bodies: {}, buttons: {} });
+  if (!admin) return [...buckets.values()];
+  const { data } = await admin.from("email_templates").select("kind, language_code, subject, body, button_label");
+  for (const row of data ?? []) {
+    if (!(EMAIL_KINDS as readonly string[]).includes(row.kind)) continue;
+    const template = buckets.get(row.kind as EmailKind);
+    if (!template) continue;
+    template.subjects[row.language_code] = row.subject ?? "";
+    template.bodies[row.language_code] = row.body ?? "";
+    template.buttons[row.language_code] = row.button_label ?? "";
+  }
+  return [...buckets.values()];
+}
+
+export async function listAdminTodos(userId: string): Promise<AdminTodo[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin.from("user_todos").select("id, title, is_done, completed_at, created_at, sort_order").eq("user_id", userId).order("is_done").order("sort_order").order("created_at");
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    isDone: row.is_done,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
   const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
   const admin = createAdminClient();
   const stored = new Map<string, Record<string, string>>();
@@ -279,19 +354,25 @@ export async function loadAdminConsole(): Promise<AdminConsole> {
         values[language.code] = saved;
         continue;
       }
-      if (builtIn && (language.code === "lv" || language.code === "en")) values[language.code] = builtIn[language.code];
+      if (builtIn && (language.code === "lv" || language.code === "en" || language.code === "ru")) values[language.code] = builtIn[language.code];
       else values[language.code] = "";
     }
     return { key, bundled, values };
   });
 
-  const [users, teams, members, subteams, modules, integrations] = await Promise.all([
+  const [users, teams, members, subteams, modules, integrations, emailTemplates, todos, watched] = await Promise.all([
     listSystemUsers(),
     listSystemTeams(),
     listSystemTeamMembers(),
     listSystemSubteams(),
     listFrontendModules().then((modules) => modules ?? []),
     listIntegrations(),
+    listEmailTemplates(),
+    listAdminTodos(userId),
+    admin
+      ? admin.from("admin_team_watches").select("team_id").eq("user_id", userId)
+      : Promise.resolve({ data: [] as { team_id: string }[] }),
   ]);
-  return { brand, languages, translations, users, teams, members, subteams, modules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback` };
+  const watchedTeamIds = (watched.data ?? []).map((row) => row.team_id);
+  return { brand, languages, translations, users, teams, members, subteams, modules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
 }

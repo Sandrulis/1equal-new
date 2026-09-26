@@ -8,8 +8,14 @@ import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo
 import { adjustMemberBalance, removeOwnedMember, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { formatDisplayDate, formatDisplayDateTime, formatMoney, formatRelativeUpdated, toLocalDateTimeStamp } from "@/app/lib/format";
-import { IconPencil, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
+import { useDisplayFormat } from "@/app/components/display-preferences";
+import { MoneyVotingFields } from "@/app/components/money-voting-fields";
+import { useCurrencySymbol, useFormatMoney } from "@/app/components/currency-provider";
+import { toLocalDateTimeStamp } from "@/app/lib/format";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
+import { votingHours } from "@/app/lib/team-defaults";
+import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
+import { clearInviteBannerDismissed, readInviteBannerDismissed, writeInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
 import { useLanguage } from "@/app/lib/language";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
@@ -45,6 +51,7 @@ export function TeamRoster({
   accountId = null,
   trainingVotingHours = 24,
   gameVotingHours = 72,
+  currency = null,
   onTeamSaved,
   subteams,
   memberId,
@@ -66,7 +73,8 @@ export function TeamRoster({
   accountId?: string | null;
   trainingVotingHours?: number;
   gameVotingHours?: number;
-  onTeamSaved?: (team: { name: string; trainingVotingHours: number; gameVotingHours: number }) => void;
+  currency?: string | null;
+  onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) => void;
   subteams?: Subteam[];
   memberId: string | null;
   onOpenMember: (id: string) => void;
@@ -78,12 +86,14 @@ export function TeamRoster({
   persistedEntries?: TeamEntry[];
 }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
   const { showFeedback } = useFeedbackToast();
   const { subteamById, subteams: catalogSubteams } = useTeamCatalog();
   const groupList = subteams ?? catalogSubteams;
   function groupById(id: string): Subteam | undefined {
     return groupList.find((item) => item.id === id) ?? subteamById(id);
   }
+  const [inviteVisible, setInviteVisible] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [editing, setEditing] = useState<Member | null>(null);
@@ -97,6 +107,10 @@ export function TeamRoster({
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
   const player = memberId ? members.find((member) => member.id === memberId) : undefined;
+
+  useEffect(() => {
+    setInviteVisible(!readInviteBannerDismissed(inviteCode));
+  }, [inviteCode]);
 
   function openPlayer(id: string) {
     onOpenMember(id);
@@ -197,13 +211,14 @@ export function TeamRoster({
         ) : null}
       </div>
 
+      {inviteVisible ? (
       <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-line min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-between">
         <p className="flex items-center gap-2 text-sm text-muted">
           <IconLock />
           {t("team.invite.label")}
         </p>
         <div className="flex items-center gap-2">
-          <span className="flex-1 rounded-lg bg-ice px-3.5 py-2 text-center font-mono text-base font-semibold tracking-[0.22em] text-ink min-[600px]:flex-none">{inviteCode}</span>
+          <span className="flex h-9 flex-1 items-center justify-center rounded-lg bg-ice px-3.5 text-center font-mono text-base font-semibold tracking-[0.22em] text-ink min-[600px]:flex-none">{inviteCode}</span>
           <button
             type="button"
             onClick={() => {
@@ -212,12 +227,24 @@ export function TeamRoster({
                 () => showFeedback({ message: t("team.invite.copy_failed"), variant: "error" }),
               );
             }}
-            className="shrink-0 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90"
+            className="grid h-9 shrink-0 place-items-center rounded-lg bg-navy px-4 text-sm font-medium text-white hover:bg-navy/90"
           >
             {t("team.invite.copy")}
           </button>
+          <button
+            type="button"
+            aria-label={t("event.close")}
+            onClick={() => {
+              writeInviteBannerDismissed(inviteCode);
+              setInviteVisible(false);
+            }}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted ring-1 ring-line hover:bg-ice hover:text-ink"
+          >
+            <IconX />
+          </button>
         </div>
       </div>
+      ) : null}
 
       <div className="mb-4 flex items-center gap-2">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line focus-within:ring-train">
@@ -230,9 +257,22 @@ export function TeamRoster({
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
         </label>
-        <button type="button" onClick={() => setInviting(true)} className="shrink-0 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+        <button type="button" onClick={() => setInviting(true)} className="h-9 shrink-0 rounded-lg bg-navy px-4 text-sm font-medium text-white hover:bg-navy/90">
           {t("roster.invite")}
         </button>
+        {inviteVisible === false ? (
+          <button
+            type="button"
+            aria-label={t("team.invite.show")}
+            onClick={() => {
+              clearInviteBannerDismissed(inviteCode);
+              setInviteVisible(true);
+            }}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-white hover:bg-navy/90"
+          >
+            <IconQr />
+          </button>
+        ) : null}
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
@@ -317,6 +357,7 @@ export function TeamRoster({
         <TeamSettingsDialog
           open={settingsOpen}
           name={teamName}
+          currency={currency}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
           onClose={() => setSettingsOpen(false)}
@@ -396,12 +437,14 @@ function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose:
   );
 }
 
-function signedMoney(amount: number): string {
-  return amount > 0 ? `+${formatMoney(amount)}` : formatMoney(amount);
+function signedMoney(amount: number, format: (value: number) => string): string {
+  return amount > 0 ? `+${format(amount)}` : format(amount);
 }
 
 function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entries: TeamEntry[]; onClose: () => void }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const { formatDateTime } = useDisplayFormat();
   const total = Math.round(entries.reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100;
 
   return (
@@ -411,16 +454,15 @@ function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entrie
       ) : (
         <ul className="divide-y divide-line">
           {entries.map((entry) => {
-            const [date, time = ""] = entry.at.split("T");
             return (
               <li key={entry.id} className="flex items-start justify-between gap-4 py-3">
                 <div className="min-w-0">
                   <p className="font-medium">{entry.description}</p>
                   <p className="text-sm text-muted">
-                    {formatDisplayDate(date)} {time.slice(0, 5)}
+                    {formatDateTime(entry.at)}
                   </p>
                 </div>
-                <p className={`shrink-0 font-medium tabular-nums ${entry.amount < 0 ? "text-game" : "text-train"}`}>{signedMoney(entry.amount)}</p>
+                <p className={`shrink-0 font-medium tabular-nums ${entry.amount < 0 ? "text-game" : "text-train"}`}>{signedMoney(entry.amount, formatMoney)}</p>
               </li>
             );
           })}
@@ -442,6 +484,7 @@ function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entrie
 function TeamSettingsDialog({
   open,
   name,
+  currency,
   trainingHours,
   gameHours,
   onClose,
@@ -449,13 +492,16 @@ function TeamSettingsDialog({
 }: {
   open: boolean;
   name: string;
+  currency: string | null;
   trainingHours: number;
   gameHours: number;
   onClose: () => void;
-  onSave: (next: { name: string; trainingVotingHours: number; gameVotingHours: number }) => Promise<boolean>;
+  onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) => Promise<boolean>;
 }) {
   const { t } = useLanguage();
+  const brand = useSiteBrand();
   const [draftName, setDraftName] = useState(name);
+  const [draftCurrency, setDraftCurrency] = useState(currency);
   const [training, setTraining] = useState(String(trainingHours));
   const [game, setGame] = useState(String(gameHours));
   const [pending, setPending] = useState(false);
@@ -463,21 +509,22 @@ function TeamSettingsDialog({
   useEffect(() => {
     if (!open) return;
     setDraftName(name);
+    setDraftCurrency(currency);
     setTraining(String(trainingHours));
     setGame(String(gameHours));
     setPending(false);
-  }, [open, name, trainingHours, gameHours]);
+  }, [open, name, currency, trainingHours, gameHours]);
 
-  const trainingValue = Number(training);
-  const gameValue = Number(game);
-  const hoursOk = Number.isInteger(trainingValue) && trainingValue >= 1 && trainingValue <= 168 && Number.isInteger(gameValue) && gameValue >= 1 && gameValue <= 168;
-  const dirty = draftName.trim() !== name || trainingValue !== trainingHours || gameValue !== gameHours;
+  const trainingValue = votingHours(training);
+  const gameValue = votingHours(game);
+  const hoursOk = trainingValue != null && gameValue != null;
+  const dirty = draftName.trim() !== name || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!draftName.trim() || !hoursOk || !dirty || pending) return;
+    if (!draftName.trim() || !hoursOk || trainingValue == null || gameValue == null || !dirty || pending) return;
     setPending(true);
-    const saved = await onSave({ name: draftName.trim(), trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+    const saved = await onSave({ name: draftName.trim(), currency: draftCurrency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
     setPending(false);
     if (saved) onClose();
   }
@@ -489,22 +536,18 @@ function TeamSettingsDialog({
           <span className="text-muted">{t("team.settings.name")}</span>
           <input required value={draftName} maxLength={80} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
         </label>
-        <div>
-          <p className="text-sm font-medium">{t("team.voting.title")}</p>
-          <div className="mt-3 grid grid-cols-2 items-start gap-3">
-            <label className="block text-sm">
-              <span className="text-muted">{t("team.voting.training")}</span>
-              <input required type="number" min={1} max={168} step={1} value={training} onChange={(event) => setTraining(event.target.value)} className={fieldClass} />
-              <span className="mt-1 block text-xs text-muted">{t("team.voting.training.help")}</span>
-            </label>
-            <label className="block text-sm">
-              <span className="text-muted">{t("team.voting.game")}</span>
-              <input required type="number" min={1} max={168} step={1} value={game} onChange={(event) => setGame(event.target.value)} className={fieldClass} />
-              <span className="mt-1 block text-xs text-muted">{t("team.voting.game.help")}</span>
-            </label>
-          </div>
-          <p className="mt-3 text-xs text-muted">{t("team.voting.help")}</p>
-        </div>
+        <MoneyVotingFields
+          idPrefix="team-settings"
+          currency={draftCurrency}
+          trainingHours={training}
+          gameHours={game}
+          systemCurrency={brand.currency}
+          allowSystemCurrency
+          disabled={pending}
+          onCurrency={setDraftCurrency}
+          onTrainingHours={setTraining}
+          onGameHours={setGame}
+        />
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
             {t("actions.cancel")}
@@ -532,6 +575,7 @@ function BalanceDialog({
   onAdd: (amount: number, description?: string) => void;
 }) {
   const { t } = useLanguage();
+  const symbol = useCurrencySymbol();
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [negative, setNegative] = useState(false);
@@ -586,7 +630,7 @@ function BalanceDialog({
               onChange={(event) => setAmount(event.target.value)}
               className="min-w-0 flex-1 bg-transparent px-3 py-2 text-ink outline-none placeholder:text-muted"
             />
-            <span className="shrink-0 pr-3 text-muted">€</span>
+            <span className="shrink-0 pr-3 text-muted">{symbol}</span>
           </span>
         </label>
         <div className="flex justify-end gap-2 pt-2">
@@ -681,6 +725,7 @@ function SubteamSwatch({ color, name }: { color: string; name: string }) {
 }
 
 function MemberBalance({ member }: { member: Member }) {
+  const formatMoney = useFormatMoney();
   return (
     <span className={`font-medium tabular-nums ${member.balance < 0 ? "text-game" : "text-ink"}`}>
       {formatMoney(member.balance)}
@@ -689,13 +734,13 @@ function MemberBalance({ member }: { member: Member }) {
 }
 
 function MemberDates({ member }: { member: Member }) {
-  const { formatLang } = useLanguage();
+  const { formatDate, formatDateTime, formatRelative } = useDisplayFormat();
   return (
     <div>
-      <span className="block tabular-nums" title={formatDisplayDateTime(member.updatedAt)}>
-        {formatRelativeUpdated(member.updatedAt, formatLang)}
+      <span className="block tabular-nums" title={formatDateTime(member.updatedAt)}>
+        {formatRelative(member.updatedAt)}
       </span>
-      <span className="block text-xs text-muted tabular-nums">{formatDisplayDate(member.joined)}</span>
+      <span className="block text-xs text-muted tabular-nums">{formatDate(member.joined)}</span>
     </div>
   );
 }
@@ -738,6 +783,14 @@ function ChevronLeft() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function IconQr() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zM13 3h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zM13 13h2v2h-2v-2zm4 0h4v2h-2v2h-2v-2h2v-2zm-4 4h2v2h-2v-2zm2 2h2v2h-2v-2zm2-2h2v2h-2v-2z" />
     </svg>
   );
 }
