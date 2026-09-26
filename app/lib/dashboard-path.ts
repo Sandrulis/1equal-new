@@ -1,8 +1,8 @@
-import { EVENTS, MEMBERS } from "@/app/lib/demo-data";
+import { EVENTS } from "@/app/lib/demo-data";
 
 export type DashboardBase = "/dashboard" | "/demo";
 
-export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "integrations", "languages", "translations"] as const;
+export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "languages", "translations"] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
@@ -21,7 +21,7 @@ export function parseDashboardPath(path: string[] | undefined): DashboardRoute |
   const parts = path ?? [];
   if (parts.length === 0) return { view: "home", eventId: null, lineup: false };
   if (parts[0] === "team" && parts.length === 1) return { view: "team", memberId: null };
-  if (parts[0] === "team" && parts.length === 2 && MEMBERS.some((member) => member.id === parts[1])) {
+  if (parts[0] === "team" && parts.length === 2 && /^[A-Za-z0-9-]+$/.test(parts[1])) {
     return { view: "team", memberId: parts[1] };
   }
   if (parts[0] === "subteams" && parts.length === 1) return { view: "subteams" };

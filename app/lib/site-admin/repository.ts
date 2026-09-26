@@ -2,7 +2,9 @@ import { cache } from "react";
 import { messages } from "@/app/lib/messages";
 import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
 import { getSiteUrl } from "@/app/lib/site";
-import { INTEGRATION_KEYS, type AdminConsole, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemUser } from "@/app/lib/site-admin/types";
+import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
+import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
+import { INTEGRATION_KEYS, type AdminConsole, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
@@ -81,11 +83,48 @@ function displayName(row: { name: string; first_name: string; last_name: string;
   return row.name.trim() || row.email;
 }
 
+type MembershipLink = {
+  user_id: string;
+  team_id: string;
+  jersey_number: number | null;
+  position: string;
+  phone: string;
+  ehl_player: unknown;
+  users: { email: string; name: string; first_name: string; last_name: string } | { email: string; name: string; first_name: string; last_name: string }[] | null;
+  teams: { id: string; name: string } | { id: string; name: string }[] | null;
+};
+
+function oneRow<T>(value: T | T[] | null): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+async function listMemberships(): Promise<MembershipLink[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data, error } = await admin
+    .from("team_members")
+    .select("user_id, team_id, jersey_number, position, phone, ehl_player, users(email, name, first_name, last_name), teams(id, name)");
+  if (error || !data) return [];
+  return data as MembershipLink[];
+}
+
 export async function listSystemUsers(): Promise<SystemUser[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const { data, error } = await admin.from("users").select("id, email, name, first_name, last_name, is_admin, created_at");
+  const [{ data, error }, links] = await Promise.all([
+    admin.from("users").select("id, email, name, first_name, last_name, is_admin, created_at, last_seen_at"),
+    listMemberships(),
+  ]);
   if (error || !data) return [];
+  const teamsByUser = new Map<string, { id: string; name: string }[]>();
+  for (const link of links) {
+    const team = oneRow(link.teams);
+    if (!team) continue;
+    const list = teamsByUser.get(link.user_id) ?? [];
+    if (!list.some((item) => item.id === team.id)) list.push({ id: team.id, name: team.name });
+    teamsByUser.set(link.user_id, list);
+  }
   return data
     .map((row) => ({
       id: row.id,
@@ -93,8 +132,38 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
       email: row.email,
       isAdmin: row.is_admin,
       createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      teams: (teamsByUser.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "lv")),
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "lv"));
+}
+
+export async function touchUserLastSeen(userId: string): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) return;
+  await admin.from("users").update({ last_seen_at: new Date().toISOString() }).eq("id", userId);
+}
+
+export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
+  const links = await listMemberships();
+  return links.flatMap((link) => {
+    const user = oneRow(link.users);
+    const team = oneRow(link.teams);
+    if (!user || !team) return [];
+    const ehl = readStoredEhlPlayer(link.ehl_player);
+    return [
+      {
+        teamId: link.team_id,
+        userId: link.user_id,
+        name: ehl?.name || displayName(user),
+        email: user.email,
+        number: link.jersey_number,
+        position: link.position.trim() || ehl?.position || "",
+        phone: link.phone ?? "",
+        photoUrl: ehl?.photoUrl ?? null,
+      },
+    ];
+  });
 }
 
 export async function listSystemTeams(): Promise<SystemTeam[]> {
@@ -166,6 +235,26 @@ export async function getPublicUmami(): Promise<PublicUmami | null> {
   return { websiteId, scriptUrl };
 }
 
+type ModuleRow = { id: string; module_key: string; is_enabled: boolean; sort_order: number };
+
+function mapModule(row: ModuleRow): FrontendModule {
+  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, sortOrder: row.sort_order };
+}
+
+export async function listFrontendModules(): Promise<FrontendModule[] | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data, error } = await admin.from("site_frontend_modules").select("id, module_key, is_enabled, sort_order").order("sort_order").order("module_key");
+  if (error || !data) return null;
+  return (data as ModuleRow[]).map(mapModule).filter((module) => !(BUILTIN_NAV_KEYS as readonly string[]).includes(module.moduleKey));
+}
+
+export async function listEnabledFrontendModuleKeys(): Promise<string[]> {
+  const modules = await listFrontendModules();
+  if (!modules) return [...KNOWN_FRONTEND_MODULE_KEYS];
+  return modules.filter((module) => module.isEnabled).map((module) => module.moduleKey);
+}
+
 export async function loadAdminConsole(): Promise<AdminConsole> {
   const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
   const admin = createAdminClient();
@@ -196,11 +285,13 @@ export async function loadAdminConsole(): Promise<AdminConsole> {
     return { key, bundled, values };
   });
 
-  const [users, teams, subteams, integrations] = await Promise.all([
+  const [users, teams, members, subteams, modules, integrations] = await Promise.all([
     listSystemUsers(),
     listSystemTeams(),
+    listSystemTeamMembers(),
     listSystemSubteams(),
+    listFrontendModules().then((modules) => modules ?? []),
     listIntegrations(),
   ]);
-  return { brand, languages, translations, users, teams, subteams, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback` };
+  return { brand, languages, translations, users, teams, members, subteams, modules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback` };
 }

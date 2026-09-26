@@ -28,7 +28,7 @@ export function TeamCatalogProvider({ children }: { children: ReactNode }) {
   const value = useMemo<TeamCatalogValue>(() => {
     return {
       subteams,
-      venues,
+      venues: venues.filter((item) => !item.hidden),
       addSubteam(input) {
         setSubteams((current) => [
           ...current,
@@ -63,7 +63,7 @@ export function TeamCatalogProvider({ children }: { children: ReactNode }) {
         );
       },
       removeVenue(id) {
-        setVenues((current) => current.filter((item) => item.id !== id));
+        setVenues((current) => current.map((item) => (item.id === id ? { ...item, hidden: true, updatedAt: stamp() } : item)));
       },
       subteamById(id) {
         return subteams.find((item) => item.id === id);

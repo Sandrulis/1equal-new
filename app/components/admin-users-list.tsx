@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDisplayDateTime, formatRelativeUpdated, toLocalDateTimeStamp } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
@@ -21,7 +22,8 @@ function countKey(count: number): MessageKey {
 }
 
 export function AdminUsersList({ users }: { users: SystemUser[] }) {
-  const { t, formatLang } = useLanguage();
+  const { t } = useLanguage();
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   const visible = useMemo(() => {
@@ -29,7 +31,8 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
     if (!needle) return users;
     return users.filter((user) => {
       const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
-      return [user.name, user.email, role].join(" ").toLowerCase().includes(needle);
+      const teams = user.teams.map((team) => team.name).join(" ");
+      return [user.name, user.email, role, teams].join(" ").toLowerCase().includes(needle);
     });
   }, [query, t, users]);
 
@@ -58,13 +61,15 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
               <tr className="border-b border-line bg-ice text-xs tracking-wide text-muted uppercase">
                 <th className="px-4 py-3 font-medium">{t("roster.member")}</th>
                 <th className="hidden px-4 py-3 font-medium min-[768px]:table-cell">{t("admin.users.role")}</th>
+                <th className="px-4 py-3 font-medium">{t("admin.users.team")}</th>
                 <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("admin.users.registered")}</th>
+                <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("admin.users.last_seen")}</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-muted">
+                  <td colSpan={5} className="px-4 py-8 text-muted">
                     {query.trim() ? t("admin.users.noMatch") : t("admin.users.empty")}
                   </td>
                 </tr>
@@ -88,11 +93,29 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
                       <td className="hidden px-4 py-3 whitespace-nowrap min-[768px]:table-cell">
                         <span className="rounded-md bg-ice px-2 py-0.5 text-xs font-semibold">{t(user.isAdmin ? "roles.admin" : "roles.user")}</span>
                       </td>
+                      <td className="px-4 py-3">
+                        {user.teams.length ? (
+                          <span className="flex flex-col items-start gap-1">
+                            {user.teams.map((team) => (
+                              <button
+                                key={team.id}
+                                type="button"
+                                onClick={() => router.push(`/dashboard/admin/teams?team=${team.id}`)}
+                                className="text-left font-medium text-train"
+                              >
+                                {team.name}
+                              </button>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-muted">{t("admin.users.no_team")}</span>
+                        )}
+                      </td>
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
-                        <span className="block tabular-nums" title={formatDisplayDateTime(registered)}>
-                          {formatRelativeUpdated(registered, formatLang)}
-                        </span>
-                        <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(registered).split(" ")[0]}</span>
+                        <WhenCell value={registered} />
+                      </td>
+                      <td className="hidden px-4 py-3 min-[900px]:table-cell">
+                        {user.lastSeenAt ? <WhenCell value={toLocalDateTimeStamp(user.lastSeenAt)} /> : <span className="text-muted">{t("admin.users.last_seen.never")}</span>}
                       </td>
                     </tr>
                   );
@@ -103,6 +126,18 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function WhenCell({ value }: { value: string }) {
+  const { formatLang } = useLanguage();
+  return (
+    <>
+      <span className="block tabular-nums" title={formatDisplayDateTime(value)}>
+        {formatRelativeUpdated(value, formatLang)}
+      </span>
+      <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(value).split(" ")[0]}</span>
+    </>
   );
 }
 

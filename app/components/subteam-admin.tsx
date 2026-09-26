@@ -1,15 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { IconCheck, IconPencil, IconPlus, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
+import { AdminDialog } from "@/app/components/admin-dialog";
+import { ColorField } from "@/app/components/color-field";
+import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import { formatDisplayDateTime } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
+import { deleteOwnedSubteam, saveOwnedSubteam } from "@/app/lib/team-actions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { Subteam } from "@/app/lib/demo-data";
 
-export function SubteamAdmin() {
+export function SubteamAdmin({
+  teamId = null,
+  subteams: ownedSubteams,
+  onChange,
+}: {
+  teamId?: string | null;
+  subteams?: Subteam[];
+  onChange?: (subteams: Subteam[]) => void;
+}) {
   const { t } = useLanguage();
-  const { subteams, addSubteam, updateSubteam, removeSubteam } = useTeamCatalog();
+  const { showFeedback } = useFeedbackToast();
+  const catalog = useTeamCatalog();
+  const subteams = teamId ? (ownedSubteams ?? []) : catalog.subteams;
+  const [pending, setPending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#0f6e82");
@@ -30,12 +45,42 @@ export function SubteamAdmin() {
     setEditingId(null);
   }
 
-  function save() {
+  async function save() {
     const trimmed = name.trim();
-    if (!trimmed || !editingId) return;
-    if (editingId === "new") addSubteam({ name: trimmed, color });
-    else updateSubteam(editingId, { name: trimmed, color });
+    if (!trimmed || !editingId || pending) return;
+    if (teamId) {
+      setPending(true);
+      const result = await saveOwnedSubteam({ teamId, id: editingId === "new" ? null : editingId, name: trimmed, color });
+      setPending(false);
+      if (!result.ok) {
+        showFeedback({ message: t(result.error), variant: "error" });
+        return;
+      }
+      const next = editingId === "new" ? [...subteams, result.subteam] : subteams.map((item) => (item.id === editingId ? result.subteam : item));
+      onChange?.(next);
+      setEditingId(null);
+      return;
+    }
+    if (editingId === "new") catalog.addSubteam({ name: trimmed, color });
+    else catalog.updateSubteam(editingId, { name: trimmed, color });
     setEditingId(null);
+  }
+
+  async function remove(id: string) {
+    if (pending) return;
+    if (teamId) {
+      setPending(true);
+      const result = await deleteOwnedSubteam(teamId, id);
+      setPending(false);
+      if (!result.ok) {
+        showFeedback({ message: t(result.error), variant: "error" });
+        return;
+      }
+      onChange?.(subteams.filter((item) => item.id !== id));
+      if (editingId === id) setEditingId(null);
+      return;
+    }
+    catalog.removeSubteam(id);
   }
 
   return (
@@ -48,53 +93,38 @@ export function SubteamAdmin() {
         </button>
       </div>
 
-      {editingId ? (
+      <AdminDialog
+        open={editingId !== null}
+        title={editingId === "new" ? t("catalog.subteams.add") : t("catalog.subteams.edit")}
+        onClose={pending ? () => undefined : close}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            save();
+            void save();
           }}
-          className="mb-4 rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5"
+          className="space-y-4"
         >
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <ColorField value={color} onChange={setColor} label={t("catalog.color")}>
             <label className="block text-sm">
               <span className="text-muted">{t("catalog.name")}</span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring-line outline-none focus:ring-train"
+                className="mt-1 h-10 w-full rounded-lg bg-ice px-3 text-ink ring-1 ring-line outline-none focus:ring-train"
               />
             </label>
-            <label className="block text-sm">
-              <span className="text-muted">{t("catalog.color")}</span>
-              <span className="mt-1 flex items-center gap-2">
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(event) => setColor(event.target.value)}
-                  aria-label={t("catalog.color")}
-                  className="h-10 w-14 rounded-md bg-ice ring-1 ring-line"
-                />
-                <span className="h-8 w-8 rounded-md" style={{ background: color }} />
-              </span>
-            </label>
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" onClick={close} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
-              <IconX />
+          </ColorField>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={close} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
               {t("actions.cancel")}
             </button>
-            <button
-              type="submit"
-              disabled={!name.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <IconCheck />
+            <button type="submit" disabled={!name.trim() || pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
               {t("actions.save")}
             </button>
           </div>
         </form>
-      ) : null}
+      </AdminDialog>
 
       {subteams.length === 0 ? (
         <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("catalog.subteams.empty")}</p>
@@ -113,7 +143,7 @@ export function SubteamAdmin() {
                 <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(subteam)}>
                   <IconPencil />
                 </IconTipButton>
-                <IconTipButton label={t("roster.remove")} tone="game" onClick={() => removeSubteam(subteam.id)}>
+                <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(subteam.id)}>
                   <IconTrash />
                 </IconTipButton>
               </span>

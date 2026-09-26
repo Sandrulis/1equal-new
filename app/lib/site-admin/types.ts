@@ -1,3 +1,5 @@
+import type { FrontendModule } from "@/app/lib/frontend-modules";
+
 export type SiteBrand = {
   name: string;
   logoUrl: string | null;
@@ -24,6 +26,8 @@ export type SystemUser = {
   email: string;
   isAdmin: boolean;
   createdAt: string;
+  lastSeenAt: string | null;
+  teams: { id: string; name: string }[];
 };
 
 export type SystemTeam = {
@@ -39,6 +43,17 @@ export type SystemSubteam = {
   name: string;
   color: string;
   updatedAt: string;
+};
+
+export type SystemTeamMember = {
+  teamId: string;
+  userId: string;
+  name: string;
+  email: string;
+  number: number | null;
+  position: string;
+  phone: string;
+  photoUrl: string | null;
 };
 
 export const INTEGRATION_KEYS = ["turnstile", "google_oauth", "resend", "umami", "sentry"] as const;
@@ -65,7 +80,9 @@ export type AdminConsole = {
   translations: SiteTranslationRow[];
   users: SystemUser[];
   teams: SystemTeam[];
+  members: SystemTeamMember[];
   subteams: SystemSubteam[];
+  modules: FrontendModule[];
   integrations: IntegrationStatus[];
   googleRedirectUrl: string;
 };

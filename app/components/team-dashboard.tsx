@@ -2,7 +2,14 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { EVENTS, TEAM_NAME, type EventType, type TeamEvent } from "@/app/lib/demo-data";
+import { createPortal } from "react-dom";
+import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { EVENTS, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { teamPlayer } from "@/app/lib/auth/profile";
+import { creatorMember } from "@/app/lib/team-creator";
+import { PlayerLinkHint } from "@/app/components/team-switcher";
+import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
+import { createOwnedTeam, joinOwnedTeam } from "@/app/lib/team-actions";
 import {
   formatDisplayDate,
   formatDuration,
@@ -17,10 +24,11 @@ import {
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { EventDetails, type Rsvp } from "@/app/components/event-details";
-import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
+import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
 import { SiteFooter } from "@/app/components/site-footer";
 import { AdminIntegrationsPage } from "@/app/components/admin-integrations-page";
+import { AdminModulesPage } from "@/app/components/admin-modules-page";
 import { AdminLanguagesForm } from "@/app/components/admin-languages-form";
 import { AdminSettingsForm } from "@/app/components/admin-settings-form";
 import { AdminSubteamsList } from "@/app/components/admin-subteams-list";
@@ -30,7 +38,9 @@ import { AdminUsersList } from "@/app/components/admin-users-list";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { TopBar } from "@/app/components/top-bar";
 import type { AccountProfile } from "@/app/lib/auth/profile";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
+import { NoTeamStart } from "@/app/components/no-team-start";
 import { SubteamAdmin } from "@/app/components/subteam-admin";
 import { TeamRoster } from "@/app/components/team-roster";
 import { VenueAdmin } from "@/app/components/venue-admin";
@@ -56,6 +66,28 @@ function monthCells(year: number, month: number): Date[] {
   });
 }
 
+function EventCardBody({ event, game, cost }: { event: TeamEvent; game: boolean; cost: number }) {
+  const { t } = useLanguage();
+  const { subteamById } = useTeamCatalog();
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
+            {game ? t("legend.game") : t("legend.training")}
+          </p>
+          <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p>
+        </div>
+        <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p>
+      </div>
+      <p className="mt-2 text-sm text-muted">
+        {event.start}-{event.end}, {formatDuration(hoursBetween(event.start, event.end))}
+      </p>
+      <p className="mt-1 text-sm">{subteamById(event.subteamId)?.name}</p>
+    </>
+  );
+}
+
 function eventTitleKey(titleId: string): MessageKey {
   return `event.${titleId}` as MessageKey;
 }
@@ -64,20 +96,144 @@ export function TeamDashboard({
   basePath,
   account = null,
   admin = null,
+  initialTeams = [],
+  openTeamId = null,
+  enabledModules = null,
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
   admin?: AdminConsole | null;
+  initialTeams?: IssuedTeam[];
+  openTeamId?: string | null;
+  enabledModules?: string[] | null;
 }) {
   const { formatLang, t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
+  const creating = useRef(false);
+  const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
+  const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.leaderId ?? ""}:${team.code}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}`).join("|");
+  const preferredCode = useRef<string | null>(null);
+  preferredCode.current = ownedTeam?.code ?? preferredCode.current;
+  useEffect(() => {
+    if (!account || !initialTeams.length) return;
+    replaceMyTeams(initialTeams);
+    const preferred = preferredCode.current && initialTeams.some((team) => team.code === preferredCode.current) ? preferredCode.current : initialTeams[0].code;
+    const next = selectMyTeam(preferred);
+    if (!next) return;
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+  }, [account, initialTeams, serverTeams]);
+  const [profile, setProfile] = useState(account);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const needsTeam = Boolean(account) && !ownedTeam;
+  const activeTeam = account ? ownedTeam : { name: TEAM_NAME, code: DEMO_INVITE_CODE, demo: true };
   const pathname = usePathname();
   const router = useRouter();
   const route = routeFromPathname(pathname, basePath);
   const view = route.view;
+  const showStart = needsTeam && (view === "home" || view === "team" || view === "subteams" || view === "venues");
+
+  async function createTeam(name: string, sourceUrl: string | null, logoUrl: string | null) {
+    if (creating.current) return;
+    creating.current = true;
+    let result: Awaited<ReturnType<typeof createOwnedTeam>>;
+    try {
+      result = await createOwnedTeam({ name, sourceUrl, logoUrl });
+    } catch {
+      creating.current = false;
+      showFeedback({ message: t("auth.error.generic"), variant: "error" });
+      return;
+    }
+    creating.current = false;
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    setCurrentTeam(result.team);
+    setOwnedTeam(result.team);
+    setTeams(listMyTeams());
+    showFeedback({ message: t("team.created"), variant: "success" });
+    router.push(teamHref(basePath));
+    router.refresh();
+  }
+
+  function selectTeam(code: string) {
+    const team = selectMyTeam(code);
+    if (!team) return;
+    setOwnedTeam(team);
+  }
+
+  function rememberMember(member: Member, teamCode: string) {
+    if (!ownedTeam || ownedTeam.code !== teamCode) return;
+    const existing = ownedTeam.members ?? [];
+    const members = existing.some((item) => item.id === member.id)
+      ? existing.map((item) => (item.id === member.id ? member : item))
+      : [...existing, member];
+    const next = { ...ownedTeam, members };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+    setProfile((current) => {
+      if (!current) return current;
+      const ehlPlayers = { ...current.ehlPlayers };
+      if (member.ehl && member.id === current.id) ehlPlayers[teamCode] = member.ehl;
+      else if (member.id === current.id) delete ehlPlayers[teamCode];
+      return { ...current, ehlPlayers };
+    });
+  }
+
+  function forgetMember(id: string) {
+    if (!ownedTeam) return;
+    const members = (ownedTeam.members ?? []).filter((member) => member.id !== id);
+    if (id === profile?.id || members.length === 0) {
+      forgetTeam(ownedTeam.code);
+      const next = getCurrentTeam();
+      setOwnedTeam(next);
+      setTeams(listMyTeams());
+      router.push(basePath === "/demo" ? "/demo" : "/dashboard");
+      router.refresh();
+      return;
+    }
+    const next = { ...ownedTeam, members };
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+    router.refresh();
+  }
+
+  async function joinTeam(raw: string) {
+    const code = normalizeInviteCode(raw);
+    if (code === DEMO_INVITE_CODE) {
+      const team = findIssuedTeam(code);
+      if (!team) {
+        showFeedback({ message: t("team.join.not_found"), variant: "error" });
+        return;
+      }
+      setCurrentTeam(team);
+      setOwnedTeam(team);
+      setTeams(listMyTeams());
+      showFeedback({ message: t("team.joined"), variant: "success" });
+      router.push(teamHref(basePath));
+      return;
+    }
+    const result = await joinOwnedTeam(code);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    setCurrentTeam(result.team);
+    setOwnedTeam(result.team);
+    setTeams(listMyTeams());
+    showFeedback({ message: t("team.joined"), variant: "success" });
+    router.push(teamHref(basePath));
+    router.refresh();
+  }
   const openEventId = route.view === "home" ? route.eventId : null;
   const lineup = route.view === "home" && route.lineup;
   const { subteams, venues, subteamById, venueById } = useTeamCatalog();
+  const filterSubteams = activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.subteams ?? []) : subteams;
   const todayIso = isoDate(new Date());
   const today = parseIsoDate(todayIso);
   const [year, setYear] = useState(today.getFullYear());
@@ -87,6 +243,7 @@ export function TeamDashboard({
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [adminNavOpen, setAdminNavOpen] = useState(false);
   const [compactRail, setCompactRail] = useState(false);
   const overlay = compactRail && !sidebarCollapsed;
 
@@ -105,12 +262,30 @@ export function TeamDashboard({
       railQuery.removeEventListener("change", sync);
     };
   }, []);
+
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 600px)");
+    function close() {
+      if (wide.matches) setAdminNavOpen(false);
+    }
+    wide.addEventListener("change", close);
+    return () => wide.removeEventListener("change", close);
+  }, []);
+
+  useEffect(() => {
+    if (!adminNavOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAdminNavOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [adminNavOpen]);
   const [savedSlots, setSavedSlots] = useState<Record<string, SlotMap>>({});
   const [savedSides, setSavedSides] = useState<Record<string, SideMap>>({});
   const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>({});
   const pendingAnchor = useRef<string | null>(null);
 
-  const activeSubteamId = subteamId && subteams.some((item) => item.id === subteamId) ? subteamId : null;
+  const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
   const filtered = useMemo(() => {
@@ -239,6 +414,35 @@ export function TeamDashboard({
     window.scrollTo({ top: 0 });
   }
 
+  function moduleOn(key: string) {
+    if (!enabledModules) return true;
+    return enabledModules.includes(key);
+  }
+
+  const viewModule: Partial<Record<DashboardView, string>> = {
+    subteams: FRONTEND_MODULE_KEYS.subteams,
+  };
+  const activeModule = view === "admin" ? undefined : viewModule[view];
+  const moduleVisible = !activeModule || moduleOn(activeModule);
+  const lineupAllowed = moduleOn(FRONTEND_MODULE_KEYS.gameLayout);
+  const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
+  const lineupBlocked = lineup && !lineupAllowed;
+  const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? MEMBERS.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
+  const subteamCount = showStart ? 0 : filterSubteams.length;
+  const venueSource = showStart ? [] : activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.venues ?? []) : venues;
+  const venueCount = venueSource.filter((item) => !item.hidden).length;
+  const adminCounts: Partial<Record<AdminSection, number>> = admin
+    ? {
+        users: admin.users.length,
+        teams: admin.teams.length,
+        subteams: admin.subteams.length,
+        modules: admin.modules.length,
+        integrations: admin.integrations.length,
+        languages: admin.languages.length,
+        translations: admin.translations.length,
+      }
+    : {};
+
   function showAdmin(section: AdminSection) {
     collapseIfNarrow();
     router.push(`${basePath}/admin/${section}`);
@@ -254,6 +458,35 @@ export function TeamDashboard({
       className="flex min-h-screen flex-col min-[600px]:grid min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)] min-[600px]:transition-[grid-template-columns] min-[600px]:duration-200"
       style={{ "--side": overlay || sidebarCollapsed ? "4.5rem" : "15rem" } as CSSProperties}
     >
+      {account?.isAdmin && adminNavOpen ? (
+        <div className="fixed inset-0 z-50 min-[600px]:hidden">
+          <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={() => setAdminNavOpen(false)} />
+          <aside className="relative z-10 flex h-full w-60 flex-col bg-navy text-white shadow-xl">
+            <div className="flex items-center justify-between gap-2 px-3 py-3">
+              <p className="min-w-0 truncate text-sm font-semibold">{t("nav.admin")}</p>
+              <button type="button" aria-label={t("event.close")} onClick={() => setAdminNavOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/80 hover:bg-white/10">
+                <IconX />
+              </button>
+            </div>
+            <nav aria-label={t("nav.admin")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-4">
+              {ADMIN_NAV.map((item) => (
+                <SideItem
+                  key={item.section}
+                  label={t(item.label)}
+                  count={adminCounts[item.section]}
+                  icon={item.icon}
+                  row
+                  active={route.view === "admin" && route.section === item.section}
+                  onClick={() => {
+                    setAdminNavOpen(false);
+                    showAdmin(item.section);
+                  }}
+                />
+              ))}
+            </nav>
+          </aside>
+        </div>
+      ) : null}
       {overlay ? (
         <button
           type="button"
@@ -283,24 +516,25 @@ export function TeamDashboard({
           )}
         </div>
         <nav
-          className={`flex flex-wrap gap-1 px-3 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:overflow-y-auto min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:items-center min-[600px]:px-2" : "min-[600px]:items-stretch min-[600px]:px-0"}`}
+          className={`flex flex-wrap gap-1 px-3 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:px-2 min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:items-center min-[600px]:overflow-visible" : "min-[600px]:items-stretch min-[600px]:overflow-y-auto"}`}
           aria-label={t("nav.sections")}
         >
           <SideItem label={t("nav.calendar")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
-          <SideItem label={t("nav.members")} icon={<IconUsers />} active={view === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
-          <SideItem label={t("nav.subteams")} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} />
-          <SideItem label={t("nav.venues")} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} />
+          <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
+          {moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
+          <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} />
         </nav>
         {account?.isAdmin ? (
           <nav
             aria-label={t("nav.admin")}
-            className={`mt-auto hidden shrink-0 flex-col gap-1 border-t border-white/15 pt-3 pb-4 min-[600px]:flex ${sidebarCollapsed ? "items-center px-2" : ""}`}
+            className={`mt-auto hidden shrink-0 flex-col gap-1 border-t border-white/15 px-2 pt-3 pb-4 min-[600px]:flex ${sidebarCollapsed ? "items-center" : ""}`}
           >
             <p className="sr-only">{t("nav.admin")}</p>
             {ADMIN_NAV.map((item) => (
               <SideItem
                 key={item.section}
                 label={t(item.label)}
+                count={adminCounts[item.section]}
                 icon={item.icon}
                 compact={sidebarCollapsed}
                 active={route.view === "admin" && route.section === item.section}
@@ -313,9 +547,28 @@ export function TeamDashboard({
       </div>
 
       <div className="flex min-h-screen min-w-0 flex-col max-[599px]:contents">
-      <TopBar account={account} teamName={account ? null : TEAM_NAME} onHome={() => showHome()} />
+      <TopBar
+        key={ownedTeam ? teamPlayer(profile, ownedTeam.code)?.sourceUrl ?? ownedTeam.code : "account"}
+        account={profile}
+        team={activeTeam ? { name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl } : null}
+        teams={account ? teams : []}
+        onHome={() => showHome()}
+        onSelectTeam={selectTeam}
+        onCreateTeam={createTeam}
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
+        onAccountChange={setProfile}
+        onOpenAdmin={account?.isAdmin ? () => setAdminNavOpen(true) : undefined}
+      />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
-        {view === "home" && lineupEvent ? (
+        {account && ownedTeam && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
+          <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
+        ) : null}
+        {showStart ? <NoTeamStart onCreate={createTeam} onJoin={joinTeam} /> : null}
+        {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart ? (
+          <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("frontend_modules.disabled")}</p>
+        ) : null}
+        {view === "home" && lineupEvent && lineupAllowed && !showStart && moduleVisible ? (
           <EventLineup
             key={lineupEvent.id}
             event={lineupEvent}
@@ -327,23 +580,63 @@ export function TeamDashboard({
             onBack={() => router.push(eventHref(basePath, lineupEvent.id))}
           />
         ) : null}
-        {view === "team" ? (
+        {view === "team" && !showStart && activeTeam && moduleVisible ? (
           <TeamRoster
+            key={activeTeam.code}
+            teamName={activeTeam.name}
+            inviteCode={activeTeam.code}
+            sourceUrl={activeTeam.sourceUrl}
+            logoUrl={activeTeam.logoUrl}
+            teamId={activeTeam.id ?? null}
+            leaderId={activeTeam.leaderId ?? null}
+            accountId={profile?.id ?? null}
+            initialMembers={activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]}
             memberId={route.view === "team" ? route.memberId : null}
             onOpenMember={(id) => router.push(teamHref(basePath, id))}
             onCloseMember={() => router.push(teamHref(basePath))}
+            subteams={activeTeam.demo ? undefined : (activeTeam.subteams ?? [])}
+            onMemberSaved={rememberMember}
+            onMemberRemoved={forgetMember}
+            finance={financeAllowed}
           />
         ) : null}
-        {view === "subteams" ? <SubteamAdmin /> : null}
-        {view === "venues" ? <VenueAdmin /> : null}
+        {view === "subteams" && !showStart && moduleVisible ? (
+          <SubteamAdmin
+            teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
+            subteams={activeTeam?.subteams}
+            onChange={(subteams) => {
+              if (!ownedTeam) return;
+              const next = { ...ownedTeam, subteams };
+              setCurrentTeam(next);
+              setOwnedTeam(next);
+              setTeams(listMyTeams());
+            }}
+          />
+        ) : null}
+        {view === "venues" && !showStart && moduleVisible ? (
+          <VenueAdmin
+            teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
+            venues={activeTeam?.venues}
+            onChange={(venues) => {
+              if (!ownedTeam) return;
+              const next = { ...ownedTeam, venues };
+              setCurrentTeam(next);
+              setOwnedTeam(next);
+              setTeams(listMyTeams());
+            }}
+          />
+        ) : null}
         {route.view === "admin" ? (
           <div className="space-y-6">
-            {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams") ? null : (
+            {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
             )}
             {route.section === "users" && admin ? <AdminUsersList users={admin.users} /> : null}
-            {route.section === "teams" && admin ? <AdminTeamsList teams={admin.teams} subteams={admin.subteams} /> : null}
+            {route.section === "teams" && admin ? (
+              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} openTeamId={openTeamId} />
+            ) : null}
             {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
+            {route.section === "modules" && admin ? <AdminModulesPage initialModules={admin.modules} /> : null}
             {route.section === "integrations" && admin ? (
               <AdminIntegrationsPage integrations={admin.integrations} googleRedirectUrl={admin.googleRedirectUrl} />
             ) : null}
@@ -354,7 +647,7 @@ export function TeamDashboard({
             ) : null}
           </div>
         ) : null}
-        <div className={view === "home" && !lineupEvent ? undefined : "hidden"}>
+        <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
         <section id="kalendars" className="scroll-mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
             <div className="mb-4 flex flex-col gap-3">
@@ -386,7 +679,7 @@ export function TeamDashboard({
                   className="ml-auto w-fit max-w-full rounded-lg bg-ice px-3 py-2 text-sm text-ink ring-1 ring-line max-[499px]:px-2 max-[499px]:py-1 max-[499px]:text-xs"
                 >
                   <option value="">{t("filter.allSubteams")}</option>
-                  {subteams.map((subteam) => (
+                  {filterSubteams.map((subteam) => (
                     <option key={subteam.id} value={subteam.id}>
                       {subteam.name}
                     </option>
@@ -401,7 +694,7 @@ export function TeamDashboard({
                   <FilterChip label={typeFilter === "game" ? t("filter.gamesOnly") : t("filter.trainingsOnly")} onClear={() => setTypeFilter("all")} />
                 ) : null}
                 {activeSubteamId ? (
-                  <FilterChip label={subteamById(activeSubteamId)?.name ?? ""} onClear={() => setSubteamId(null)} />
+                  <FilterChip label={filterSubteams.find((item) => item.id === activeSubteamId)?.name ?? subteamById(activeSubteamId)?.name ?? ""} onClear={() => setSubteamId(null)} />
                 ) : null}
                 {activeVenueId ? (
                   <FilterChip label={venueById(activeVenueId)?.name ?? ""} onClear={() => setVenueId(null)} />
@@ -526,21 +819,15 @@ export function TeamDashboard({
                   const game = event.type === "game";
                   return (
                     <li key={event.id} className={`rounded-xl bg-ice p-3 ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
-                      <button type="button" onClick={() => openLineup(event)} className="w-full text-left">
-                      <div className="flex items-start justify-between gap-3">
+                      {lineupAllowed ? (
+                        <button type="button" onClick={() => openLineup(event)} className="w-full text-left">
+                          <EventCardBody event={event} game={game} cost={cost} />
+                        </button>
+                      ) : (
                         <div>
-                          <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
-                            {game ? t("legend.game") : t("legend.training")}
-                          </p>
-                          <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p>
+                          <EventCardBody event={event} game={game} cost={cost} />
                         </div>
-                        <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p>
-                      </div>
-                      <p className="mt-2 text-sm text-muted">
-                        {event.start}-{event.end}, {formatDuration(hours)}
-                      </p>
-                      <p className="mt-1 text-sm">{subteamById(event.subteamId)?.name}</p>
-                      </button>
+                      )}
                       {venue ? (
                         <button
                           type="button"
@@ -584,6 +871,7 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   teams: "nav.admin.teams",
   subteams: "nav.subteams",
   settings: "user.settings",
+  modules: "nav.admin.modules",
   integrations: "nav.admin.integrations",
   languages: "nav.admin.languages",
   translations: "nav.admin.translations",
@@ -594,6 +882,7 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "teams", label: ADMIN_LABEL.teams, icon: <IconTeams /> },
   { section: "subteams", label: ADMIN_LABEL.subteams, icon: <IconLayers /> },
   { section: "settings", label: ADMIN_LABEL.settings, icon: <IconGear /> },
+  { section: "modules", label: ADMIN_LABEL.modules, icon: <IconModules /> },
   { section: "integrations", label: ADMIN_LABEL.integrations, icon: <IconPlug /> },
   { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
   { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
@@ -601,40 +890,67 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
 
 function SideItem({
   label,
+  count,
   icon,
   active,
   compact,
+  row = false,
   onClick,
 }: {
   label: string;
+  count?: number;
   icon: ReactNode;
   active?: boolean;
   compact?: boolean;
+  row?: boolean;
   onClick: () => void;
 }) {
+  const caption = count == null ? label : `${label} ${count}`;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
+
+  function placeTip() {
+    if (!compact || window.matchMedia("(max-width: 599px)").matches) return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTip({ top: rect.top + rect.height / 2, left: rect.right + 8 });
+  }
+
   return (
+    <>
     <button
+      ref={buttonRef}
       type="button"
       onClick={onClick}
+      onMouseEnter={placeTip}
+      onMouseLeave={() => setTip(null)}
+      onFocus={placeTip}
+      onBlur={() => setTip(null)}
       aria-current={active ? "page" : undefined}
-      aria-label={label}
-      className={`group relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight text-white/90 hover:bg-white/10 ${
-        compact
-          ? "min-[600px]:grid min-[600px]:h-9 min-[600px]:w-9 min-[600px]:flex-none min-[600px]:place-items-center min-[600px]:gap-0 min-[600px]:rounded-lg min-[600px]:px-0 min-[600px]:py-0"
-          : "min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:gap-1 min-[600px]:rounded-xl min-[600px]:py-1 min-[600px]:pr-3 min-[600px]:pl-[18px] min-[600px]:text-left min-[600px]:text-base"
+      aria-label={caption}
+      className={`group relative text-white/90 hover:bg-white/10 ${
+        row
+          ? "inline-flex w-full flex-none flex-row items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm"
+          : `flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight ${
+              compact
+                ? "min-[600px]:grid min-[600px]:h-9 min-[600px]:w-9 min-[600px]:flex-none min-[600px]:place-items-center min-[600px]:gap-0 min-[600px]:rounded-lg min-[600px]:px-0 min-[600px]:py-0"
+                : "min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:gap-2 min-[600px]:rounded-xl min-[600px]:px-2.5 min-[600px]:py-1.5 min-[600px]:text-left min-[600px]:text-sm"
+            }`
       } ${active ? "bg-white/15" : ""}`}
     >
-      <span className={`inline-grid shrink-0 place-items-center [&_svg]:h-[22px] [&_svg]:w-[22px] min-[600px]:[&_svg]:h-5 min-[600px]:[&_svg]:w-5 ${compact ? "" : "min-[600px]:h-9 min-[600px]:w-9"}`}>{icon}</span>
-      <span className={compact ? "min-[600px]:sr-only" : undefined}>{label}</span>
-      {compact ? (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute top-1/2 left-full z-40 ml-2 hidden -translate-y-1/2 rounded-md bg-paper px-2 py-1 text-xs font-medium whitespace-nowrap text-ink ring-1 ring-line min-[600px]:group-hover:block min-[600px]:group-focus-visible:block"
-        >
-          {label}
-        </span>
-      ) : null}
+      <span className={`inline-grid shrink-0 place-items-center [&_svg]:h-[22px] [&_svg]:w-[22px] ${row ? "h-7 w-7 [&_svg]:h-4 [&_svg]:w-4" : `min-[600px]:[&_svg]:h-4 min-[600px]:[&_svg]:w-4 ${compact ? "" : "min-[600px]:h-7 min-[600px]:w-7"}`}`}>{icon}</span>
+      <span className={row ? "min-w-0 flex-1 truncate" : compact ? "min-[600px]:sr-only" : "min-[600px]:min-w-0 min-[600px]:flex-1 min-[600px]:truncate"}>{label}</span>
+      {count != null && !compact ? <span className={`shrink-0 text-xs tabular-nums text-white/55 ${row ? "" : "hidden min-[600px]:inline"}`}>{count}</span> : null}
     </button>
+    {tip
+      ? createPortal(
+          <span role="tooltip" style={{ top: tip.top, left: tip.left }} className="pointer-events-none fixed z-[70] -translate-y-1/2 rounded-md bg-paper px-2 py-1 text-xs font-medium whitespace-nowrap text-ink ring-1 ring-line">
+            {caption}
+          </span>,
+          document.body,
+        )
+      : null}
+    </>
   );
 }
 
@@ -751,6 +1067,17 @@ function IconGear() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
       <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+    </svg>
+  );
+}
+
+function IconModules() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 4h4a2 2 0 0 1 2 2v2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+      <path d="M14 10h4a2 2 0 0 1 2 2v2h-6v-2a2 2 0 0 1 2-2z" />
+      <path d="M4 16h6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2z" />
+      <path d="M12 8v2M8 14v2M18 14v2" />
     </svg>
   );
 }

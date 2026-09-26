@@ -1,3 +1,5 @@
+import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+
 export type EventType = "game" | "training";
 
 export type Venue = {
@@ -6,6 +8,7 @@ export type Venue = {
   area: string;
   pricePerHour: number;
   updatedAt: string;
+  hidden?: boolean;
 };
 
 export type Subteam = {
@@ -20,13 +23,18 @@ export type Member = {
   name: string;
   email: string;
   phone: string;
-  number: number;
+  number: number | null;
   position: string;
   role: "coach" | "captain" | "goalie" | "defender" | "forward";
   subteamId: string;
+  subteamIds?: string[];
+  feeExempt?: boolean;
   balance: number;
+  ledger?: BalanceEntry[];
   joined: string;
   updatedAt: string;
+  photoUrl?: string | null;
+  ehl?: EhlPlayerProfile | null;
 };
 
 export type TeamEvent = {
@@ -39,6 +47,11 @@ export type TeamEvent = {
   subteamId: string;
   venueId: string;
 };
+
+export function formatJersey(number: number | null | undefined): string | null {
+  if (number == null || !Number.isInteger(number) || number < 0 || number > 99) return null;
+  return `#${number}`;
+}
 
 export const TEAM_NAME = "HK Rīga Amateiri";
 export const CURRENT_USER_ID = "m1";
@@ -95,13 +108,19 @@ export const EVENTS: TeamEvent[] = [
   { id: "e21", date: "2026-10-08", start: "19:30", end: "21:00", type: "training", titleId: "ice", subteamId: "rezerve", venueId: "daugava" },
 ];
 
+export type BalanceEntry = {
+  id: string;
+  amount: number;
+  at: string;
+};
+
 export type PlayerCharge = {
   id: string;
   memberId: string;
   date: string;
   time: string;
   amount: number;
-  kind: "event" | "payment";
+  kind: "event" | "payment" | "manual";
   type?: EventType;
   titleId?: string;
   venueId?: string;

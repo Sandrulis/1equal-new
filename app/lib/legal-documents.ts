@@ -247,6 +247,11 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
               purpose: "Saglabā, kurām neobligātajām kategorijām piekriti un kad izvēle veikta.",
               duration: "12 mēneši",
             },
+            {
+              name: "1equal-player-hint",
+              purpose: "Atceras, kurām komandām spēlētāja saites paziņojums ir aizvērts.",
+              duration: "12 mēneši",
+            },
           ],
         },
         {
@@ -286,6 +291,11 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
             {
               name: "1equal-consent",
               purpose: "Stores which optional categories you allowed and when the choice was made.",
+              duration: "12 months",
+            },
+            {
+              name: "1equal-player-hint",
+              purpose: "Remembers for which teams the player-link notice was closed.",
               duration: "12 months",
             },
           ],

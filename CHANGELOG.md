@@ -4,6 +4,12 @@
 
 - (none)
 
+## v0.1.4
+
+- Komandas, dalībnieki, apakškomandas un laukumi glabājas datubāzē. Uzaicinājuma kods, vadītājs, numurs no 0 un spēlētāja bilance
+- Moduļi apakškomandām, spēļu izklājumam un finansēm. Kalendārs, komanda un laukumi vienmēr redzami. Adminā komandas logs, pēdējo reizi redzēts un admin izvēlne zem 600px
+- Paroles maiņa no lietotāja izvēlnes prasa pašreizējo paroli. Virs 600px komandas ikona atver komandu sarakstu
+
 ## v0.1.3
 
 - Supabase reģistrācija, ielogošanās un paroles maiņa bez e-pasta. Pirmais lietotājs ir administrators

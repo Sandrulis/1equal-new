@@ -1,6 +1,7 @@
 "use client";
 
-import { chargesForMember, venueById, type Member, type PlayerCharge } from "@/app/lib/demo-data";
+import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
+import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { formatDisplayDate, formatMoney } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
@@ -23,51 +24,65 @@ function roleKey(role: Member["role"]): MessageKey {
   return `role.${role}` as MessageKey;
 }
 
-export function PlayerProfile({ member }: { member: Member }) {
+export function PlayerProfile({ member, subteams, finance = true }: { member: Member; subteams?: Subteam[]; finance?: boolean }) {
   const { t } = useLanguage();
   const { subteamById } = useTeamCatalog();
-  const charges = chargesForMember(member.id);
+  const usingLedger = member.ledger != null;
+  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
   const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
-  const subteam = subteamById(member.subteamId);
-  const number = String(member.number).padStart(2, "0");
+  const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
+  const groups = ids.map((id) => subteams?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
+  const jersey = formatJersey(member.number);
 
   return (
     <div className="space-y-4">
       <section className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
         <div className="flex items-start gap-4">
-          <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-navy text-xl font-semibold text-white">
-            {initials(member.name)}
-          </span>
+          {member.photoUrl ? (
+            <img src={member.photoUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-ice object-contain object-center" />
+          ) : (
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-navy text-xl font-semibold text-white">{initials(member.name)}</span>
+          )}
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">{member.name}</h1>
-            <p className="mt-1 truncate text-sm text-muted">{member.email}</p>
-            <p className="text-sm text-muted">{member.phone}</p>
+            <p className="truncate text-sm leading-5 text-muted">{member.email}</p>
+            {member.phone ? <p className="truncate text-sm leading-5 text-muted">{member.phone}</p> : null}
             <p className="mt-2 inline-flex rounded-full bg-ice px-2.5 py-0.5 text-xs font-medium text-muted">
               {t(roleKey(member.role))}
             </p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl bg-ice px-4 py-3">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.number")}</p>
-            <p className="mt-1 text-lg font-semibold text-train tabular-nums">#{number}</p>
-          </div>
-          <div className="rounded-xl bg-ice px-4 py-3">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.subteams")}</p>
-            {subteam ? (
-              <p className="mt-2 flex items-center gap-2 text-sm font-medium">
-                <span className="h-4 w-4 rounded-md" style={{ background: subteam.color }} title={subteam.name} />
-                {subteam.name}
-              </p>
+        {jersey || groups.length ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {jersey ? (
+              <div className="rounded-xl bg-ice px-4 py-3">
+                <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.number")}</p>
+                <p className="mt-1 text-lg font-semibold text-train tabular-nums">{jersey}</p>
+              </div>
+            ) : null}
+            {groups.length ? (
+              <div className="rounded-xl bg-ice px-4 py-3">
+                <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.subteams")}</p>
+                <ul className="mt-2 space-y-1.5">
+                  {groups.map((subteam) => (
+                    <li key={subteam.id} className="flex items-center gap-2 text-sm font-medium">
+                      <span className="h-4 w-4 rounded-md" style={{ background: subteam.color }} />
+                      {subteam.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
-        </div>
+        ) : null}
       </section>
 
-      <section className="rounded-2xl bg-paper ring-1 ring-line">
+      {member.ehl ? <PlayerEhl profile={member.ehl} /> : null}
+
+      {finance ? <section className="rounded-2xl bg-paper ring-1 ring-line">
         <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
         {charges.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-muted sm:px-5">{t("player.empty")}</p>
+          <p className="px-4 py-8 text-sm text-muted sm:px-5">{t(usingLedger ? "player.ledger.empty" : "player.empty")}</p>
         ) : (
           <>
             <ul className="mt-3 divide-y divide-line md:hidden">
@@ -102,8 +117,50 @@ export function PlayerProfile({ member }: { member: Member }) {
             </div>
           </>
         )}
-      </section>
+      </section> : null}
     </div>
+  );
+}
+
+function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
+  const { t } = useLanguage();
+  const facts = [
+    ["player.ehl.height", profile.height],
+    ["player.ehl.weight", profile.weight],
+    ["player.ehl.stick", profile.stick],
+    ["player.ehl.birth", profile.birthDate],
+    ["player.ehl.country", profile.country],
+  ].filter((item): item is [MessageKey, string] => Boolean(item[1]));
+  const season = profile.season;
+  const stats = season ? season.columns.filter((column) => season.results[column]).slice(0, 8) : [];
+
+  return (
+    <section className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
+      <h2 className="text-lg font-semibold">{t("player.ehl.title")}</h2>
+      {profile.team ? <p className="mt-1 text-sm text-muted">{profile.team}</p> : null}
+      {facts.length ? (
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {facts.map(([key, value]) => (
+            <div key={key} className="rounded-xl bg-ice px-4 py-3">
+              <dt className="text-xs font-medium tracking-wide text-muted uppercase">{t(key)}</dt>
+              <dd className="mt-1 text-sm font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {season && stats.length ? (
+        <div className="mt-4">
+          <p className="text-xs font-medium tracking-wide text-muted uppercase">{season.label || t("player.ehl.season")}</p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {stats.map((column) => (
+              <li key={column} className="rounded-lg bg-ice px-3 py-2 text-sm">
+                <span className="text-muted">{column}</span> <span className="font-semibold tabular-nums">{season.results[column]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -155,10 +212,18 @@ function TotalRow({ total }: { total: number }) {
   );
 }
 
+function ledgerCharges(member: Member): PlayerCharge[] {
+  return (member.ledger ?? []).map((entry) => {
+    const [date, time = ""] = entry.at.split("T");
+    return { id: entry.id, memberId: member.id, date, time: time.slice(0, 5), amount: entry.amount, kind: "manual" };
+  });
+}
+
 function chargeDetails(
   charge: PlayerCharge,
   t: (key: MessageKey, params?: Record<string, string | number>) => string,
 ): { title: string; meta: string | null } {
+  if (charge.kind === "manual") return { title: t("player.manual"), meta: null };
   if (charge.kind === "payment" || !charge.type || !charge.titleId || !charge.venueId) {
     return { title: t("player.deposit"), meta: null };
   }

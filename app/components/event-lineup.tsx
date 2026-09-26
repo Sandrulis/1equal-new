@@ -196,7 +196,7 @@ function GameLineup({
                 active ? "bg-navy text-white ring-navy" : "bg-paper text-ink ring-line"
               }`}
             >
-              {member.number} {member.name}
+              {member.number == null ? member.name : `${member.number} ${member.name}`}
             </button>
           );
         })}
@@ -367,7 +367,7 @@ function TeamColumn({
         {members.map((member) => (
           <li key={member.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${dark ? "bg-white/10" : "bg-ice"}`}>
             <span className="text-sm">
-              {member.number} {member.name}
+              {member.number == null ? member.name : `${member.number} ${member.name}`}
             </span>
             <button
               type="button"
@@ -414,7 +414,7 @@ function PoolColumn({
           {members.map((member) => (
             <li key={member.id} className="rounded-lg bg-paper px-3 py-2 ring-1 ring-line">
               <p className="text-sm font-medium">
-                {member.number} {member.name}
+                {member.number == null ? member.name : `${member.number} ${member.name}`}
               </p>
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={() => onBlack(member.id)} className="rounded-md bg-navy px-2 py-1 text-xs text-white">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAccountProfile } from "@/app/lib/auth/session";
+import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
 import { messages, type MessageKey } from "@/app/lib/messages";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
@@ -280,6 +281,55 @@ export async function deleteSubteam(id: string): Promise<ActionResult> {
   const gate = await adminClient();
   if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
   const { error } = await gate.client.from("subteams").delete().eq("id", id);
+  if (error) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true };
+}
+
+type ModuleRow = { id: string; module_key: string; is_enabled: boolean; sort_order: number };
+
+function mapModule(row: ModuleRow): FrontendModule {
+  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, sortOrder: row.sort_order };
+}
+
+export async function createFrontendModule(rawKey: string): Promise<{ ok: true; module: FrontendModule } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const moduleKey = normalizeModuleKey(rawKey);
+  if (!moduleKey) return { ok: false, error: "frontend_modules.error.key_required" };
+  if (moduleKey.length > 128 || !MODULE_KEY_PATTERN.test(moduleKey)) return { ok: false, error: "frontend_modules.error.key_invalid" };
+  if ((BUILTIN_NAV_KEYS as readonly string[]).includes(moduleKey)) return { ok: false, error: "frontend_modules.error.builtin" };
+  const existing = await gate.client.from("site_frontend_modules").select("sort_order").order("sort_order", { ascending: false }).limit(1);
+  const sortOrder = ((existing.data?.[0]?.sort_order as number | undefined) ?? 0) + 10;
+  const now = new Date().toISOString();
+  const inserted = await gate.client
+    .from("site_frontend_modules")
+    .insert({ module_key: moduleKey, is_enabled: false, sort_order: sortOrder, updated_at: now })
+    .select("id, module_key, is_enabled, sort_order")
+    .single();
+  if (inserted.error || !inserted.data) {
+    return { ok: false, error: inserted.error?.code === "23505" ? "frontend_modules.error.exists" : "auth.error.generic" };
+  }
+  refresh();
+  return { ok: true, module: mapModule(inserted.data as ModuleRow) };
+}
+
+export async function setFrontendModuleEnabled(moduleKey: string, isEnabled: boolean): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const { error } = await gate.client
+    .from("site_frontend_modules")
+    .update({ is_enabled: isEnabled, updated_at: new Date().toISOString() })
+    .eq("module_key", moduleKey);
+  if (error) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true };
+}
+
+export async function deleteFrontendModule(moduleKey: string): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const { error } = await gate.client.from("site_frontend_modules").delete().eq("module_key", moduleKey);
   if (error) return { ok: false, error: "auth.error.generic" };
   refresh();
   return { ok: true };

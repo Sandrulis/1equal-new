@@ -13,12 +13,14 @@ const toneClass: Record<Tone, string> = {
 export function IconTipButton({
   label,
   tone = "train",
+  compact = false,
   onClick,
   disabled = false,
   children,
 }: {
   label: string;
   tone?: Tone;
+  compact?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   children: ReactNode;
@@ -43,7 +45,7 @@ export function IconTipButton({
         onMouseLeave={() => setTip(null)}
         onFocus={(event) => place(event.currentTarget)}
         onBlur={() => setTip(null)}
-        className={`grid h-8 w-8 place-items-center rounded-lg ${toneClass[tone]}`}
+        className={`grid place-items-center rounded-lg ${compact ? "size-5" : "size-8"} ${toneClass[tone]}`}
       >
         {children}
       </button>

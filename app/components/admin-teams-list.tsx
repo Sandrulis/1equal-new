@@ -2,19 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { formatDisplayDateTime, toLocalDateTimeStamp } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
-import type { MessageKey } from "@/app/lib/messages";
 import { deleteTeam, saveTeam } from "@/app/lib/site-admin/actions";
-import type { SystemSubteam, SystemTeam } from "@/app/lib/site-admin/types";
+import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 
-function countKey(count: number): MessageKey {
-  return count === 1 ? "admin.teams.subteams.one" : "admin.teams.subteams";
-}
-
-export function AdminTeamsList({ teams, subteams }: { teams: SystemTeam[]; subteams: SystemSubteam[] }) {
+export function AdminTeamsList({
+  teams,
+  subteams,
+  members,
+  openTeamId = null,
+}: {
+  teams: SystemTeam[];
+  subteams: SystemSubteam[];
+  members: SystemTeamMember[];
+  openTeamId?: string | null;
+}) {
   const { t } = useLanguage();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
@@ -63,6 +69,14 @@ export function AdminTeamsList({ teams, subteams }: { teams: SystemTeam[]; subte
     if (editingId === id) setEditingId(null);
     showFeedback({ message: t("admin.teams.deleted"), variant: "success" });
     router.refresh();
+  }
+
+  const openTeam = teams.find((team) => team.id === openTeamId) ?? null;
+  const players = openTeam ? members.filter((member) => member.teamId === openTeam.id) : [];
+  const openSubteams = openTeam ? subteams.filter((item) => item.teamId === openTeam.id) : [];
+
+  function openRoster(id: string) {
+    router.push(`/dashboard/admin/teams?team=${id}`);
   }
 
   const visible = useMemo(() => {
@@ -118,34 +132,102 @@ export function AdminTeamsList({ teams, subteams }: { teams: SystemTeam[]; subte
         </form>
       ) : null}
 
-      {visible.length === 0 ? (
-        <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">
-          {query.trim() ? t("admin.teams.noMatch") : t("admin.teams.empty")}
-        </p>
-      ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
-          {visible.map((team) => {
-            const count = subteams.filter((item) => item.teamId === team.id).length;
-            return (
-              <li key={team.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{team.name}</span>
-                  <span className="block text-xs text-muted">{t(countKey(count), { count })}</span>
-                  <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(toLocalDateTimeStamp(team.updatedAt))}</span>
-                </span>
-                <span className="flex shrink-0 gap-1">
-                  <IconTipButton label={t("roster.edit")} tone="train" disabled={pending} onClick={() => openEdit(team)}>
-                    <IconPencil />
-                  </IconTipButton>
-                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(team.id)}>
-                    <IconTrash />
-                  </IconTipButton>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-line bg-ice text-xs tracking-wide text-muted uppercase">
+                <th className="px-4 py-3 font-medium">{t("catalog.name")}</th>
+                <th className="px-4 py-3 text-center font-medium">{t("nav.subteams")}</th>
+                <th className="px-4 py-3 text-center font-medium">{t("admin.teams.players")}</th>
+                <th className="px-4 py-3 text-right font-medium">{t("common.actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-muted">
+                    {query.trim() ? t("admin.teams.noMatch") : t("admin.teams.empty")}
+                  </td>
+                </tr>
+              ) : (
+                visible.map((team) => {
+                  const subteamCount = subteams.filter((item) => item.teamId === team.id).length;
+                  const playerCount = members.filter((member) => member.teamId === team.id).length;
+                  return (
+                    <tr key={team.id} className="border-b border-line last:border-b-0">
+                      <td className="px-4 py-3">
+                        <button type="button" onClick={() => openRoster(team.id)} className="block max-w-full truncate text-left font-medium text-train">
+                          {team.name}
+                        </button>
+                        <span className="block text-xs text-muted tabular-nums">{formatDisplayDateTime(toLocalDateTimeStamp(team.updatedAt))}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center font-medium tabular-nums">{subteamCount}</td>
+                      <td className="px-4 py-3 text-center font-medium tabular-nums">{playerCount}</td>
+                      <td className="px-4 py-3">
+                        <span className="flex justify-end gap-1">
+                          <IconTipButton label={t("roster.edit")} tone="train" disabled={pending} onClick={() => openEdit(team)}>
+                            <IconPencil />
+                          </IconTipButton>
+                          <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(team.id)}>
+                            <IconTrash />
+                          </IconTipButton>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {openTeam ? (
+        <AdminDialog open wide closeButton title={openTeam.name} onClose={() => router.replace("/dashboard/admin/teams")}>
+          <h3 className="text-sm font-semibold">{t("nav.subteams")}</h3>
+          {openSubteams.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">{t("admin.teams.subteams.empty")}</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {openSubteams.map((subteam) => (
+                <li key={subteam.id} className="inline-flex items-center gap-2 rounded-lg bg-ice px-2.5 py-1.5 text-sm">
+                  <span className="h-3.5 w-3.5 shrink-0 rounded" style={{ background: subteam.color }} />
+                  {subteam.name}
+                </li>
+              ))}
+            </ul>
+          )}
+          <h3 className="mt-6 text-sm font-semibold">{t("admin.teams.players")}</h3>
+          {players.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">{t("admin.teams.players.empty")}</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {players.map((player) => (
+                <li key={player.userId} className="flex items-center gap-3 py-3">
+                  {player.photoUrl ? (
+                    <img src={player.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">
+                      {player.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{player.name}</span>
+                    {player.number != null || player.position ? (
+                      <span className="block truncate text-sm text-muted">
+                        {player.number != null ? `#${player.number}` : ""}
+                        {player.number != null && player.position ? " " : ""}
+                        {player.position}
+                      </span>
+                    ) : null}
+                    {player.phone ? <span className="block truncate text-sm text-muted">{player.phone}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AdminDialog>
+      ) : null}
     </div>
   );
 }

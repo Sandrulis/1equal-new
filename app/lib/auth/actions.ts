@@ -1,12 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import type { MessageKey } from "@/app/lib/messages";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
 import { createClient } from "@/app/lib/supabase/server";
 
-export type AuthResult = { error: MessageKey } | { confirm: true } | { ok: true };
+export type AuthResult = { error: MessageKey } | { confirm: true } | { ok: true; ehlPlayer?: EhlPlayerProfile | null; teamCode?: string };
 
 const MIN_PASSWORD = 8;
 
@@ -87,6 +88,31 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
   return { ok: true };
 }
 
+export async function changePassword(formData: FormData): Promise<AuthResult> {
+  if (!isSupabaseConfigured()) return { error: "auth.error.config" };
+
+  const current = typeof formData.get("currentPassword") === "string" ? String(formData.get("currentPassword")) : "";
+  const next = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
+  const confirm = typeof formData.get("confirmPassword") === "string" ? String(formData.get("confirmPassword")) : "";
+  if (!current) return { error: "user.password.wrong" };
+  if (next.length < MIN_PASSWORD) return { error: "auth.error.weak" };
+  if (next !== confirm) return { error: "user.password.mismatch" };
+  if (next === current) return { error: "user.password.same" };
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  const email = data.user?.email;
+  if (!email) return { error: "auth.error.generic" };
+
+  const checked = await supabase.auth.signInWithPassword({ email, password: current });
+  if (checked.error) return { error: "user.password.wrong" };
+
+  const updated = await supabase.auth.updateUser({ password: next });
+  if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+
+  return { ok: true };
+}
+
 export async function resetPassword(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
 
@@ -124,14 +150,52 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { error: "auth.error.generic" };
 
+  const includePlayer = formData.has("playerUrl");
+  const teamCode = readField(formData, "teamCode").toUpperCase();
+  const teamOk = /^[A-Z0-9]{4,16}$/.test(teamCode);
+  let player: EhlPlayerProfile | null = null;
+  if (includePlayer) {
+    if (!teamOk) return { error: "auth.error.generic" };
+    const raw = readField(formData, "playerUrl");
+    if (raw) {
+      const loaded = await loadEhlPlayer(raw);
+      if ("error" in loaded) return loaded;
+      player = loaded.profile;
+    }
+  }
+
   const { error } = await supabase.rpc("update_own_profile", {
     user_first_name: firstName,
     user_last_name: lastName,
+    user_ehl_team: includePlayer && teamOk ? teamCode : null,
+    user_ehl_player: player,
+    user_ehl_set: includePlayer && teamOk,
   });
   if (error) return { error: "auth.error.generic" };
 
   await supabase.auth.updateUser({ data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}` } });
-  return { ok: true };
+  return includePlayer ? { ok: true, ehlPlayer: player, teamCode } : { ok: true };
+}
+
+async function loadEhlPlayer(raw: string): Promise<{ profile: EhlPlayerProfile } | { error: MessageKey }> {
+  const url = parseEhlPlayerUrl(raw);
+  if (!url) return { error: "user.player.invalid" };
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+      headers: { accept: "text/html" },
+    });
+    const finalUrl = parseEhlPlayerUrl(response.url);
+    if (!finalUrl) return { error: "user.player.invalid" };
+    if (!response.ok) return { error: "user.player.failed" };
+    const html = (await response.text()).slice(0, 200_000);
+    const profile = parseEhlPlayerPage(html, finalUrl.toString());
+    if (!profile) return { error: "user.player.not_found" };
+    return { profile };
+  } catch {
+    return { error: "user.player.failed" };
+  }
 }
 
 export async function signOut() {
