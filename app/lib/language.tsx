@@ -1,11 +1,21 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { messages, translate, type Lang, type MessageKey } from "@/app/lib/messages";
 import { applyBrandName } from "@/app/lib/site-brand";
 import type { PublicI18n } from "@/app/lib/site-admin/types";
 
 const STORAGE_KEY = "1equal-lang";
+const langListeners = new Set<() => void>();
+
+function subscribeStoredLang(onChange: () => void) {
+  langListeners.add(onChange);
+  return () => langListeners.delete(onChange);
+}
+
+function emitStoredLang() {
+  for (const listener of langListeners) listener();
+}
 
 const FALLBACK_I18N: PublicI18n = {
   languages: [
@@ -49,13 +59,15 @@ export function LanguageProvider({
   i18n?: PublicI18n;
   brandName: string;
 }) {
-  const [lang, setLangState] = useState(i18n.defaultCode);
+  const lang = useSyncExternalStore(
+    subscribeStoredLang,
+    () => readStoredLang(i18n.languages, i18n.defaultCode),
+    () => i18n.defaultCode,
+  );
 
   useEffect(() => {
-    const stored = readStoredLang(i18n.languages, i18n.defaultCode);
-    setLangState(stored);
-    document.documentElement.lang = stored;
-  }, [i18n.defaultCode, i18n.languages]);
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   const value = useMemo<LanguageValue>(() => {
     const formatLang = builtinLang(lang, i18n.defaultCode);
@@ -65,9 +77,9 @@ export function LanguageProvider({
       languages: i18n.languages,
       setLang(next) {
         if (!i18n.languages.some((language) => language.code === next)) return;
-        setLangState(next);
         window.localStorage.setItem(STORAGE_KEY, next);
         document.documentElement.lang = next;
+        emitStoredLang();
       },
       t(key, params) {
         const builtIn = messages[key];

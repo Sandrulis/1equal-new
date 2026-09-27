@@ -186,7 +186,7 @@ Pēc push un pull request GitHub Actions palaiž trīs pārbaudes:
 
 - **Secret scan** (gitleaks) - atslēgas un paroles git vēsturē. Repozitorijam vajag secret `GITLEAKS_LICENSE`, ja tas nav organizācijas secret.
 - **Security audit** - `npm run audit:check`, krīt uz neakceptētu high vai critical.
-- **Security smoke** - `typecheck`, `lint`, production `build`, auth pārbaude `*actions.ts` un `route.ts`, nav `eval()`, drošības galvenes `next.config.ts`. `lint` šobrīd krīt uz esošajām `react-hooks/set-state-in-effect` kļūdām, tāpēc smoke solis nav zaļš, kamēr tās nav iztīrītas.
+- **Security smoke** - `typecheck`, `lint`, production `build`, auth pārbaude `*actions.ts` un `route.ts`, nav `eval()`, drošības galvenes `next.config.ts`.
 
 Noklusējuma solis ir patch +0.0.1. `README.md` rāda **Current version**. Izmaiņu saraksts ir `CHANGELOG.md`, ne README.
 

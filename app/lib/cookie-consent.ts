@@ -1,5 +1,26 @@
 export const CONSENT_COOKIE = "1equal-consent";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const listeners = new Set<() => void>();
+let cachedConsent: CookieConsentState | null | undefined;
+let cachedConsentKey = "";
+
+export function subscribeConsent(onChange: () => void) {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
+}
+
+function emitConsent() {
+  for (const listener of listeners) listener();
+}
+
+export function getConsentSnapshot(): CookieConsentState | null {
+  const next = readCookieConsent();
+  const key = next ? `${next.preferences}:${next.analytics}:${next.marketing}:${next.updatedAt}` : "null";
+  if (cachedConsent !== undefined && key === cachedConsentKey) return cachedConsent;
+  cachedConsentKey = key;
+  cachedConsent = next;
+  return next;
+}
 
 export type OptionalCookieCategory = "preferences" | "analytics" | "marketing";
 
@@ -53,5 +74,8 @@ export function writeCookieConsent(selection: CookieConsentSelection): CookieCon
     "Path=/",
     "SameSite=Lax",
   ].join("; ");
+  cachedConsent = state;
+  cachedConsentKey = `${state.preferences}:${state.analytics}:${state.marketing}:${state.updatedAt}`;
+  emitConsent();
   return state;
 }

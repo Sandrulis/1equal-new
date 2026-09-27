@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { TeamMark } from "@/app/components/team-mark";
@@ -15,7 +16,7 @@ import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { votingHours } from "@/app/lib/team-defaults";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
-import { clearInviteBannerDismissed, readInviteBannerDismissed, writeInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
+import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDismissed, clearInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
 import { useLanguage } from "@/app/lib/language";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
@@ -90,10 +91,11 @@ export function TeamRoster({
   const { showFeedback } = useFeedbackToast();
   const { subteamById, subteams: catalogSubteams } = useTeamCatalog();
   const groupList = subteams ?? catalogSubteams;
-  function groupById(id: string): Subteam | undefined {
-    return groupList.find((item) => item.id === id) ?? subteamById(id);
-  }
-  const [inviteVisible, setInviteVisible] = useState<boolean | null>(null);
+  const inviteVisible = useSyncExternalStore<boolean | null>(
+    subscribeInviteBanner,
+    () => !readInviteBannerDismissed(inviteCode),
+    () => null,
+  );
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [editing, setEditing] = useState<Member | null>(null);
@@ -108,10 +110,6 @@ export function TeamRoster({
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
   const player = memberId ? members.find((member) => member.id === memberId) : undefined;
 
-  useEffect(() => {
-    setInviteVisible(!readInviteBannerDismissed(inviteCode));
-  }, [inviteCode]);
-
   function openPlayer(id: string) {
     onOpenMember(id);
     window.scrollTo({ top: 0 });
@@ -122,13 +120,13 @@ export function TeamRoster({
     if (!needle) return members;
     return members.filter((member) => {
       const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
-      const subteam = ids.map((id) => groupById(id)?.name ?? "").join(" ");
+      const subteam = ids.map((id) => (groupList.find((item) => item.id === id) ?? subteamById(id))?.name ?? "").join(" ");
       return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", member.position, subteam]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [groupList, members, query, subteamById, t]);
+  }, [groupList, members, query, subteamById]);
 
   async function removeMember(id: string) {
     if (teamId) {
@@ -236,7 +234,6 @@ export function TeamRoster({
             aria-label={t("event.close")}
             onClick={() => {
               writeInviteBannerDismissed(inviteCode);
-              setInviteVisible(false);
             }}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted ring-1 ring-line hover:bg-ice hover:text-ink"
           >
@@ -266,7 +263,6 @@ export function TeamRoster({
             aria-label={t("team.invite.show")}
             onClick={() => {
               clearInviteBannerDismissed(inviteCode);
-              setInviteVisible(true);
             }}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-white hover:bg-navy/90"
           >
@@ -404,10 +400,11 @@ const fieldClass = "mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring
 function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { t } = useLanguage();
   const [email, setEmail] = useState("");
-
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setEmail("");
-  }, [open]);
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -505,15 +502,18 @@ function TeamSettingsDialog({
   const [training, setTraining] = useState(String(trainingHours));
   const [game, setGame] = useState(String(gameHours));
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setDraftName(name);
-    setDraftCurrency(currency);
-    setTraining(String(trainingHours));
-    setGame(String(gameHours));
-    setPending(false);
-  }, [open, name, currency, trainingHours, gameHours]);
+  const settingsKey = `${open}|${name}|${currency ?? ""}|${trainingHours}|${gameHours}`;
+  const [seenSettings, setSeenSettings] = useState(settingsKey);
+  if (settingsKey !== seenSettings) {
+    setSeenSettings(settingsKey);
+    if (open) {
+      setDraftName(name);
+      setDraftCurrency(currency);
+      setTraining(String(trainingHours));
+      setGame(String(gameHours));
+      setPending(false);
+    }
+  }
 
   const trainingValue = votingHours(training);
   const gameValue = votingHours(game);
@@ -579,13 +579,15 @@ function BalanceDialog({
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [negative, setNegative] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setDescription("");
-    setAmount("");
-    setNegative(false);
-  }, [open]);
+  const [balanceOpen, setBalanceOpen] = useState(open);
+  if (open !== balanceOpen) {
+    setBalanceOpen(open);
+    if (open) {
+      setDescription("");
+      setAmount("");
+      setNegative(false);
+    }
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -651,7 +653,7 @@ function MemberIdentity({ member }: { member: Member }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       {member.photoUrl ? (
-        <img src={member.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
+        <ContentImage src={member.photoUrl} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
       ) : (
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
       )}

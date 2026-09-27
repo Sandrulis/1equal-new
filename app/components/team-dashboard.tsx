@@ -1,14 +1,16 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { ContentImage } from "@/app/components/content-image";
 import { CURRENT_USER_ID, EVENTS, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
-import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam, type TeamLedgerLine } from "@/app/lib/invite-code";
+import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
+import { getDemoSession, settleDemoCharges, subscribeDemoSession, updateDemoSession } from "@/app/lib/demo-session";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
@@ -59,7 +61,7 @@ import { SubteamAdmin } from "@/app/components/subteam-admin";
 import { TeamRoster } from "@/app/components/team-roster";
 import { VenueAdmin } from "@/app/components/venue-admin";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
-import { eventAudienceIncludes, eventHasEnded, eventVotingDeadline } from "@/app/lib/event-voting";
+import { eventAudienceIncludes, eventVotingDeadline } from "@/app/lib/event-voting";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 type TypeFilter = "all" | EventType;
@@ -117,13 +119,6 @@ function eventTitleKey(titleId: string): MessageKey {
   return `event.${titleId}` as MessageKey;
 }
 
-const demoAttendanceMoney = { player: {} as Record<string, number>, team: 0 };
-const demoAttendanceRsvp: Record<string, Record<string, Rsvp>> = {};
-const demoEventCharges: TeamLedgerLine[] = [];
-const demoAddedEvents: TeamEvent[] = [];
-const demoHiddenEventIds: string[] = [];
-const demoEventEdits: Record<string, TeamEvent> = {};
-
 export function TeamDashboard({
   basePath,
   account = null,
@@ -146,27 +141,6 @@ export function TeamDashboard({
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
   const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}`).join("|");
-  const preferredCode = useRef<string | null>(null);
-  preferredCode.current = ownedTeam?.code ?? preferredCode.current;
-  useEffect(() => {
-    if (!account) return;
-    if (!initialTeams.length) {
-      replaceMyTeams([]);
-      setOwnedTeam(null);
-      setTeams([]);
-      setRsvp({});
-      return;
-    }
-    replaceMyTeams(initialTeams);
-    const preferred = preferredCode.current && initialTeams.some((team) => team.code === preferredCode.current) ? preferredCode.current : initialTeams[0].code;
-    const next = selectMyTeam(preferred);
-    if (!next) return;
-    setOwnedTeam(next);
-    setTeams(listMyTeams());
-    const seeded: Record<string, Record<string, Rsvp>> = {};
-    for (const row of next.rsvps ?? []) seeded[row.eventId] = { ...seeded[row.eventId], [row.userId]: row.status };
-    setRsvp(seeded);
-  }, [account, initialTeams, serverTeams]);
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
@@ -314,10 +288,13 @@ export function TeamDashboard({
   const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
-  const [demoEvents, setDemoEvents] = useState<TeamEvent[]>(() => demoAddedEvents.slice());
-  const [eventEdits, setEventEdits] = useState<Record<string, TeamEvent>>(() => ({ ...demoEventEdits }));
-  const [hiddenEventIds, setHiddenEventIds] = useState<string[]>(() => demoHiddenEventIds.slice());
-  const [demoCharges, setDemoCharges] = useState<TeamLedgerLine[]>(() => demoEventCharges.slice());
+  const demo = useSyncExternalStore(subscribeDemoSession, getDemoSession, getDemoSession);
+  const demoEvents = demo.events;
+  const eventEdits = demo.edits;
+  const hiddenEventIds = demo.hidden;
+  const demoCharges = demo.charges;
+  const demoPlayerDelta = demo.player;
+  const demoTeamDelta = demo.team;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -356,13 +333,40 @@ export function TeamDashboard({
   const [savedSides, setSavedSides] = useState<Record<string, SideMap>>({});
   const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>(() => {
     const next: Record<string, Record<string, Rsvp>> = {};
-    for (const [eventId, rows] of Object.entries(demoAttendanceRsvp)) next[eventId] = { ...rows };
+    for (const [eventId, rows] of Object.entries(getDemoSession().rsvp)) next[eventId] = { ...rows };
     return next;
   });
   const rsvpRef = useRef(rsvp);
-  rsvpRef.current = rsvp;
-  const [demoPlayerDelta, setDemoPlayerDelta] = useState<Record<string, number>>(() => ({ ...demoAttendanceMoney.player }));
-  const [demoTeamDelta, setDemoTeamDelta] = useState(() => demoAttendanceMoney.team);
+  useEffect(() => {
+    rsvpRef.current = rsvp;
+  }, [rsvp]);
+  const [preferredCode, setPreferredCode] = useState<string | null>(null);
+  if (ownedTeam?.code && ownedTeam.code !== preferredCode) setPreferredCode(ownedTeam.code);
+  const [appliedTeams, setAppliedTeams] = useState<string | null>(null);
+  if (account && serverTeams !== appliedTeams) {
+    setAppliedTeams(serverTeams);
+    if (!initialTeams.length) {
+      setOwnedTeam(null);
+      setTeams([]);
+      setRsvp({});
+    } else {
+      const remembered = ownedTeam?.code ?? preferredCode;
+      const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0].code;
+      const next = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
+      setOwnedTeam(next);
+      setTeams(initialTeams);
+      const seeded: Record<string, Record<string, Rsvp>> = {};
+      for (const row of next.rsvps ?? []) seeded[row.eventId] = { ...seeded[row.eventId], [row.userId]: row.status };
+      setRsvp(seeded);
+    }
+  }
+  useEffect(() => {
+    if (!account) return;
+    replaceMyTeams(initialTeams);
+    const remembered = ownedTeam?.code ?? preferredCode;
+    const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0]?.code;
+    if (preferred) selectMyTeam(preferred);
+  }, [account, initialTeams, ownedTeam?.code, preferredCode, serverTeams]);
   const pendingAnchor = useRef<string | null>(null);
 
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
@@ -432,8 +436,11 @@ export function TeamDashboard({
   async function setMemberRsvp(memberId: string, status: Rsvp, targetEventId?: string) {
     const eventId = targetEventId ?? openEventId;
     if (!eventId) return;
-    const previous = rsvp[eventId]?.[memberId] ?? demoAttendanceRsvp[eventId]?.[memberId] ?? "pending";
-    demoAttendanceRsvp[eventId] = { ...demoAttendanceRsvp[eventId], [memberId]: status };
+    const previous = rsvp[eventId]?.[memberId] ?? getDemoSession().rsvp[eventId]?.[memberId] ?? "pending";
+    updateDemoSession((current) => ({
+      ...current,
+      rsvp: { ...current.rsvp, [eventId]: { ...current.rsvp[eventId], [memberId]: status } },
+    }));
     setRsvp((current) => ({
       ...current,
       [eventId]: { ...current[eventId], [memberId]: status },
@@ -447,18 +454,21 @@ export function TeamDashboard({
       if (moduleOn(FRONTEND_MODULE_KEYS.finance) && event && member && !member.feeExempt && price > 0 && wasGoing !== nowGoing) {
         const playerStep = nowGoing ? -price : price;
         const teamStep = nowGoing ? price : -price;
-        const nextPlayer = Math.round(((demoAttendanceMoney.player[memberId] ?? 0) + playerStep) * 100) / 100;
-        demoAttendanceMoney.player[memberId] = nextPlayer;
-        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team + teamStep) * 100) / 100;
-        setDemoPlayerDelta({ ...demoAttendanceMoney.player });
-        setDemoTeamDelta(demoAttendanceMoney.team);
+        updateDemoSession((current) => ({
+          ...current,
+          player: { ...current.player, [memberId]: Math.round(((current.player[memberId] ?? 0) + playerStep) * 100) / 100 },
+          team: Math.round((current.team + teamStep) * 100) / 100,
+        }));
       }
       return;
     }
     const result = await setEventAttendance({ teamId: ownedTeam.id, eventId, userId: memberId, status });
     if ((rsvpRef.current[eventId]?.[memberId] ?? "pending") !== status) return;
     if (!result.ok) {
-      demoAttendanceRsvp[eventId] = { ...demoAttendanceRsvp[eventId], [memberId]: previous };
+      updateDemoSession((current) => ({
+        ...current,
+        rsvp: { ...current.rsvp, [eventId]: { ...current.rsvp[eventId], [memberId]: previous } },
+      }));
       setRsvp((current) => ({
         ...current,
         [eventId]: { ...current[eventId], [memberId]: previous },
@@ -509,14 +519,15 @@ export function TeamDashboard({
     if (basePath === "/demo" || !ownedTeam?.id) {
       if (editing) {
         const nextEvent = eventFromInput(editing.id, input, editing);
-        const index = demoAddedEvents.findIndex((item) => item.id === editing.id);
-        if (index >= 0) demoAddedEvents[index] = nextEvent;
-        demoEventEdits[editing.id] = nextEvent;
-        setDemoEvents(demoAddedEvents.slice());
-        setEventEdits({ ...demoEventEdits });
+        updateDemoSession((current) => {
+          const events = current.events.slice();
+          const index = events.findIndex((item) => item.id === editing.id);
+          if (index >= 0) events[index] = nextEvent;
+          return { ...current, events, edits: { ...current.edits, [editing.id]: nextEvent } };
+        });
       } else {
-        demoAddedEvents.push(eventFromInput(crypto.randomUUID(), input));
-        setDemoEvents(demoAddedEvents.slice());
+        const created = eventFromInput(crypto.randomUUID(), input);
+        updateDemoSession((current) => ({ ...current, events: [...current.events, created] }));
       }
       const picked = parseIsoDate(input.date);
       setYear(picked.getFullYear());
@@ -565,24 +576,25 @@ export function TeamDashboard({
   }
 
   function refundDemoEvent(event: TeamEvent) {
-    const rows = demoAttendanceRsvp[event.id] ?? {};
     const price = Math.round((venues.find((item) => item.id === event.venueId)?.pricePerHour ?? 0) * 100) / 100;
-    for (const [userId, status] of Object.entries(rows)) {
-      if (status !== "going" || price <= 0) continue;
-      const member = MEMBERS.find((item) => item.id === userId);
-      if (!member || member.feeExempt) continue;
-      demoAttendanceMoney.player[userId] = Math.round(((demoAttendanceMoney.player[userId] ?? 0) + price) * 100) / 100;
-      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - price) * 100) / 100;
-    }
-    delete demoAttendanceRsvp[event.id];
-    const chargeIndex = demoEventCharges.findIndex((line) => line.eventId === event.id);
-    if (chargeIndex >= 0) {
-      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - demoEventCharges[chargeIndex].amount) * 100) / 100;
-      demoEventCharges.splice(chargeIndex, 1);
-    }
-    setDemoPlayerDelta({ ...demoAttendanceMoney.player });
-    setDemoTeamDelta(demoAttendanceMoney.team);
-    setDemoCharges(demoEventCharges.slice());
+    updateDemoSession((current) => {
+      const rows = current.rsvp[event.id] ?? {};
+      const player = { ...current.player };
+      let team = current.team;
+      for (const [userId, status] of Object.entries(rows)) {
+        if (status !== "going" || price <= 0) continue;
+        const member = MEMBERS.find((item) => item.id === userId);
+        if (!member || member.feeExempt) continue;
+        player[userId] = Math.round(((player[userId] ?? 0) + price) * 100) / 100;
+        team = Math.round((team - price) * 100) / 100;
+      }
+      const rsvpRows = { ...current.rsvp };
+      delete rsvpRows[event.id];
+      const charge = current.charges.find((line) => line.eventId === event.id);
+      const charges = charge ? current.charges.filter((line) => line.eventId !== event.id) : current.charges;
+      if (charge) team = Math.round((team - charge.amount) * 100) / 100;
+      return { ...current, player, team, rsvp: rsvpRows, charges };
+    });
     setRsvp((current) => {
       const next = { ...current };
       delete next[event.id];
@@ -594,13 +606,16 @@ export function TeamDashboard({
     if (savingEvent) return;
     if (basePath === "/demo" || !ownedTeam?.id) {
       refundDemoEvent(event);
-      const added = demoAddedEvents.findIndex((item) => item.id === event.id);
-      if (added >= 0) demoAddedEvents.splice(added, 1);
-      if (!demoHiddenEventIds.includes(event.id)) demoHiddenEventIds.push(event.id);
-      delete demoEventEdits[event.id];
-      setDemoEvents(demoAddedEvents.slice());
-      setHiddenEventIds(demoHiddenEventIds.slice());
-      setEventEdits({ ...demoEventEdits });
+      updateDemoSession((current) => {
+        const edits = { ...current.edits };
+        delete edits[event.id];
+        return {
+          ...current,
+          events: current.events.filter((item) => item.id !== event.id),
+          hidden: current.hidden.includes(event.id) ? current.hidden : [...current.hidden, event.id],
+          edits,
+        };
+      });
       setDeleteTarget(null);
       showFeedback({ message: t("event.delete.saved"), variant: "success" });
       router.push(basePath);
@@ -674,12 +689,6 @@ export function TeamDashboard({
 
   useEffect(() => {
     if (!openEventId || lineup) return;
-    const event = calendarEvents.find((item) => item.id === openEventId);
-    if (!event) return;
-    const date = parseIsoDate(event.date);
-    setYear(date.getFullYear());
-    setMonth(date.getMonth());
-    setSelectedIso(event.date);
     const timer = window.setTimeout(() => {
       document.getElementById("event-details")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 0);
@@ -732,42 +741,18 @@ export function TeamDashboard({
   }
 
   const now = useNow();
+  const openEventDate = openEventId && !lineup ? (calendarEvents.find((item) => item.id === openEventId)?.date ?? null) : null;
+  const [trackedEventDate, setTrackedEventDate] = useState<string | null>(null);
+  if (openEventDate && openEventDate !== trackedEventDate) {
+    setTrackedEventDate(openEventDate);
+    const date = parseIsoDate(openEventDate);
+    setYear(date.getFullYear());
+    setMonth(date.getMonth());
+    setSelectedIso(openEventDate);
+  }
   useEffect(() => {
     if (basePath !== "/demo") return;
-    let changed = false;
-    for (const event of calendarEvents) {
-      const cost = event.type === "game" && event.expense != null ? Math.round(event.expense * 100) / 100 : 0;
-      const existing = demoEventCharges.find((line) => line.eventId === event.id);
-      if (!eventHasEnded(event, now) || cost <= 0) {
-        if (!existing) continue;
-        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - existing.amount) * 100) / 100;
-        demoEventCharges.splice(demoEventCharges.indexOf(existing), 1);
-        changed = true;
-        continue;
-      }
-      if (existing) {
-        if (existing.amount === -cost && existing.eventDate === event.date && existing.eventType === event.type) continue;
-        demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - existing.amount - cost) * 100) / 100;
-        existing.amount = -cost;
-        existing.eventDate = event.date;
-        existing.eventType = event.type;
-        changed = true;
-        continue;
-      }
-      demoEventCharges.push({
-        id: `charge-${event.id}`,
-        amount: -cost,
-        at: new Date().toISOString(),
-        eventId: event.id,
-        eventDate: event.date,
-        eventType: event.type,
-      });
-      demoAttendanceMoney.team = Math.round((demoAttendanceMoney.team - cost) * 100) / 100;
-      changed = true;
-    }
-    if (!changed) return;
-    setDemoCharges(demoEventCharges.slice());
-    setDemoTeamDelta(demoAttendanceMoney.team);
+    settleDemoCharges(calendarEvents, now);
   }, [basePath, calendarEvents, now]);
   const voteTraining = activeTeam?.trainingVotingHours ?? brand.trainingVotingHours;
   const voteGame = activeTeam?.gameVotingHours ?? brand.gameVotingHours;
@@ -835,7 +820,7 @@ export function TeamDashboard({
             {sidebarCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
           </button>
           <span className={`min-w-0 items-center gap-2 whitespace-nowrap ${sidebarCollapsed ? "sr-only" : "flex"}`}>
-            {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-7 w-auto shrink-0" /> : null}
+            {brand.logoUrl ? <ContentImage src={brand.logoUrl} className="h-7 w-auto shrink-0" /> : null}
             <p className="truncate text-base font-semibold tracking-wide">{brand.name}</p>
           </span>
         </div>

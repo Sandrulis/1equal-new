@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import type { Member, Subteam } from "@/app/lib/demo-data";
@@ -50,12 +50,19 @@ export function MemberEditDialog({
     playerUrl.trim() !== (member.ehl?.sourceUrl ?? "") ||
     feeExempt !== startFee ||
     !sameIds(selectedIds, startIds);
+  const fillFromLinkRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    fillFromLinkRef.current = () => {
+      void fillFromLink();
+    };
+  });
 
   useEffect(() => {
     const raw = playerUrl.trim();
     if (!remote || !parseEhlPlayerUrl(raw) || raw === (member.ehl?.sourceUrl ?? "")) return;
     const handle = window.setTimeout(() => {
-      void fillFromLink();
+      fillFromLinkRef.current();
     }, 500);
     return () => window.clearTimeout(handle);
   }, [playerUrl, remote, member.ehl?.sourceUrl]);

@@ -1,5 +1,15 @@
 export const INVITE_BANNER_COOKIE = "1equal-invite-banner";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const listeners = new Set<() => void>();
+
+export function subscribeInviteBanner(onChange: () => void) {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
+}
+
+function emitInviteBanner() {
+  for (const listener of listeners) listener();
+}
 
 function dismissedCodes(): Set<string> {
   if (typeof document === "undefined") return new Set();
@@ -31,4 +41,5 @@ export function clearInviteBannerDismissed(teamCode: string) {
 function writeCodes(codes: Set<string>) {
   const value = [...codes].slice(-30).join(",");
   document.cookie = [`${INVITE_BANNER_COOKIE}=${encodeURIComponent(value)}`, `Max-Age=${MAX_AGE_SECONDS}`, "Path=/", "SameSite=Lax"].join("; ");
+  emitInviteBanner();
 }

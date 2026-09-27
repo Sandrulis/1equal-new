@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -31,10 +31,16 @@ export function AdminTranslationsManager({
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(languages));
   const [deleteTarget, setDeleteTarget] = useState<SiteTranslationRow | null>(null);
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!open) setDraft(emptyDraft(languages));
-  }, [languages, open]);
+  const [seenClosed, setSeenClosed] = useState(open);
+  const [seenLanguages, setSeenLanguages] = useState(languages);
+  if (!open && (open !== seenClosed || languages !== seenLanguages)) {
+    setSeenClosed(open);
+    setSeenLanguages(languages);
+    setDraft(emptyDraft(languages));
+  } else if (open !== seenClosed || languages !== seenLanguages) {
+    setSeenClosed(open);
+    setSeenLanguages(languages);
+  }
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();

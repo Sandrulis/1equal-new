@@ -68,18 +68,16 @@ export function ColorField({
   const [open, setOpen] = useState(false);
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(value) ?? { h: 190, s: 0.82, v: 0.51 });
   const [hex, setHex] = useState(value);
+  const [trackedValue, setTrackedValue] = useState(value);
   const rootRef = useRef<HTMLDivElement>(null);
-  const lastHex = useRef(value.toLowerCase());
-
-  useEffect(() => {
-    const next = value.toLowerCase();
-    if (next === lastHex.current) return;
+  if (value !== trackedValue) {
+    setTrackedValue(value);
     const parsed = hexToHsv(value);
-    if (!parsed) return;
-    setHsv(parsed);
-    setHex(next);
-    lastHex.current = next;
-  }, [value]);
+    if (parsed) {
+      setHsv(parsed);
+      setHex(value.toLowerCase());
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +92,7 @@ export function ColorField({
     const color = hsvToHex(next);
     setHsv(next);
     setHex(color);
-    lastHex.current = color;
+    setTrackedValue(color);
     onChange(color);
   }
 
@@ -105,7 +103,7 @@ export function ColorField({
     if (!parsed) return;
     const color = hsvToHex(parsed);
     setHsv(parsed);
-    lastHex.current = color;
+    setTrackedValue(color);
     onChange(color);
   }
 

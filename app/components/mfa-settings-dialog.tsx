@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { OtpCodeInput } from "@/app/components/otp-code-input";
@@ -26,7 +27,9 @@ export function MfaSettingsDialog({ onClose }: { onClose: () => void }) {
   const [otpNonce, setOtpNonce] = useState(0);
   const factorIdRef = useRef<string | null>(null);
   const verifyingRef = useRef(false);
-  factorIdRef.current = factorId;
+  useEffect(() => {
+    factorIdRef.current = factorId;
+  }, [factorId]);
 
   useEffect(() => {
     void (async () => {
@@ -109,7 +112,7 @@ export function MfaSettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <AdminDialog open closeButton title={t("auth.mfa.title")} lead={t("auth.mfa.subtitle")} onClose={onClose}>
       <div className="space-y-4">
-        {image ? <img src={image} alt={t("auth.mfa.qr_alt")} className="h-40 w-40" /> : null}
+        {image ? <ContentImage src={image} alt={t("auth.mfa.qr_alt")} className="h-40 w-40" /> : null}
         {secret ? (
           <p className="text-sm text-zinc-600">
             {t("auth.mfa.secret")}: <code className="font-mono text-xs">{secret}</code>

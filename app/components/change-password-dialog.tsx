@@ -4,23 +4,20 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { changePassword } from "@/app/lib/auth/actions";
+import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
 export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pending, setPending] = useState(false);
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const canSave = !pending && currentPassword.length > 0 && password.length >= 8 && password === confirmPassword && password !== currentPassword;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

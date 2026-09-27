@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -26,13 +26,14 @@ export function AdminModulesPage({ initialModules }: { initialModules: FrontendM
   const { showFeedback } = useFeedbackToast();
   const router = useRouter();
   const [modules, setModules] = useState(() => sortModules(initialModules));
+  const [seenModules, setSeenModules] = useState(initialModules);
   const [moduleKey, setModuleKey] = useState("");
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FrontendModule | null>(null);
-
-  useEffect(() => {
+  if (initialModules !== seenModules) {
+    setSeenModules(initialModules);
     setModules(sortModules(initialModules));
-  }, [initialModules]);
+  }
 
   async function create(event: FormEvent) {
     event.preventDefault();

@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   DENIED_COOKIE_CONSENT,
   GRANTED_COOKIE_CONSENT,
   OPTIONAL_COOKIE_CATEGORIES,
-  readCookieConsent,
+  getConsentSnapshot,
+  subscribeConsent,
   writeCookieConsent,
   type CookieConsentSelection,
   type CookieConsentState,
   type OptionalCookieCategory,
 } from "@/app/lib/cookie-consent";
+import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -42,17 +44,13 @@ export function useCookieConsent(): CookieConsentValue {
 }
 
 export function CookieConsentProvider({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
-  const [consent, setConsent] = useState<CookieConsentState | null>(null);
+  const stored = useSyncExternalStore<CookieConsentState | null | undefined>(subscribeConsent, getConsentSnapshot, () => undefined);
+  const ready = stored !== undefined;
+  const consent = stored ?? null;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    setConsent(readCookieConsent());
-    setReady(true);
-  }, []);
-
   const saveConsent = useCallback((selection: CookieConsentSelection) => {
-    setConsent(writeCookieConsent(selection));
+    writeCookieConsent(selection);
     setIsSettingsOpen(false);
   }, []);
 
@@ -79,11 +77,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
 
 function CookieConsentUi() {
   const { consent, isSettingsOpen } = useCookieConsent();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsClient();
 
   if (!mounted) return null;
   if (isSettingsOpen) return createPortal(<CookieSettings />, document.body);

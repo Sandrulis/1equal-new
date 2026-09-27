@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -94,14 +94,16 @@ function IntegrationCard({
   const { t } = useLanguage();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
+  const statusKey = `${status.key}:${status.clientId}:${status.replyTo}:${status.configured}:${status.hasSecret}:${status.enabled}`;
+  const [seenStatus, setSeenStatus] = useState(statusKey);
   const [expanded, setExpanded] = useState(status.configured);
   const [draft, setDraft] = useState<Draft>({ clientId: status.clientId, secret: "", replyTo: status.replyTo });
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
+  if (statusKey !== seenStatus) {
+    setSeenStatus(statusKey);
     setDraft({ clientId: status.clientId, secret: "", replyTo: status.replyTo });
     setExpanded(status.configured);
-  }, [status.clientId, status.replyTo, status.configured, status.hasSecret, status.enabled, status.key]);
+  }
 
   const dirty = draft.clientId.trim() !== status.clientId || draft.replyTo.trim() !== status.replyTo || draft.secret.trim().length > 0;
 

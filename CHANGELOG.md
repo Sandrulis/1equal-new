@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.8
+
+- Lint iziet tīri. Formu stāvoklis vairs netiek rakstīts efekta iekšienē, un attēli iet caur Next attēlu komponenti
+
 ## v0.1.7
 
 - Reģistrācija sūta apstiprinājuma vēstuli. Aizmirsi paroli sūta saiti ar Cloudflare pārbaudi, un parole mainās tikai pēc saites. Izlogošanās aizved uz sākumlapu

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconX } from "@/app/components/icon-tip-button";
+import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
 export function AdminDialog({
@@ -24,11 +25,7 @@ export function AdminDialog({
 }) {
   const { t } = useLanguage();
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsClient();
 
   useEffect(() => {
     if (!open) return;

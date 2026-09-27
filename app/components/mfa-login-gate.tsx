@@ -27,8 +27,11 @@ export function MfaLoginGate() {
   const verifyingRef = useRef(false);
   const queuedCodeRef = useRef<string | null>(null);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const verifyCodeRef = useRef<(raw: string) => Promise<void>>(async () => {});
   const pending = verifyStatus !== "idle";
-  factorIdRef.current = factorId;
+  useEffect(() => {
+    factorIdRef.current = factorId;
+  }, [factorId]);
 
   function clearResultTimer() {
     if (!resultTimerRef.current) return;
@@ -49,8 +52,12 @@ export function MfaLoginGate() {
 
   useEffect(() => {
     if (!factorId || !queuedCodeRef.current) return;
-    void verifyCode(queuedCodeRef.current);
+    void verifyCodeRef.current(queuedCodeRef.current);
   }, [factorId]);
+
+  useEffect(() => {
+    verifyCodeRef.current = verifyCode;
+  });
 
   async function verifyCode(raw: string) {
     const digits = onlyDigits(raw);

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ContentImage } from "@/app/components/content-image";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { useLanguage } from "@/app/lib/language";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
@@ -14,7 +15,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <div className="flex min-w-0 items-center gap-8">
           <Link href="/" className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-lg font-semibold tracking-tight">
-            {brand.logoUrl ? <img src={brand.logoUrl} alt="" className="h-8 w-auto" /> : null}
+            {brand.logoUrl ? <ContentImage src={brand.logoUrl} className="h-8 w-auto" /> : null}
             {brand.name}
           </Link>
           <nav aria-label={t("nav.sections")} className="hidden items-center gap-6 text-sm text-muted md:flex">

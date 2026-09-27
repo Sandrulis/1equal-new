@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ContentImage } from "@/app/components/content-image";
 import { DisplayPreferencesFields } from "@/app/components/display-preferences";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -36,8 +37,9 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
   const [gameHours, setGameHours] = useState(String(initial.gameVotingHours));
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
+  const [seenInitial, setSeenInitial] = useState(initial);
+  if (initial !== seenInitial) {
+    setSeenInitial(initial);
     setName(initial.name);
     setLogoFile(null);
     setFaviconFile(null);
@@ -48,7 +50,7 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
     setTrainingHours(String(initial.trainingVotingHours));
     setGameHours(String(initial.gameVotingHours));
     setContactEmail(initial.contactEmail);
-  }, [initial]);
+  }
 
   const displayDirty = !displaySettingsEqual(
     {
@@ -196,18 +198,12 @@ function ImageField({
 }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
-  const [preview, setPreview] = useState<string | null>(null);
-  const [over, setOver] = useState(false);
-
+  const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    if (!preview) return;
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
+  const [over, setOver] = useState(false);
 
   const shown = preview ?? currentUrl;
 
@@ -245,7 +241,7 @@ function ImageField({
         }}
         className={`mt-3 flex h-24 items-center justify-center rounded-lg px-3 text-center ${over ? "bg-train-soft ring-2 ring-train" : "bg-paper ring-1 ring-line"}`}
       >
-        {shown ? <img src={shown} alt="" className="max-h-16 max-w-full object-contain" /> : <span className="text-sm text-muted">{dropHint}</span>}
+        {shown ? <ContentImage src={shown} className="max-h-16 max-w-full object-contain" /> : <span className="text-sm text-muted">{dropHint}</span>}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <label className="cursor-pointer rounded-lg bg-paper px-3 py-2 text-sm ring-1 ring-line hover:bg-ice">

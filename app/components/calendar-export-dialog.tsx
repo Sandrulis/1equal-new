@@ -14,7 +14,9 @@ export function CalendarExportDialog({ onClose }: { onClose: () => void }) {
   const [pending, setPending] = useState(true);
   const [renewing, setRenewing] = useState(false);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     let active = true;

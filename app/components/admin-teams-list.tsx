@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
@@ -233,7 +234,7 @@ export function AdminTeamsList({
               {players.map((player) => (
                 <li key={player.userId} className="flex items-center gap-3 py-3">
                   {player.photoUrl ? (
-                    <img src={player.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
+                    <ContentImage src={player.photoUrl} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
                   ) : (
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">
                       {player.name.slice(0, 1).toUpperCase()}

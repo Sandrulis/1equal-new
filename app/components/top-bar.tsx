@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ContentImage } from "@/app/components/content-image";
 import { AccountSettingsDialog } from "@/app/components/account-settings-dialog";
 import { CalendarExportDialog } from "@/app/components/calendar-export-dialog";
 import { MfaSettingsDialog } from "@/app/components/mfa-settings-dialog";
@@ -191,7 +192,7 @@ function UserMenu({
         className="inline-flex items-center gap-2 rounded-lg hover:bg-ice min-[600px]:py-1 min-[600px]:pr-2 min-[600px]:pl-1"
       >
         {photoUrl ? (
-          <img src={photoUrl} alt="" className="h-9 w-9 rounded-lg bg-ice object-contain object-center" />
+          <ContentImage src={photoUrl} className="h-9 w-9 rounded-lg bg-ice object-contain object-center" />
         ) : (
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(name)}</span>
         )}

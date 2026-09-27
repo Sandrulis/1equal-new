@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { DisplayPreferencesFields } from "@/app/components/display-preferences";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -8,7 +8,9 @@ import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { updateProfile } from "@/app/lib/auth/actions";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
+import { ContentImage } from "@/app/components/content-image";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
 export function AccountSettingsDialog({
@@ -29,7 +31,7 @@ export function AccountSettingsDialog({
   const brand = useSiteBrand();
   const titleId = useId();
   const savedPlayer = teamPlayer(account, teamCode);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
   const [playerUrl, setPlayerUrl] = useState(savedPlayer?.sourceUrl ?? "");
@@ -39,10 +41,6 @@ export function AccountSettingsDialog({
   const hasTeam = Boolean(teamCode);
   const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display);
   const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && !pending;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -133,7 +131,7 @@ function PlayerSummary({ player }: { player: EhlPlayerProfile }) {
   const bits = [player.name, player.number ? `nr. ${player.number}` : "", player.position, player.team].filter(Boolean);
   return (
     <span className="flex items-center gap-2 font-normal text-ink">
-      {player.photoUrl ? <img src={player.photoUrl} alt="" className="h-10 w-10 rounded-lg bg-ice object-contain object-center" /> : null}
+      {player.photoUrl ? <ContentImage src={player.photoUrl} className="h-10 w-10 rounded-lg bg-ice object-contain object-center" /> : null}
       {bits.join(", ")}
     </span>
   );

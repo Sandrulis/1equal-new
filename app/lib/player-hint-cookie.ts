@@ -1,5 +1,15 @@
 export const PLAYER_HINT_COOKIE = "1equal-player-hint";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const listeners = new Set<() => void>();
+
+export function subscribePlayerHint(onChange: () => void) {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
+}
+
+function emitPlayerHint() {
+  for (const listener of listeners) listener();
+}
 
 function dismissedCodes(): Set<string> {
   if (typeof document === "undefined") return new Set();
@@ -23,4 +33,5 @@ export function writePlayerHintDismissed(teamCode: string) {
   codes.add(teamCode);
   const value = [...codes].slice(-30).join(",");
   document.cookie = [`${PLAYER_HINT_COOKIE}=${encodeURIComponent(value)}`, `Max-Age=${MAX_AGE_SECONDS}`, "Path=/", "SameSite=Lax"].join("; ");
+  emitPlayerHint();
 }

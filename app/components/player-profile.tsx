@@ -1,5 +1,6 @@
 "use client";
 
+import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
@@ -38,7 +39,7 @@ export function PlayerProfile({ member, subteams, finance = true }: { member: Me
       <section className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
         <div className="flex items-start gap-4">
           {member.photoUrl ? (
-            <img src={member.photoUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-ice object-contain object-center" />
+            <ContentImage src={member.photoUrl} className="h-16 w-16 shrink-0 rounded-lg bg-ice object-contain object-center" />
           ) : (
             <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-navy text-xl font-semibold text-white">{initials(member.name)}</span>
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconTipButton, IconX } from "@/app/components/icon-tip-button";
@@ -13,7 +13,7 @@ import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
-import { readPlayerHintDismissed, writePlayerHintDismissed } from "@/app/lib/player-hint-cookie";
+import { readPlayerHintDismissed, subscribePlayerHint, writePlayerHintDismissed } from "@/app/lib/player-hint-cookie";
 
 const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
   invalid: "team.link.invalid",
@@ -160,11 +160,7 @@ export function TeamSwitcher({
 
 export function PlayerLinkHint({ teamCode, onOpen }: { teamCode: string; onOpen: () => void }) {
   const { t } = useLanguage();
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    setVisible(!readPlayerHintDismissed(teamCode));
-  }, [teamCode]);
+  const visible = useSyncExternalStore(subscribePlayerHint, () => !readPlayerHintDismissed(teamCode), () => false);
 
   if (!visible) return null;
 
@@ -181,7 +177,6 @@ export function PlayerLinkHint({ teamCode, onOpen }: { teamCode: string; onOpen:
         aria-label={t("event.close")}
         onClick={() => {
           writePlayerHintDismissed(teamCode);
-          setVisible(false);
         }}
         className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-paper hover:text-ink"
       >
@@ -216,8 +211,10 @@ function CreateTeamDialog({
   const trainingValue = votingHours(trainingHours);
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
-
-  useEffect(() => {
+  const closedKey = `${open ? 1 : 0}|${brand.trainingVotingHours}|${brand.gameVotingHours}`;
+  const [seenClosed, setSeenClosed] = useState(closedKey);
+  if (closedKey !== seenClosed) {
+    setSeenClosed(closedKey);
     if (!open) {
       setName("");
       setLink("");
@@ -226,7 +223,7 @@ function CreateTeamDialog({
       setGameHours(String(brand.gameVotingHours));
       setMismatch(null);
     }
-  }, [open, brand.trainingVotingHours, brand.gameVotingHours]);
+  }
 
   function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;

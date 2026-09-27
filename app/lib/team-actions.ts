@@ -453,7 +453,7 @@ async function applyEventSettlement(
 ): Promise<number | null> {
   const team = await client.from("teams").select("balance").eq("id", teamId).maybeSingle();
   if (team.error || !team.data) return null;
-  let balance = roundMoney(Number(team.data.balance ?? 0));
+  const balance = roundMoney(Number(team.data.balance ?? 0));
   const expense = event.type === "game" && event.expense != null ? roundMoney(event.expense) : 0;
   const ended = eventHasEnded(event);
   const line = await client.from("team_ledger").select("id, amount").eq("event_id", event.id).maybeSingle();

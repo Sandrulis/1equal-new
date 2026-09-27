@@ -35,11 +35,15 @@ export function OtpCodeInput({
   const refs = useRef<Array<HTMLInputElement | null>>([]);
   const digits = onlyDigits(value);
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  const digitsRef = useRef(digits);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    digitsRef.current = digits;
+  });
 
   useEffect(() => {
     if (!autoFocus || disabled) return;
-    const firstEmpty = Math.min(digits.length, OTP_LENGTH - 1);
+    const firstEmpty = Math.min(digitsRef.current.length, OTP_LENGTH - 1);
     const frame = requestAnimationFrame(() => {
       refs.current[firstEmpty]?.focus();
       refs.current[firstEmpty]?.select();

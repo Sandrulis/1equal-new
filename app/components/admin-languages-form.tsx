@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -21,16 +21,17 @@ export function AdminLanguagesForm({ initialLanguages }: { initialLanguages: Sit
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
   const [languages, setLanguages] = useState(initialLanguages);
+  const [seenLanguages, setSeenLanguages] = useState(initialLanguages);
   const [selectedCode, setSelectedCode] = useState("");
   const [makeDefault, setMakeDefault] = useState(false);
   const [editTarget, setEditTarget] = useState<SiteLanguage | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SiteLanguage | null>(null);
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
+  if (initialLanguages !== seenLanguages) {
+    setSeenLanguages(initialLanguages);
     setLanguages(initialLanguages);
-  }, [initialLanguages]);
+  }
 
   const existing = new Set(languages.map((language) => language.code));
   const options = LANGUAGE_OPTIONS.filter((option) => !existing.has(option.code));
