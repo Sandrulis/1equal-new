@@ -89,10 +89,12 @@ export function PlayerProfile({ member, subteams, finance = true }: { member: Me
   );
 }
 
-export function PlayerBalanceDialog({ member, onClose }: { member: Member; onClose: () => void }) {
+export function PlayerBalanceDialog({ member, reserved = 0, onClose }: { member: Member; reserved?: number; onClose: () => void }) {
   const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
   return (
     <AdminDialog open title={t("player.log")} onClose={onClose} wide closeButton>
+      {reserved > 0 ? <p className="px-4 text-sm font-medium text-train sm:px-5">{t("finance.reserved", { amount: formatMoney(reserved) })}</p> : null}
       <PlayerBalanceLog member={member} />
     </AdminDialog>
   );

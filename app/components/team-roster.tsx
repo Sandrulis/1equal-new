@@ -1,20 +1,24 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
+import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { TeamMark } from "@/app/components/team-mark";
 import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo-data";
-import { adjustMemberBalance, removeOwnedMember, updateOwnedTeam } from "@/app/lib/team-actions";
+import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
+import { SportField } from "@/app/components/sport-switch";
 import { useCurrencySymbol, useFormatMoney } from "@/app/components/currency-provider";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { votingHours } from "@/app/lib/team-defaults";
+import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
@@ -55,6 +59,8 @@ export function TeamRoster({
   trainingVotingHours = 24,
   gameVotingHours = 72,
   currency = null,
+  sportId = null,
+  sports = [],
   onTeamSaved,
   subteams,
   memberId,
@@ -65,6 +71,7 @@ export function TeamRoster({
   finance = true,
   persistedBalance = 0,
   persistedEntries = [],
+  reservedTeam = 0,
 }: {
   teamName: string;
   inviteCode: string;
@@ -77,7 +84,9 @@ export function TeamRoster({
   trainingVotingHours?: number;
   gameVotingHours?: number;
   currency?: string | null;
-  onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) => void;
+  sportId?: string | null;
+  sports?: Sport[];
+  onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string }) => void;
   subteams?: Subteam[];
   memberId: string | null;
   onOpenMember: (id: string) => void;
@@ -87,6 +96,7 @@ export function TeamRoster({
   finance?: boolean;
   persistedBalance?: number;
   persistedEntries?: TeamEntry[];
+  reservedTeam?: number;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -201,6 +211,7 @@ export function TeamRoster({
             <button type="button" onClick={() => setStatementOpen(true)} className="rounded-lg px-2 py-1 text-right hover:bg-paper">
               <span className="block text-xs text-muted">{t("roster.balance.team")}</span>
               <span className={`block text-lg font-semibold tabular-nums ${teamBalance < 0 ? "text-game" : "text-ink"}`}>{formatMoney(teamBalance)}</span>
+              {reservedTeam > 0 ? <span className="block text-xs text-muted">{t("finance.reserved.team", { amount: formatMoney(reservedTeam) })}</span> : null}
             </button>
             {canAdjust ? (
               <button type="button" onClick={() => setBalancing(true)} className="shrink-0 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy/90">
@@ -338,6 +349,7 @@ export function TeamRoster({
           member={editing}
           teamId={teamId}
           remote={Boolean(teamId)}
+          self={Boolean(accountId) && accountId === editing.id}
           subteams={groupList}
           onClose={() => setEditing(null)}
           onSaved={(member, teamCode) => {
@@ -354,15 +366,18 @@ export function TeamRoster({
       {teamId ? (
         <TeamSettingsDialog
           open={settingsOpen}
+          teamId={teamId}
           name={teamName}
           sourceUrl={sourceUrl}
           logoUrl={logoUrl}
           currency={currency}
+          sportId={sportId}
+          sports={sports}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
           onClose={() => setSettingsOpen(false)}
           onSave={async (next) => {
-            const result = await updateOwnedTeam({ teamId, ...next });
+            const result = await updateOwnedTeam({ teamId, ...next, sportId: next.sportId });
             if (!result.ok) {
               showFeedback({ message: t(result.error), variant: "error" });
               return false;
@@ -386,7 +401,7 @@ export function TeamRoster({
           showFeedback({ message: t("roster.balance.saved"), variant: "success" });
         }}
       />
-      <TeamStatementDialog open={statementOpen} entries={statementEntries} onClose={() => setStatementOpen(false)} />
+      <TeamStatementDialog open={statementOpen} entries={statementEntries} reservedTeam={reservedTeam} onClose={() => setStatementOpen(false)} />
       <BalanceDialog
         open={adjusting !== null}
         title={t("roster.balance.adjust")}
@@ -442,7 +457,7 @@ function signedMoney(amount: number, format: (value: number) => string): string 
   return amount > 0 ? `+${format(amount)}` : format(amount);
 }
 
-function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entries: TeamEntry[]; onClose: () => void }) {
+function TeamStatementDialog({ open, entries, reservedTeam = 0, onClose }: { open: boolean; entries: TeamEntry[]; reservedTeam?: number; onClose: () => void }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
   const { formatDateTime } = useDisplayFormat();
@@ -450,6 +465,7 @@ function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entrie
 
   return (
     <AdminDialog open={open} title={t("roster.balance.statement")} onClose={onClose}>
+      {reservedTeam > 0 ? <p className="mb-3 text-sm text-muted">{t("finance.reserved.team", { amount: formatMoney(reservedTeam) })}</p> : null}
       {entries.length === 0 ? (
         <p className="text-sm text-muted">{t("roster.balance.statement.empty")}</p>
       ) : (
@@ -490,24 +506,30 @@ const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
 
 function TeamSettingsDialog({
   open,
+  teamId,
   name,
   sourceUrl,
   logoUrl,
   currency,
   trainingHours,
   gameHours,
+  sportId,
+  sports,
   onClose,
   onSave,
 }: {
   open: boolean;
+  teamId: string;
   name: string;
   sourceUrl: string | null;
   logoUrl: string | null;
   currency: string | null;
   trainingHours: number;
   gameHours: number;
+  sportId: string | null;
+  sports: Sport[];
   onClose: () => void;
-  onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) => Promise<boolean>;
+  onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId: string | null }) => Promise<boolean>;
 }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -517,9 +539,12 @@ function TeamSettingsDialog({
   const [draftCurrency, setDraftCurrency] = useState(currency);
   const [training, setTraining] = useState(String(trainingHours));
   const [game, setGame] = useState(String(gameHours));
+  const [draftSport, setDraftSport] = useState(sportId ?? "");
   const [busy, setBusy] = useState<"lookup" | "save" | null>(null);
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const avatarRef = useRef<AvatarCropHandle>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
-  const settingsKey = `${open}|${name}|${sourceUrl ?? ""}|${currency ?? ""}|${trainingHours}|${gameHours}`;
+  const settingsKey = `${open}|${name}|${sourceUrl ?? ""}|${currency ?? ""}|${trainingHours}|${gameHours}|${sportId ?? ""}`;
   const [seenSettings, setSeenSettings] = useState(settingsKey);
   if (settingsKey !== seenSettings) {
     setSeenSettings(settingsKey);
@@ -529,7 +554,9 @@ function TeamSettingsDialog({
       setDraftCurrency(currency);
       setTraining(String(trainingHours));
       setGame(String(gameHours));
+      setDraftSport(sportId ?? "");
       setBusy(null);
+      setAvatarDirty(false);
       setMismatch(null);
     }
   }
@@ -538,7 +565,29 @@ function TeamSettingsDialog({
   const gameValue = votingHours(game);
   const hoursOk = trainingValue != null && gameValue != null;
   const linkValue = draftLink.trim();
-  const dirty = draftName.trim() !== name || linkValue !== (sourceUrl ?? "") || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours;
+  const showAvatar = linkValue === "";
+  const pickedSport = chosenSportId(sports, draftSport);
+  const dirty = draftName.trim() !== name || linkValue !== (sourceUrl ?? "") || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours || pickedSport !== (sportId ?? null) || (showAvatar && avatarDirty);
+
+  async function resolveLogo(nextSource: string | null, ehlLogo: string | null): Promise<string | null | undefined> {
+    if (nextSource) return ehlLogo;
+    const crop = await avatarRef.current?.result();
+    if (!crop || !crop.changed) return isOwnAvatarUrl(logoUrl) ? logoUrl : null;
+    if (crop.remove) return null;
+    if (!crop.file) {
+      showFeedback({ message: t("avatar.error.file"), variant: "error" });
+      return undefined;
+    }
+    const body = new FormData();
+    body.set("teamId", teamId);
+    body.set("file", crop.file);
+    const uploaded = await saveTeamAvatar(body);
+    if (!uploaded.ok) {
+      showFeedback({ message: t(uploaded.error), variant: "error" });
+      return undefined;
+    }
+    return uploaded.url;
+  }
 
   async function persist(nextSource: string | null, nextLogo: string | null) {
     if (trainingValue == null || gameValue == null) return;
@@ -550,6 +599,7 @@ function TeamSettingsDialog({
       gameVotingHours: gameValue,
       sourceUrl: nextSource,
       logoUrl: nextLogo,
+      sportId: pickedSport,
     });
     setBusy(null);
     if (saved) onClose();
@@ -559,7 +609,9 @@ function TeamSettingsDialog({
     event.preventDefault();
     if (!draftName.trim() || !hoursOk || !dirty || busy) return;
     if (!linkValue) {
-      await persist(null, null);
+      const nextLogo = await resolveLogo(null, null);
+      if (nextLogo === undefined) return;
+      await persist(null, nextLogo);
       return;
     }
     if (linkValue === (sourceUrl ?? "")) {
@@ -593,7 +645,10 @@ function TeamSettingsDialog({
             <span className="ml-2 text-muted">{t("team.empty.link_optional")}</span>
             <input
               value={draftLink}
-              onChange={(event) => setDraftLink(event.target.value)}
+              onChange={(event) => {
+                setDraftLink(event.target.value);
+                if (event.target.value.trim()) setAvatarDirty(false);
+              }}
               placeholder={t("team.empty.link_placeholder")}
               inputMode="url"
               autoComplete="off"
@@ -602,6 +657,15 @@ function TeamSettingsDialog({
               className={fieldClass}
             />
           </label>
+          {showAvatar ? (
+            <AvatarCropField
+              ref={avatarRef}
+              existingUrl={isOwnAvatarUrl(logoUrl) ? logoUrl : null}
+              disabled={busy !== null}
+              onDirty={setAvatarDirty}
+            />
+          ) : null}
+          <SportField sports={sports} value={pickedSport ?? ""} onChange={setDraftSport} disabled={busy !== null} />
           <MoneyVotingFields
             idPrefix="team-settings"
             currency={draftCurrency}

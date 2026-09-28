@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { redirect } from "next/navigation";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
@@ -347,6 +348,40 @@ async function loadEhlPlayer(raw: string): Promise<{ profile: EhlPlayerProfile }
   } catch {
     return { error: "user.player.failed" };
   }
+}
+
+export async function saveUserAvatar(formData: FormData): Promise<{ ok: true; url: string | null } | { ok: false; error: MessageKey }> {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return { ok: false, error: "auth.error.generic" };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "auth.error.config" };
+  const path = `users/${data.user.id}.jpg`;
+  const file = formData.get("file");
+  if (formData.get("remove") === "1") {
+    await removeAvatar(path);
+    const cleared = await admin.from("users").update({ avatar_url: null }).eq("id", data.user.id);
+    if (cleared.error) return { ok: false, error: "avatar.error.save" };
+    return { ok: true, url: null };
+  }
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "avatar.error.file" };
+  const uploaded = await uploadAvatarJpeg(file, path, data.user.id);
+  if ("error" in uploaded) return { ok: false, error: uploaded.error };
+  const saved = await admin.from("users").update({ avatar_url: uploaded.url }).eq("id", data.user.id);
+  if (saved.error) return { ok: false, error: "avatar.error.save" };
+  return { ok: true, url: uploaded.url };
+}
+
+export async function saveEventEmails(enabled: boolean): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
+  if (typeof enabled !== "boolean") return { ok: false, error: "auth.error.generic" };
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return { ok: false, error: "auth.error.generic" };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "auth.error.config" };
+  const saved = await admin.from("users").update({ event_emails: enabled }).eq("id", data.user.id);
+  if (saved.error) return { ok: false, error: "auth.error.generic" };
+  return { ok: true };
 }
 
 export async function signOut() {

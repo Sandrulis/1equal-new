@@ -1,6 +1,6 @@
 {
   "name": "1equal-new",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "engines": {
     "node": ">=22"

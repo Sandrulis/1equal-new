@@ -5,6 +5,7 @@ import { ContentImage } from "@/app/components/content-image";
 import { AccountSettingsDialog } from "@/app/components/account-settings-dialog";
 import { CalendarExportDialog } from "@/app/components/calendar-export-dialog";
 import { MfaSettingsDialog } from "@/app/components/mfa-settings-dialog";
+import { NotificationsDialog } from "@/app/components/notifications-dialog";
 import { ChangePasswordDialog } from "@/app/components/change-password-dialog";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
 import { LanguageMenu } from "@/app/components/language-menu";
@@ -17,6 +18,7 @@ import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/pro
 import { CURRENT_USER_ID, MEMBERS, type Member } from "@/app/lib/demo-data";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import type { CreateTeamInput } from "@/app/lib/team-defaults";
+import type { Sport } from "@/app/lib/sports";
 import { useLanguage } from "@/app/lib/language";
 
 function initials(name: string): string {
@@ -44,7 +46,9 @@ export function TopBar({
   onOpenMenu,
   onOpenAdmin,
   balanceMember = null,
+  reservedBalance = 0,
   calendarIntegration = false,
+  sports = [],
 }: {
   onHome: () => void;
   account?: AccountProfile | null;
@@ -61,7 +65,9 @@ export function TopBar({
   onOpenMenu?: () => void;
   onOpenAdmin?: () => void;
   balanceMember?: Member | null;
+  reservedBalance?: number;
   calendarIntegration?: boolean;
+  sports?: Sport[];
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -69,10 +75,11 @@ export function TopBar({
   const [profile, setProfile] = useState(account);
   const name = profile ? accountName(profile) : demo.name;
 
-  const photoUrl = teamPlayer(profile, team?.code)?.photoUrl ?? null;
+  const linkedPhoto = teamPlayer(profile, team?.code)?.photoUrl ?? null;
+  const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
   const [balanceOpen, setBalanceOpen] = useState(false);
 
-  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "display">) {
+  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) {
     setProfile((current) => (current ? { ...current, ...next } : current));
     if (profile) onAccountChange?.({ ...profile, ...next });
   }
@@ -93,6 +100,7 @@ export function TopBar({
           onSelect={onSelectTeam ?? (() => onHome())}
           onUnwatch={onUnwatchTeam}
           onCreate={onCreateTeam ?? (() => undefined)}
+          sports={sports}
         />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -104,7 +112,8 @@ export function TopBar({
             onClick={() => setBalanceOpen(true)}
             className={`rounded-lg px-2 py-1 text-sm font-semibold tabular-nums hover:bg-ice ${balanceMember.balance < 0 ? "text-game" : balanceMember.balance > 0 ? "text-[#1b7a46]" : "text-muted"}`}
           >
-            {formatMoney(balanceMember.balance)}
+            <span className="block">{formatMoney(balanceMember.balance)}</span>
+            {reservedBalance > 0 ? <span className="block text-xs font-medium text-muted">{t("finance.reserved", { amount: formatMoney(reservedBalance) })}</span> : null}
           </button>
         ) : null}
         <UserMenu
@@ -129,7 +138,7 @@ export function TopBar({
           </button>
         ) : null}
       </div>
-      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} onClose={() => setBalanceOpen(false)} /> : null}
+      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
     </header>
   );
 }
@@ -154,7 +163,7 @@ function UserMenu({
   photoUrl: string | null;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "display">) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) => void;
   calendarIntegration?: boolean;
   onOpenFeedback?: (kind: FeedbackKind) => void;
   onOpenContact?: () => void;
@@ -163,6 +172,7 @@ function UserMenu({
   const [open, setOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [mfaOpen, setMfaOpen] = useState(false);
+  const [noticesOpen, setNoticesOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -217,6 +227,14 @@ function UserMenu({
               onClick={() => {
                 setOpen(false);
                 if (account) onSettingsOpenChange?.(true);
+              }}
+            />
+            <MenuItem
+              icon={<IconBell />}
+              label={t("user.notices")}
+              onClick={() => {
+                setOpen(false);
+                if (account) setNoticesOpen(true);
               }}
             />
             <MenuItem
@@ -283,6 +301,13 @@ function UserMenu({
       ) : null}
       {passwordOpen && account ? <ChangePasswordDialog onClose={() => setPasswordOpen(false)} /> : null}
       {mfaOpen && account ? <MfaSettingsDialog onClose={() => setMfaOpen(false)} /> : null}
+      {noticesOpen && account ? (
+        <NotificationsDialog
+          enabled={account.eventEmails}
+          onClose={() => setNoticesOpen(false)}
+          onSaved={(eventEmails) => onSaved({ firstName: account.firstName, lastName: account.lastName, ehlPlayers: account.ehlPlayers, avatarUrl: account.avatarUrl, display: account.display, eventEmails })}
+        />
+      ) : null}
       {calendarOpen && account ? <CalendarExportDialog onClose={() => setCalendarOpen(false)} /> : null}
     </div>
   );
@@ -302,6 +327,15 @@ function IconKey() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <circle cx="8" cy="15" r="4" />
       <path d="M11 12l9-9M16 6l3 3M14 8l2 2" />
+    </svg>
+  );
+}
+
+function IconBell() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
     </svg>
   );
 }

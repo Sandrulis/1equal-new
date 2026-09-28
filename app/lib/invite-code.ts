@@ -11,6 +11,12 @@ export type TeamLedgerLine = {
   eventType: "game" | "training";
 };
 
+export type FinanceHold = {
+  eventId: string;
+  userId: string;
+  amount: number;
+};
+
 export type IssuedTeam = {
   id?: string;
   name: string;
@@ -30,6 +36,9 @@ export type IssuedTeam = {
   venues?: Venue[];
   events?: TeamEvent[];
   watching?: boolean;
+  financeReserve?: boolean;
+  reservations?: FinanceHold[];
+  sportId?: string | null;
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

@@ -48,7 +48,9 @@ export type CreateTeamInput = {
   name: string;
   sourceUrl: string | null;
   logoUrl: string | null;
+  avatarFile?: File | null;
   currency: string | null;
   trainingVotingHours: number;
   gameVotingHours: number;
+  sportId?: string | null;
 };

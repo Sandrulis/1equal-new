@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.12
+
+- Bez Entuziastu saites var izgriezt kvadrāta avataru lietotājam un komandai. Paziņojumos var izslēgt e-pastus par jauniem notikumiem
+- Admina cron slēdzis rezervē notikuma naudu līdz sākumam. Stundas saite to noņem cron-job.org
+- Sporta veidiem ir nosaukums katrā valodā un moduļi. Komandas slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens
+
 ## v0.1.11
 
 - Sākumlapas izvēlne ritina līdz sadaļai, un enkurs seko aktīvajai valodai

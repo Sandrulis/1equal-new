@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { DisplayPreferencesFields } from "@/app/components/display-preferences";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
-import { updateProfile } from "@/app/lib/auth/actions";
+import { saveUserAvatar, updateProfile } from "@/app/lib/auth/actions";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { ContentImage } from "@/app/components/content-image";
@@ -24,7 +25,7 @@ export function AccountSettingsDialog({
   teamCode?: string | null;
   teamName?: string | null;
   onClose: () => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "display">) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display">) => void;
 }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -36,15 +37,39 @@ export function AccountSettingsDialog({
   const [lastName, setLastName] = useState(account.lastName);
   const [playerUrl, setPlayerUrl] = useState(savedPlayer?.sourceUrl ?? "");
   const [display, setDisplay] = useState<UserDisplayPreferences>(account.display);
+  const [avatarDirty, setAvatarDirty] = useState(false);
   const [pending, setPending] = useState(false);
+  const avatarRef = useRef<AvatarCropHandle>(null);
   const savedUrl = savedPlayer?.sourceUrl ?? "";
   const hasTeam = Boolean(teamCode);
-  const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display);
+  const showAvatar = playerUrl.trim() === "";
+  const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display) || (showAvatar && avatarDirty);
   const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && !pending;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSave) return;
+    let avatarUrl = account.avatarUrl;
+    if (showAvatar) {
+      const crop = await avatarRef.current?.result();
+      if (crop?.changed) {
+        if (!crop.remove && !crop.file) {
+          showFeedback({ message: t("avatar.error.file"), variant: "error" });
+          return;
+        }
+        const body = new FormData();
+        if (crop.remove) body.set("remove", "1");
+        else if (crop.file) body.set("file", crop.file);
+        setPending(true);
+        const uploaded = await saveUserAvatar(body);
+        setPending(false);
+        if (!uploaded.ok) {
+          showFeedback({ message: t(uploaded.error), variant: "error" });
+          return;
+        }
+        avatarUrl = uploaded.url;
+      }
+    }
     setPending(true);
     const result = await updateProfile(new FormData(event.currentTarget));
     setPending(false);
@@ -61,6 +86,7 @@ export function AccountSettingsDialog({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       ehlPlayers,
+      avatarUrl,
       display: result.display ?? display,
     });
     showFeedback({ message: t("user.settings.saved"), variant: "success" });
@@ -103,13 +129,17 @@ export function AccountSettingsDialog({
               autoComplete="off"
               spellCheck={false}
               placeholder={t("user.settings.player_placeholder")}
-              onChange={(event) => setPlayerUrl(event.target.value)}
+              onChange={(event) => {
+                setPlayerUrl(event.target.value);
+                if (event.target.value.trim()) setAvatarDirty(false);
+              }}
               className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
             />
             <span className="font-normal text-muted">{t("user.settings.player_hint")}</span>
             {savedPlayer && playerUrl.trim() === savedUrl ? <PlayerSummary player={savedPlayer} /> : null}
           </label>
         ) : null}
+        {showAvatar ? <div className="mt-4"><AvatarCropField ref={avatarRef} existingUrl={account.avatarUrl} disabled={pending} onDirty={setAvatarDirty} /></div> : null}
         <div className="mt-6 border-t border-line pt-5">
           <DisplayPreferencesFields idPrefix="user-display" values={display} onChange={setDisplay} system={brand.display} allowSystemDefault />
         </div>

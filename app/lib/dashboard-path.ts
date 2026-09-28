@@ -2,7 +2,7 @@ import { catalogEvents } from "@/app/lib/demo-data";
 
 export type DashboardBase = "/dashboard" | "/demo";
 
-export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "languages", "translations", "email", "todo"] as const;
+export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "languages", "translations", "email", "todo", "cron", "sports"] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 

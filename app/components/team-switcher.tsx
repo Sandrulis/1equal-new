@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import { TeamMark } from "@/app/components/team-mark";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
+import { SportField } from "@/app/components/sport-switch";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
+import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { useLanguage } from "@/app/lib/language";
@@ -29,6 +32,7 @@ export function TeamSwitcher({
   onSelect,
   onCreate,
   onUnwatch,
+  sports = [],
 }: {
   team: Pick<IssuedTeam, "name" | "code" | "logoUrl"> | null;
   teams: IssuedTeam[];
@@ -37,6 +41,7 @@ export function TeamSwitcher({
   onSelect: (code: string) => void;
   onCreate: (input: CreateTeamInput) => void;
   onUnwatch?: (teamId: string) => void | Promise<void>;
+  sports?: Sport[];
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -148,6 +153,7 @@ export function TeamSwitcher({
       ) : null}
       <CreateTeamDialog
         open={creating}
+        sports={sports}
         onClose={() => setCreating(false)}
         onCreate={(input) => {
           setCreating(false);
@@ -190,10 +196,12 @@ export function PlayerLinkHint({ teamCode, onOpen }: { teamCode: string; onOpen:
 
 function CreateTeamDialog({
   open,
+  sports,
   onClose,
   onCreate,
 }: {
   open: boolean;
+  sports: Sport[];
   onClose: () => void;
   onCreate: (input: CreateTeamInput) => void;
 }) {
@@ -205,7 +213,9 @@ function CreateTeamDialog({
   const [currency, setCurrency] = useState<string | null>(null);
   const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
+  const [sportId, setSportId] = useState("");
   const [pending, setPending] = useState(false);
+  const avatarRef = useRef<AvatarCropHandle>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const trainingValue = votingHours(trainingHours);
@@ -225,16 +235,25 @@ function CreateTeamDialog({
     }
   }
 
-  function emit(sourceUrl: string | null, logoUrl: string | null) {
+  async function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;
-    onCreate({ name: name.trim(), sourceUrl, logoUrl, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+    let avatarFile: File | null = null;
+    if (!sourceUrl) {
+      const crop = await avatarRef.current?.result();
+      if (crop?.changed && !crop.remove && !crop.file) {
+        showFeedback({ message: t("avatar.error.file"), variant: "error" });
+        return;
+      }
+      avatarFile = crop?.file ?? null;
+    }
+    onCreate({ name: name.trim(), sourceUrl, logoUrl, avatarFile, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue, sportId: chosenSportId(sports, sportId) });
   }
 
   async function submit() {
     if (!nameReady || !hoursOk || pending) return;
     const source = link.trim();
     if (!source) {
-      emit(null, null);
+      await emit(null, null);
       return;
     }
     setPending(true);
@@ -248,7 +267,7 @@ function CreateTeamDialog({
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
       return;
     }
-    emit(result.url, result.logoUrl);
+    await emit(result.url, result.logoUrl);
   }
 
   return (
@@ -286,6 +305,8 @@ function CreateTeamDialog({
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
             />
           </label>
+          {link.trim() === "" ? <AvatarCropField ref={avatarRef} disabled={pending} /> : null}
+          <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
           <MoneyVotingFields
             idPrefix="create-team"
             currency={currency}
@@ -324,7 +345,7 @@ function CreateTeamDialog({
               const url = mismatch?.url ?? null;
               const logoUrl = mismatch?.logoUrl ?? null;
               setMismatch(null);
-              emit(url, logoUrl);
+              void emit(url, logoUrl);
             }}
             className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90"
           >

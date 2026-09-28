@@ -87,12 +87,12 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<
       userIds = userIds.filter((id) => allowed.has(id));
     }
     if (!userIds.length) return;
-    const people = await client.from("users").select("id, email, first_name, last_name, name").in("id", userIds);
+    const people = await client.from("users").select("id, email, first_name, last_name, name, event_emails").in("id", userIds);
     if (people.error || !people.data) return;
 
     await Promise.allSettled(
       people.data
-        .filter((person) => Boolean(person.email?.trim()))
+        .filter((person) => person.event_emails !== false && Boolean(person.email?.trim()))
         .map(async (person) => {
           const token = randomBytes(32).toString("hex");
           const tokenHash = createHash("sha256").update(token).digest("hex");

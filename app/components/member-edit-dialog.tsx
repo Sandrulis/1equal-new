@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { saveUserAvatar } from "@/app/lib/auth/actions";
 import type { Member, Subteam } from "@/app/lib/demo-data";
 import { parseEhlPlayerUrl } from "@/app/lib/ehl-player";
 import { useLanguage } from "@/app/lib/language";
@@ -20,6 +22,7 @@ export function MemberEditDialog({
   member,
   teamId,
   remote,
+  self = false,
   subteams,
   onClose,
   onSaved,
@@ -27,6 +30,7 @@ export function MemberEditDialog({
   member: Member;
   teamId: string | null;
   remote: boolean;
+  self?: boolean;
   subteams: Subteam[];
   onClose: () => void;
   onSaved: (member: Member, teamCode: string) => void;
@@ -42,14 +46,18 @@ export function MemberEditDialog({
   const [playerUrl, setPlayerUrl] = useState(member.ehl?.sourceUrl ?? "");
   const [selectedIds, setSelectedIds] = useState(startIds);
   const [feeExempt, setFeeExempt] = useState(startFee);
+  const [avatarDirty, setAvatarDirty] = useState(false);
   const [pending, setPending] = useState(false);
+  const avatarRef = useRef<AvatarCropHandle>(null);
+  const showAvatar = self && remote && playerUrl.trim() === "";
   const dirty =
     number.trim() !== startNumber ||
     position.trim() !== member.position.trim() ||
     phone.trim() !== member.phone.trim() ||
     playerUrl.trim() !== (member.ehl?.sourceUrl ?? "") ||
     feeExempt !== startFee ||
-    !sameIds(selectedIds, startIds);
+    !sameIds(selectedIds, startIds) ||
+    (showAvatar && avatarDirty);
   const fillFromLinkRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -85,6 +93,25 @@ export function MemberEditDialog({
     event.preventDefault();
     if (!dirty || pending) return;
     if (remote && teamId) {
+      if (showAvatar) {
+        const crop = await avatarRef.current?.result();
+        if (crop?.changed) {
+          if (!crop.remove && !crop.file) {
+            showFeedback({ message: t("avatar.error.file"), variant: "error" });
+            return;
+          }
+          const body = new FormData();
+          if (crop.remove) body.set("remove", "1");
+          else if (crop.file) body.set("file", crop.file);
+          setPending(true);
+          const uploaded = await saveUserAvatar(body);
+          setPending(false);
+          if (!uploaded.ok) {
+            showFeedback({ message: t(uploaded.error), variant: "error" });
+            return;
+          }
+        }
+      }
       setPending(true);
       const result = await saveMemberProfile({ teamId, userId: member.id, number, position, phone, playerUrl, subteamIds: selectedIds, feeExempt });
       setPending(false);
@@ -133,12 +160,16 @@ export function MemberEditDialog({
           <span className="text-muted">{t("user.settings.player")}</span>
           <input
             value={playerUrl}
-            onChange={(event) => setPlayerUrl(event.target.value)}
+            onChange={(event) => {
+              setPlayerUrl(event.target.value);
+              if (event.target.value.trim()) setAvatarDirty(false);
+            }}
             onBlur={() => void fillFromLink()}
             placeholder={t("user.settings.player_placeholder")}
             className={fieldClass}
           />
         </label>
+        {showAvatar ? <AvatarCropField ref={avatarRef} existingUrl={member.ehl?.photoUrl ? null : member.photoUrl} disabled={pending} onDirty={setAvatarDirty} /> : null}
         {subteams.length ? (
           <fieldset>
             <legend className="text-sm text-muted">{t("player.subteams")}</legend>

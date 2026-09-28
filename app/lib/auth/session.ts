@@ -22,7 +22,7 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
 
   const profile = await supabase
     .from("users")
-    .select("first_name, last_name, name, is_admin, ehl_player, week_start_day, date_format, date_separator, time_format, timezone")
+    .select("first_name, last_name, name, is_admin, ehl_player, avatar_url, event_emails, week_start_day, date_format, date_separator, time_format, timezone")
     .eq("id", user.id)
     .maybeSingle();
   const row = profile.data;
@@ -35,6 +35,8 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
       lastName: row.last_name || "",
       isAdmin: row.is_admin === true,
       ehlPlayers: readStoredEhlPlayers(row.ehl_player),
+      avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
+      eventEmails: row.event_emails !== false,
       display: readUserDisplayPreferences(row),
     };
   }
@@ -48,6 +50,8 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
     lastName: typeof meta.last_name === "string" ? meta.last_name : "",
     isAdmin: false,
     ehlPlayers: {},
+    avatarUrl: null,
+    eventEmails: true,
     display: EMPTY_USER_DISPLAY_PREFERENCES,
   };
 }

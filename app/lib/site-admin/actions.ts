@@ -5,10 +5,12 @@ import { refreshSitePublic } from "@/app/lib/cache-tags";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
 import { messages, type MessageKey } from "@/app/lib/messages";
-import { listAdminTodos } from "@/app/lib/site-admin/repository";
+import { listAdminTodos, listSports } from "@/app/lib/site-admin/repository";
+import { isSportIcon, type Sport } from "@/app/lib/sports";
 import { EMAIL_KINDS, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
 import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
+import { readFinanceCron, writeFinanceCron } from "@/app/lib/finance-cron";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const MAX_BYTES = 1_572_864;
@@ -498,4 +500,145 @@ export async function deleteSiteTranslation(key: string): Promise<ActionResult> 
   if (error) return { ok: false, error: "auth.error.generic" };
   refresh();
   return { ok: true };
+}
+
+export async function loadFinanceCron(): Promise<{ ok: true; enabled: boolean; url: string } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const settings = await readFinanceCron(gate.client);
+  if (!settings) return { ok: false, error: "auth.error.generic" };
+  return { ok: true, enabled: settings.enabled, url: settings.url };
+}
+
+export async function saveFinanceCron(enabled: boolean): Promise<ActionResult> {
+  if (typeof enabled !== "boolean") return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const saved = await writeFinanceCron(gate.client, enabled);
+  if (!saved) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true };
+}
+
+function sportWriteError(error: { message?: string; code?: string } | null): MessageKey {
+  if (error?.message?.includes("sports_need_one") || error?.code === "P0001") return "sports.error.last";
+  if (error?.code === "23503") return "sports.error.used";
+  return "auth.error.generic";
+}
+
+async function sportPayload(
+  client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
+  input: { names: Record<string, string>; icon: string; moduleKeys: string[] },
+): Promise<{ ok: true; names: Record<string, string>; icon: Sport["icon"]; moduleKeys: string[] } | { ok: false; error: MessageKey }> {
+  if (!isSportIcon(input.icon)) return { ok: false, error: "sports.error.icon" };
+  const languages = await client.from("site_languages").select("code, is_active");
+  if (languages.error || !languages.data) return { ok: false, error: "auth.error.generic" };
+  const names: Record<string, string> = {};
+  for (const language of languages.data as { code: string; is_active: boolean }[]) {
+    const value = (input.names[language.code] ?? "").trim().slice(0, 80);
+    if (language.is_active && !value) return { ok: false, error: "sports.error.name" };
+    if (value) names[language.code] = value;
+  }
+  if (Object.keys(names).length === 0) return { ok: false, error: "sports.error.name" };
+  const modules = await client.from("site_frontend_modules").select("module_key");
+  if (modules.error || !modules.data) return { ok: false, error: "auth.error.generic" };
+  const known = new Set((modules.data as { module_key: string }[]).map((row) => row.module_key));
+  const moduleKeys = [...new Set(input.moduleKeys.map((key) => key.trim()))].filter((key) => known.has(key));
+  return { ok: true, names, icon: input.icon, moduleKeys };
+}
+
+async function replaceSportLinks(
+  client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
+  sportId: string,
+  names: Record<string, string>,
+  moduleKeys: string[],
+): Promise<MessageKey | null> {
+  const clearedNames = await client.from("sport_names").delete().eq("sport_id", sportId);
+  if (clearedNames.error) return "auth.error.generic";
+  const savedNames = await client.from("sport_names").insert(Object.entries(names).map(([language_code, name]) => ({ sport_id: sportId, language_code, name })));
+  if (savedNames.error) return "auth.error.generic";
+  const clearedModules = await client.from("sport_modules").delete().eq("sport_id", sportId);
+  if (clearedModules.error) return "auth.error.generic";
+  if (moduleKeys.length === 0) return null;
+  const savedModules = await client.from("sport_modules").insert(moduleKeys.map((module_key) => ({ sport_id: sportId, module_key })));
+  return savedModules.error ? "auth.error.generic" : null;
+}
+
+export async function createSport(input: {
+  names: Record<string, string>;
+  icon: string;
+  moduleKeys: string[];
+  isActive: boolean;
+}): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const payload = await sportPayload(gate.client, input);
+  if (!payload.ok) return payload;
+  const existing = await gate.client.from("sports").select("sort_order").order("sort_order", { ascending: false }).limit(1);
+  const sortOrder = (existing.data?.[0]?.sort_order ?? 0) + 1;
+  const inserted = await gate.client.from("sports").insert({ icon: payload.icon, is_active: input.isActive !== false, sort_order: sortOrder }).select("id").single();
+  if (inserted.error || !inserted.data) return { ok: false, error: sportWriteError(inserted.error) };
+  const linked = await replaceSportLinks(gate.client, inserted.data.id, payload.names, payload.moduleKeys);
+  if (linked) return { ok: false, error: linked };
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+export async function updateSport(input: {
+  id: string;
+  names: Record<string, string>;
+  icon: string;
+  moduleKeys: string[];
+  isActive: boolean;
+}): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(input.id)) return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const payload = await sportPayload(gate.client, input);
+  if (!payload.ok) return payload;
+  if (input.isActive === false) {
+    const active = await gate.client.from("sports").select("id").eq("is_active", true);
+    const ids = (active.data ?? []).map((row) => row.id as string);
+    if (ids.length <= 1 && ids.includes(input.id)) return { ok: false, error: "sports.error.last" };
+  }
+  const saved = await gate.client.from("sports").update({ icon: payload.icon, is_active: input.isActive === true, updated_at: new Date().toISOString() }).eq("id", input.id);
+  if (saved.error) return { ok: false, error: sportWriteError(saved.error) };
+  const linked = await replaceSportLinks(gate.client, input.id, payload.names, payload.moduleKeys);
+  if (linked) return { ok: false, error: linked };
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+export async function setSportActive(id: string, isActive: boolean): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id) || typeof isActive !== "boolean") return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  if (!isActive) {
+    const active = await gate.client.from("sports").select("id").eq("is_active", true);
+    const ids = (active.data ?? []).map((row) => row.id as string);
+    if (ids.length <= 1 && ids.includes(id)) return { ok: false, error: "sports.error.last" };
+  }
+  const saved = await gate.client.from("sports").update({ is_active: isActive, updated_at: new Date().toISOString() }).eq("id", id);
+  if (saved.error) return { ok: false, error: sportWriteError(saved.error) };
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+export async function deleteSport(id: string): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const active = await gate.client.from("sports").select("id, is_active").eq("id", id).maybeSingle();
+  if (active.error || !active.data) return { ok: false, error: "auth.error.generic" };
+  if (active.data.is_active) {
+    const others = await gate.client.from("sports").select("id").eq("is_active", true).neq("id", id);
+    if ((others.data ?? []).length === 0) return { ok: false, error: "sports.error.last" };
+  }
+  const used = await gate.client.from("teams").select("id", { count: "exact", head: true }).eq("sport_id", id);
+  if (used.error) return { ok: false, error: "auth.error.generic" };
+  if ((used.count ?? 0) > 0) return { ok: false, error: "sports.error.used" };
+  const removed = await gate.client.from("sports").delete().eq("id", id);
+  if (removed.error) return { ok: false, error: sportWriteError(removed.error) };
+  refresh();
+  return { ok: true, sports: await listSports() };
 }

@@ -8,6 +8,8 @@ export type AccountProfile = {
   lastName: string;
   isAdmin: boolean;
   ehlPlayers: Record<string, EhlPlayerProfile>;
+  avatarUrl: string | null;
+  eventEmails: boolean;
   display: UserDisplayPreferences;
 };
 

@@ -23,7 +23,7 @@ export async function castMemberVote(
     actorId: string;
     enforceDeadline: boolean;
   },
-): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number } | { ok: false; error: MessageKey }> {
+): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
   if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };
   const team = await client.from("teams").select("training_voting_hours, game_voting_hours, balance").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
@@ -65,17 +65,40 @@ export async function castMemberVote(
   const wasGoing = previous === "going";
   const nowGoing = input.status === "going";
   let teamBalance = roundMoney(Number(team.data.balance ?? 0));
+  async function revertRsvp() {
+    if (previous === "pending") await client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
+    else await client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+  }
   if (wasGoing !== nowGoing) {
+    const flag = await client.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
+    const reserve = flag.data?.enabled === true;
     if (nowGoing) {
       const modules = await listEnabledFrontendModuleKeys();
-      const finance = modules.includes(FRONTEND_MODULE_KEYS.finance);
+      const sportFinance = await client.from("teams").select("sport_id").eq("id", input.teamId).maybeSingle();
+      const sportId = typeof sportFinance.data?.sport_id === "string" ? sportFinance.data.sport_id : null;
+      let sportAllowsFinance = true;
+      if (sportId) {
+        const link = await client.from("sport_modules").select("module_key").eq("sport_id", sportId).eq("module_key", FRONTEND_MODULE_KEYS.finance).maybeSingle();
+        if (!link.error) sportAllowsFinance = Boolean(link.data);
+      }
+      const finance = modules.includes(FRONTEND_MODULE_KEYS.finance) && sportAllowsFinance;
       let price = 0;
       if (finance && target.data.fee_exempt !== true) {
         const venue = await client.from("venues").select("price_per_hour").eq("id", event.data.venue_id).maybeSingle();
         const raw = Number(venue.data?.price_per_hour ?? 0);
         if (Number.isFinite(raw) && raw > 0) price = roundMoney(raw);
       }
-      if (price > 0) {
+      if (price > 0 && reserve) {
+        const held = await client.from("finance_reservations").upsert(
+          { team_id: input.teamId, user_id: input.userId, event_id: input.eventId, amount: price },
+          { onConflict: "event_id,user_id" },
+        );
+        if (held.error) {
+          await revertRsvp();
+          return { ok: false, error: "auth.error.generic" };
+        }
+      } else if (price > 0) {
+        await client.from("finance_reservations").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
         const inserted = await client.from("balance_entries").insert({
           team_id: input.teamId,
           user_id: input.userId,
@@ -85,20 +108,23 @@ export async function castMemberVote(
           created_by: input.actorId,
         });
         if (inserted.error) {
-          if (previous === "pending") await client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
-          else await client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+          await revertRsvp();
           return { ok: false, error: "auth.error.generic" };
         }
         const bumped = await client.rpc("adjust_team_balance", { target: input.teamId, delta: price });
         if (bumped.error || bumped.data == null) {
           await client.from("balance_entries").delete().eq("event_id", input.eventId).eq("user_id", input.userId).eq("kind", "event");
-          if (previous === "pending") await client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
-          else await client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+          await revertRsvp();
           return { ok: false, error: "auth.error.generic" };
         }
         teamBalance = roundMoney(Number(bumped.data));
       }
     } else {
+      const cleared = await client.from("finance_reservations").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
+      if (cleared.error) {
+        await revertRsvp();
+        return { ok: false, error: "auth.error.generic" };
+      }
       const removed = await client.from("balance_entries").delete().eq("event_id", input.eventId).eq("user_id", input.userId).eq("kind", "event").select("amount");
       if (removed.error) return { ok: false, error: "auth.error.generic" };
       const taken = (removed.data ?? []).reduce((sum, row) => sum + Math.abs(Number(row.amount)), 0);
@@ -115,8 +141,7 @@ export async function castMemberVote(
               created_by: input.actorId,
             })),
           );
-          if (previous === "pending") await client.from("team_event_rsvps").delete().eq("event_id", input.eventId).eq("user_id", input.userId);
-          else await client.from("team_event_rsvps").upsert({ event_id: input.eventId, team_id: input.teamId, user_id: input.userId, status: previous, updated_at: new Date().toISOString() });
+          await revertRsvp();
           return { ok: false, error: "auth.error.generic" };
         }
         teamBalance = roundMoney(Number(bumped.data));
@@ -127,5 +152,7 @@ export async function castMemberVote(
   if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
   const ledger = rows.data.map((row) => ({ id: row.id, amount: Number(row.amount), at: toLocalDateTimeStamp(row.created_at) }));
   const memberBalance = roundMoney(ledger.reduce((sum, item) => sum + item.amount, 0));
-  return { ok: true, memberBalance, ledger, teamBalance };
+  const hold = await client.from("finance_reservations").select("amount").eq("event_id", input.eventId).eq("user_id", input.userId).maybeSingle();
+  const reservation = !hold.error && hold.data ? { eventId: input.eventId, userId: input.userId, amount: roundMoney(Number(hold.data.amount)) } : null;
+  return { ok: true, memberBalance, ledger, teamBalance, reservation };
 }

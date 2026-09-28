@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
+import { SportField } from "@/app/components/sport-switch";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
+import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { useLanguage } from "@/app/lib/language";
 import { normalizeInviteCode } from "@/app/lib/invite-code";
@@ -19,9 +22,11 @@ const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
 };
 
 export function NoTeamStart({
+  sports = [],
   onCreate,
   onJoin,
 }: {
+  sports?: Sport[];
   onCreate: (input: CreateTeamInput) => void;
   onJoin: (code: string) => void;
 }) {
@@ -35,7 +40,9 @@ export function NoTeamStart({
   const [currency, setCurrency] = useState<string | null>(null);
   const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
+  const [sportId, setSportId] = useState("");
   const [code, setCode] = useState("");
+  const avatarRef = useRef<AvatarCropHandle>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const codeReady = normalizeInviteCode(code).length > 0;
@@ -43,16 +50,25 @@ export function NoTeamStart({
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
 
-  function emit(sourceUrl: string | null, logoUrl: string | null) {
+  async function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;
-    onCreate({ name: name.trim(), sourceUrl, logoUrl, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
+    let avatarFile: File | null = null;
+    if (!sourceUrl) {
+      const crop = await avatarRef.current?.result();
+      if (crop?.changed && !crop.remove && !crop.file) {
+        showFeedback({ message: t("avatar.error.file"), variant: "error" });
+        return;
+      }
+      avatarFile = crop?.file ?? null;
+    }
+    onCreate({ name: name.trim(), sourceUrl, logoUrl, avatarFile, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue, sportId: chosenSportId(sports, sportId) });
   }
 
   async function submitCreate() {
     if (!nameReady || !hoursOk || pending) return;
     const source = link.trim();
     if (!source) {
-      emit(null, null);
+      await emit(null, null);
       return;
     }
     setPending(true);
@@ -66,7 +82,7 @@ export function NoTeamStart({
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
       return;
     }
-    emit(result.url, result.logoUrl);
+    await emit(result.url, result.logoUrl);
   }
 
   return (
@@ -108,9 +124,15 @@ export function NoTeamStart({
                 autoComplete="off"
                 spellCheck={false}
                 disabled={pending}
-                className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
-              />
-            </label>
+              className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
+            />
+          </label>
+          {link.trim() === "" ? (
+            <div className="text-left">
+              <AvatarCropField ref={avatarRef} disabled={pending} />
+            </div>
+          ) : null}
+            <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
             <div className="text-left">
               <MoneyVotingFields
                 idPrefix="start-team"
@@ -208,7 +230,7 @@ export function NoTeamStart({
               const url = mismatch?.url ?? null;
               const logoUrl = mismatch?.logoUrl ?? null;
               setMismatch(null);
-              emit(url, logoUrl);
+              void emit(url, logoUrl);
             }}
             className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90"
           >

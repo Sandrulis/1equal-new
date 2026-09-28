@@ -38,13 +38,13 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 | Ceļš | Saturs |
 |---|---|
 | `/dashboard` | Kalendārs bez parauga notikumiem. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst saglabā `team_events`. Vadītājs labo savas komandas notikumus. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
-| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Komandas iestatījumos vadītājs labo nosaukumu, valūtu, balsošanas stundas un Entuziastu saiti. Tukša saite noņem `source_url` un no tās ielādēto logo. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
+| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Komandas iestatījumos vadītājs labo nosaukumu, valūtu, balsošanas stundas, sporta veidu un Entuziastu saiti. Sporta slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens veids. Tukša saite noņem `source_url` un no tās ielādēto logo, un tad var izgriezt kvadrāta attēlu. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
 | `/dashboard/team/:id` | Spēlētāja profils. Bilances vēsture ir redzama tikai ar `module_finance` |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Slēpts, ja `module_subteams` ir izslēgts |
 | `/dashboard/venues` | Komandas laukumi. Treniņa cena. Dzēšana paslēpj rindu, neizdzēš to |
 | `/demo/...` | Tie paši skati bez konta un ar visiem moduļiem. Notikumu datumi ir iepriekšējā, šajā un divos nākamajos mēnešos. `/demo/admin` nav |
 
-Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu un `leader_id`. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, pozīcija, telefons, vairākas apakškomandas un samaksas atbrīvojums. Balsošana ir atvērta `training_voting_hours` (24) un `game_voting_hours` (72) stundas pirms sākuma. Būs, ja finanses ir ieslēgtas un nav atbrīvojuma, noņem laukuma cenu no `balance_entries` un pieskaita `teams.balance` ar `adjust_team_balance`. Pēc notikuma sākuma `settle_finished_events` vienā SQL noņem spēles izdevumus un ieraksta `team_ledger`. Laiks ir `Europe/Riga`. Tas notiek, kad ielādējas komandas, nevis ar cron. Treniņam izdevumu nav. Dzēšana atdod pieteikušos naudu un atgriež jau norautos izdevumus. Joslas Pievienot bilanci glabājas `balance_entries` ar `kind = manual`, un to redz, ja finanses ir ieslēgtas. To drīkst tikai komandas vadītājs. Panelis ielādē pasākumus un virsgrāmatu par pēdējām 400 dienām.
+Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu, `leader_id` un aktīvo sporta veidu. Ja aktīvs ir tikai viens, slēdzis nerādās un tas tiek piesaistīts. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, pozīcija, telefons, vairākas apakškomandas un samaksas atbrīvojums. Bez Entuziastu saites lietotājs un komanda var augšupielādēt un izgriezt kvadrāta JPEG avataru. Lietotāja izvēlnē Paziņojumi izslēdz e-pastus par jauniem notikumiem (`users.event_emails`, noklusējums ieslēgts). Balsošana ir atvērta `training_voting_hours` (24) un `game_voting_hours` (72) stundas pirms sākuma. Ja cron rezervācijas ir izslēgtas, Būs uzreiz noņem laukuma cenu no `balance_entries` un pieskaita `teams.balance` ar `adjust_team_balance`, un `settle_finished_events` iet, kad ielādējas komandas. Ja slēdzis ir ieslēgts, Būs rezervē summu, Nebūšu rezervāciju atceļ, un `GET /api/cron/finance` pēc notikuma sākuma (`Europe/Riga`) noņem spēlētāja maksu un spēles izdevumus. Treniņam izdevumu nav. Dzēšana atdod pieteikušos naudu un atgriež jau norautos izdevumus. Joslas Pievienot bilanci glabājas `balance_entries` ar `kind = manual`, un to redz, ja finanses ir ieslēgtas un sporta veidam tās ir piesaistītas. To drīkst tikai komandas vadītājs. Panelis ielādē pasākumus un virsgrāmatu par pēdējām 400 dienām.
 
 Zem 600px komandas saites ir apakšējā izvēlne. Adminam turpat augšā ir izvēlne tikai ar admin saitēm. No 600 līdz 1023px josla ir ikonas, tooltip ir blakus ikonai un josla neritinās no tooltip. Komandas poga augšā virs 600px atver sarakstu, zem 600px ved uz kalendāru. Apskatē (`watching`) saraksta rindā ir X, kas atvieno komandu. Sānjoslā zem palīdzības ir atsauksmes un kontakti. No 1024px izvērsta josla maina režģi. Kalendāra saitei skaita nav. Pārējām komandas un admin saitēm labajā pusē ir skaits.
 
@@ -60,6 +60,8 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 | `/dashboard/admin/teams` | `public.teams`. Meklēšana, labošana, noņemšana. Kolonnas: apakškomandas un spēlētāji. Komandas vārds atver logu ar sarakstu. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`. Admins sastāvā neparādās un komandu tikai skatās |
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
 | `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, pievienot pēc atslēgas, dzēst. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
+| `/dashboard/admin/sports` | Sporta veidi visās valodās, ikona un piesaistītie moduļi. Vismaz vienam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām |
+| `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Tokens ir tikai admina lapā |
 | `/dashboard/admin/settings` | Nosaukums, logotips, favicon. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding` |
 | `/dashboard/admin/integrations` | Turnstile, Google auth, Resend, Umami, Sentry |
 | `/dashboard/admin/languages` | Valodas: aktīva, noklusējums, nosaukums. Noklusējumu nevar izslēgt vai dzēst |
@@ -129,6 +131,10 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `031_audit_rate_limit.sql` | `rate_limit_buckets`, `consume_rate_limit`, `audit_log` |
 | `032_rls_deny_policies.sql` | Lieguma RLS politikas tabulām bez politikas |
 | `033_email_plain_dash.sql` | E-pasta sagatavēs garā domuzīme ir defise |
+| `034_avatars.sql` | `users.avatar_url`, publisks JPEG spainis `avatars` |
+| `035_event_email_preference.sql` | `users.event_emails`, noklusējums ieslēgts |
+| `036_finance_cron.sql` | `cron_jobs`, `finance_reservations`, `settle_finance_reservations` |
+| `037_sports.sql` | `sports`, nosaukumi, moduļi, `teams.sport_id`. Sākumā Hokejs |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 

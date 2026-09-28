@@ -1,5 +1,6 @@
 "use server";
 
+import { ownAvatarUrl, removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
@@ -22,6 +23,19 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 type SaveResult = { ok: true; member: Member; teamCode: string } | { ok: false; error: MessageKey };
 type CreateResult = { ok: true; team: IssuedTeam } | { ok: false; error: MessageKey };
 type LookupResult = { ok: true; number: string; position: string; profile: EhlPlayerProfile } | { ok: false; error: MessageKey };
+
+async function attachSport(
+  client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>> extends infer Gate ? (Gate extends { client: infer Client } ? Client : never) : never,
+  requested: string | null | undefined,
+): Promise<{ ok: true; sportId: string } | { ok: false; error: MessageKey }> {
+  const rows = await client.from("sports").select("id").eq("is_active", true).order("sort_order");
+  if (rows.error) return { ok: false, error: "auth.error.generic" };
+  const ids = (rows.data ?? []).map((row) => row.id as string);
+  if (ids.length === 0) return { ok: false, error: "sports.error.last" };
+  if (ids.length === 1) return { ok: true, sportId: ids[0] };
+  if (requested && ids.includes(requested)) return { ok: true, sportId: requested };
+  return { ok: false, error: "sports.error.required" };
+}
 
 function inviteCode(): string {
   const bytes = new Uint8Array(6);
@@ -98,14 +112,16 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   if (training == null || game == null) return { ok: false, error: "site_settings.error.team_defaults" };
   const currency = input.currency && isCurrency(input.currency) ? input.currency : null;
   const source = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl)?.toString() ?? null : null;
-  const logo = cleanLogo(input.logoUrl);
+  const logo = source ? cleanLogo(input.logoUrl) : null;
+  const sport = await attachSport(gate.client, input.sportId);
+  if (!sport.ok) return sport;
   const now = new Date().toISOString();
 
   let teamId = "";
   let code = "";
   for (let attempt = 0; attempt < 5; attempt += 1) {
     code = inviteCode();
-    const inserted = await gate.client.from("teams").insert({ name, invite_code: code, source_url: source, logo_url: logo, leader_id: gate.account.id, currency, training_voting_hours: training, game_voting_hours: game, updated_at: now }).select("id").single();
+    const inserted = await gate.client.from("teams").insert({ name, invite_code: code, source_url: source, logo_url: logo, leader_id: gate.account.id, currency, training_voting_hours: training, game_voting_hours: game, sport_id: sport.sportId, updated_at: now }).select("id").single();
     if (!inserted.error && inserted.data) {
       teamId = inserted.data.id;
       break;
@@ -129,7 +145,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   refreshTeamData();
   return {
     ok: true,
-    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
+    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
   };
 }
 
@@ -141,7 +157,8 @@ export async function updateOwnedTeam(input: {
   gameVotingHours: number;
   sourceUrl: string | null;
   logoUrl: string | null;
-}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null } | { ok: false; error: MessageKey }> {
+  sportId?: string | null;
+}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const name = input.name.trim().slice(0, 80);
@@ -153,16 +170,38 @@ export async function updateOwnedTeam(input: {
   if (training == null || game == null) return { ok: false, error: "site_settings.error.team_defaults" };
   const source = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl)?.toString() ?? null : null;
   if (input.sourceUrl && !source) return { ok: false, error: "team.link.invalid" };
-  const logo = source ? cleanLogo(input.logoUrl) : null;
+  const ownLogo = ownAvatarUrl(input.logoUrl, `teams/${input.teamId}.jpg`);
+  const logo = source ? cleanLogo(input.logoUrl) : ownLogo;
+  let sportId: string | undefined;
+  if (input.sportId !== undefined) {
+    const sport = await attachSport(gate.client, input.sportId);
+    if (!sport.ok) return sport;
+    sportId = sport.sportId;
+  }
   const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
   const saved = await gate.client
     .from("teams")
-    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: source, logo_url: logo, updated_at: new Date().toISOString() })
+    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: source, logo_url: logo, ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
     .eq("id", input.teamId);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
+  if (!ownLogo) await removeAvatar(`teams/${input.teamId}.jpg`);
   refreshTeamData();
-  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: source, logoUrl: logo };
+  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: source, logoUrl: logo, sportId };
+}
+
+export async function saveTeamAvatar(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  const teamId = String(formData.get("teamId") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id").eq("id", teamId).maybeSingle();
+  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "avatar.error.file" };
+  const uploaded = await uploadAvatarJpeg(file, `teams/${teamId}.jpg`, gate.account.id);
+  if ("error" in uploaded) return { ok: false, error: uploaded.error };
+  return { ok: true, url: uploaded.url };
 }
 
 export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
@@ -177,7 +216,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   await gate.client.from("team_members").upsert({ team_id: found.data.id, user_id: gate.account.id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
   const members = await gate.client
     .from("team_members")
-    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name)")
+    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name, avatar_url)")
     .eq("team_id", found.data.id);
   if (members.error || !members.data) return { ok: false, error: "auth.error.generic" };
   const [groups, links, places, events] = await Promise.all([
@@ -254,7 +293,7 @@ export async function saveMemberProfile(input: {
     .update({ jersey_number: number, position, phone, ehl_player: player, fee_exempt: input.feeExempt, updated_at: new Date().toISOString() })
     .eq("team_id", input.teamId)
     .eq("user_id", input.userId)
-    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name)")
+    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name, avatar_url)")
     .single();
   if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
 
@@ -598,7 +637,7 @@ export async function setEventAttendance(input: {
   eventId: string;
   userId: string;
   status: "going" | "absent" | "pending";
-}): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };

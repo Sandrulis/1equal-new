@@ -11,11 +11,13 @@ import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
 import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
 import { getDemoSession, settleDemoCharges, subscribeDemoSession, updateDemoSession } from "@/app/lib/demo-session";
+import { AdminCronPage } from "@/app/components/admin-cron-page";
+import { AdminSportsPage } from "@/app/components/admin-sports-page";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
-import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, setEventAttendance, updateOwnedEvent } from "@/app/lib/team-actions";
+import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveTeamAvatar, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
 import { setAdminTeamWatch } from "@/app/lib/site-admin/actions";
 import { mergeDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -34,6 +36,7 @@ import {
 } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
+import type { Sport } from "@/app/lib/sports";
 import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
@@ -163,6 +166,7 @@ export function TeamDashboard({
   initialTeams = [],
   openTeamId = null,
   enabledModules = null,
+  sports = [],
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
@@ -170,6 +174,7 @@ export function TeamDashboard({
   initialTeams?: IssuedTeam[];
   openTeamId?: string | null;
   enabledModules?: string[] | null;
+  sports?: Sport[];
 }) {
   const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -177,7 +182,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
@@ -191,23 +196,51 @@ export function TeamDashboard({
   async function createTeam(input: CreateTeamInput) {
     if (creating.current) return;
     creating.current = true;
+    const { avatarFile, ...rest } = input;
     let result: Awaited<ReturnType<typeof createOwnedTeam>>;
     try {
-      result = await createOwnedTeam(input);
+      result = await createOwnedTeam(rest);
     } catch {
       creating.current = false;
       showFeedback({ message: t("auth.error.generic"), variant: "error" });
       return;
     }
-    creating.current = false;
     if (!result.ok) {
+      creating.current = false;
       showFeedback({ message: t(result.error), variant: "error" });
       return;
     }
-    setCurrentTeam(result.team);
-    setOwnedTeam(result.team);
+    let team = result.team;
+    let avatarError: string | null = null;
+    if (team.id && !team.sourceUrl && avatarFile && team.trainingVotingHours != null && team.gameVotingHours != null) {
+      try {
+        const body = new FormData();
+        body.set("teamId", team.id);
+        body.set("file", avatarFile);
+        const uploaded = await saveTeamAvatar(body);
+        if (!uploaded.ok) avatarError = t(uploaded.error);
+        else {
+          const marked = await updateOwnedTeam({
+            teamId: team.id,
+            name: team.name,
+            currency: team.currency ?? null,
+            trainingVotingHours: team.trainingVotingHours,
+            gameVotingHours: team.gameVotingHours,
+            sourceUrl: null,
+            logoUrl: uploaded.url,
+          });
+          if (!marked.ok) avatarError = t(marked.error);
+          else team = { ...team, logoUrl: marked.logoUrl };
+        }
+      } catch {
+        avatarError = t("avatar.error.save");
+      }
+    }
+    setCurrentTeam(team);
+    setOwnedTeam(team);
     setTeams(listMyTeams());
-    showFeedback({ message: t("team.created"), variant: "success" });
+    creating.current = false;
+    showFeedback(avatarError ? { message: avatarError, variant: "error" } : { message: t("team.created"), variant: "success" });
     router.push(teamHref(basePath));
     router.refresh();
   }
@@ -234,7 +267,7 @@ export function TeamDashboard({
     router.refresh();
   }
 
-  function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) {
+  function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string }) {
     if (!ownedTeam) return;
     const next = { ...ownedTeam, ...patch };
     setCurrentTeam(next);
@@ -257,7 +290,8 @@ export function TeamDashboard({
       const ehlPlayers = { ...current.ehlPlayers };
       if (member.ehl && member.id === current.id) ehlPlayers[teamCode] = member.ehl;
       else if (member.id === current.id) delete ehlPlayers[teamCode];
-      return { ...current, ehlPlayers };
+      const avatarUrl = member.id === current.id ? (member.ehl?.photoUrl ? current.avatarUrl : member.photoUrl ?? null) : current.avatarUrl;
+      return { ...current, ehlPlayers, avatarUrl };
     });
   }
 
@@ -518,7 +552,9 @@ export function TeamDashboard({
     );
     const rsvps = (ownedTeam.rsvps ?? []).filter((row) => !(row.eventId === eventId && row.userId === memberId));
     if (status === "going" || status === "absent") rsvps.push({ eventId, userId: memberId, status });
-    const next = { ...ownedTeam, members, balance: result.teamBalance, rsvps };
+    const reservations = (ownedTeam.reservations ?? []).filter((row) => !(row.eventId === eventId && row.userId === memberId));
+    if (result.reservation) reservations.push(result.reservation);
+    const next = { ...ownedTeam, members, balance: result.teamBalance, rsvps, reservations };
     setCurrentTeam(next);
     setOwnedTeam(next);
     setTeams(listMyTeams());
@@ -740,7 +776,12 @@ export function TeamDashboard({
 
   function moduleOn(key: string) {
     if (!enabledModules) return true;
-    return enabledModules.includes(key);
+    if (!enabledModules.includes(key)) return false;
+    const sportId = activeTeam && !activeTeam.demo ? activeTeam.sportId : null;
+    if (!sportId) return true;
+    const sport = sports.find((item) => item.id === sportId);
+    if (!sport) return true;
+    return sport.moduleKeys.includes(key);
   }
 
   const viewModule: Partial<Record<DashboardView, string>> = {
@@ -803,6 +844,23 @@ export function TeamDashboard({
           return delta ? { ...base, balance: Math.round((base.balance + delta) * 100) / 100 } : base;
         })()
       : (activeTeam.members ?? []).find((member) => member.id === profile?.id) ?? null;
+  const financeReserve = Boolean(financeAllowed && activeTeam && !activeTeam.demo && activeTeam.financeReserve);
+  const reservations = financeReserve ? (activeTeam?.reservations ?? []) : [];
+  const settledEventIds = new Set((activeTeam?.ledger ?? []).map((line) => line.eventId).filter((id): id is string => Boolean(id)));
+  const selfReserved = selfMember ? reservations.filter((row) => row.userId === selfMember.id).reduce((sum, row) => sum + row.amount, 0) : 0;
+  const teamReserved = financeReserve
+    ? (activeTeam?.events ?? []).reduce((sum, event) => {
+        const expense = event.type === "game" ? (event.expense ?? 0) : 0;
+        return expense > 0 && !settledEventIds.has(event.id) ? sum + expense : sum;
+      }, 0)
+    : 0;
+  function playerHold(eventId: string, userId: string) {
+    return reservations.find((row) => row.eventId === eventId && row.userId === userId)?.amount ?? 0;
+  }
+  function teamHold(event: TeamEvent) {
+    const expense = event.type === "game" ? (event.expense ?? 0) : 0;
+    return financeReserve && expense > 0 && !settledEventIds.has(event.id) ? expense : 0;
+  }
   const pendingVoteEvents = selfMember
     ? calendarEvents
         .filter((event) => {
@@ -917,7 +975,9 @@ export function TeamDashboard({
         onOpenMenu={account ? () => { setAdminOpen(false); setMenuOpen((value) => !value); } : undefined}
         onOpenAdmin={account?.isAdmin ? () => { setMenuOpen(false); setAdminOpen((value) => !value); } : undefined}
         balanceMember={financeAllowed ? selfMember : null}
-        calendarIntegration={Boolean(enabledModules?.includes(FRONTEND_MODULE_KEYS.calendar))}
+        reservedBalance={selfReserved}
+        calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
+        sports={sports}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {account && ownedTeam && !ownedTeam.watching && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
@@ -941,7 +1001,7 @@ export function TeamDashboard({
             </ul>
           </div>
         ) : null}
-        {showStart ? <NoTeamStart onCreate={createTeam} onJoin={joinTeam} /> : null}
+        {showStart ? <NoTeamStart sports={sports} onCreate={createTeam} onJoin={joinTeam} /> : null}
         {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart ? (
           <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("frontend_modules.disabled")}</p>
         ) : null}
@@ -974,6 +1034,8 @@ export function TeamDashboard({
             trainingVotingHours={activeTeam.trainingVotingHours ?? brand.trainingVotingHours}
             gameVotingHours={activeTeam.gameVotingHours ?? brand.gameVotingHours}
             currency={activeTeam.currency ?? null}
+            sportId={activeTeam.demo ? null : (activeTeam.sportId ?? null)}
+            sports={activeTeam.demo ? [] : sports}
             onTeamSaved={rememberTeam}
             initialMembers={(activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
@@ -988,6 +1050,7 @@ export function TeamDashboard({
             onMemberRemoved={forgetMember}
             finance={financeAllowed}
             persistedBalance={activeTeam.demo ? demoTeamDelta : (activeTeam.balance ?? 0)}
+            reservedTeam={teamReserved}
             persistedEntries={(activeTeam.demo ? demoCharges : (activeTeam.ledger ?? [])).map((line) => ({
               id: line.id,
               amount: line.amount,
@@ -1029,7 +1092,7 @@ export function TeamDashboard({
         ) : null}
         {route.view === "admin" ? (
           <div className="space-y-6">
-            {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules") ? null : (
+            {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules" || route.section === "sports") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
             )}
             {route.section === "users" && admin ? <AdminUsersList users={admin.users} /> : null}
@@ -1038,6 +1101,7 @@ export function TeamDashboard({
             ) : null}
             {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
             {route.section === "modules" && admin ? <AdminModulesPage initialModules={admin.modules} /> : null}
+            {route.section === "sports" && admin ? <AdminSportsPage initialSports={sports} languages={admin.languages} modules={admin.modules} /> : null}
             {route.section === "integrations" && admin ? (
               <AdminIntegrationsPage integrations={admin.integrations} googleRedirectUrl={admin.googleRedirectUrl} />
             ) : null}
@@ -1055,6 +1119,7 @@ export function TeamDashboard({
               />
             ) : null}
             {route.section === "todo" && admin ? <AdminTodoPage initialTodos={admin.todos} /> : null}
+            {route.section === "cron" && admin ? <AdminCronPage /> : null}
           </div>
         ) : null}
         <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
@@ -1078,6 +1143,12 @@ export function TeamDashboard({
                         <PollField label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
                         <PollField label={t("event.venue")} value={venue?.name ?? ""} />
                       </dl>
+                      {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
+                        <p className="mt-3 text-sm font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
+                      ) : null}
+                      {teamHold(event) > 0 ? (
+                        <p className="mt-1 text-sm text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
+                      ) : null}
                       <div className="mt-5 grid grid-cols-2 gap-3">
                         <button
                           type="button"
@@ -1300,6 +1371,12 @@ export function TeamDashboard({
                         </p>
                       ) : null}
                       <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} className="mt-2" />
+                      {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
+                        <p className="mt-2 text-xs font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
+                      ) : null}
+                      {teamHold(event) > 0 ? (
+                        <p className="mt-1 text-xs text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -1335,6 +1412,8 @@ export function TeamDashboard({
             leader={Boolean(profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id)}
             votingOpen={eventVotingOpen(openEvent, voteTraining, voteGame)}
             rsvp={rsvp[openEvent.id]}
+            reservedByUser={financeReserve ? Object.fromEntries(reservations.filter((row) => row.eventId === openEvent.id).map((row) => [row.userId, row.amount])) : null}
+            teamReserved={teamHold(openEvent)}
             onRsvp={setMemberRsvp}
             onLineup={lineupAllowed ? () => openLineup(openEvent) : undefined}
             onEdit={basePath === "/demo" || (profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id) ? () => setEditingEvent(openEvent) : undefined}
@@ -1401,11 +1480,13 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   subteams: "nav.subteams",
   settings: "user.settings",
   modules: "nav.admin.modules",
+  sports: "nav.admin.sports",
   integrations: "nav.admin.integrations",
   languages: "nav.admin.languages",
   translations: "nav.admin.translations",
   email: "nav.admin.email",
   todo: "nav.admin.todo",
+  cron: "nav.admin.cron",
 };
 
 const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[] = [
@@ -1414,11 +1495,13 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "subteams", label: ADMIN_LABEL.subteams, icon: <IconLayers /> },
   { section: "settings", label: ADMIN_LABEL.settings, icon: <IconGear /> },
   { section: "modules", label: ADMIN_LABEL.modules, icon: <IconModules /> },
+  { section: "sports", label: ADMIN_LABEL.sports, icon: <IconSport /> },
   { section: "integrations", label: ADMIN_LABEL.integrations, icon: <IconPlug /> },
   { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
   { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
   { section: "email", label: ADMIN_LABEL.email, icon: <IconMail /> },
   { section: "todo", label: ADMIN_LABEL.todo, icon: <IconTodo /> },
+  { section: "cron", label: ADMIN_LABEL.cron, icon: <IconCron /> },
 ];
 
 function SideItem({
@@ -1693,6 +1776,15 @@ function IconGear() {
   );
 }
 
+function IconSport() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 5v14M8 9h8" />
+    </svg>
+  );
+}
+
 function IconModules() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -1727,6 +1819,15 @@ function IconMail() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3 7l9 7 9-7" />
+    </svg>
+  );
+}
+
+function IconCron() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v5l3 2" />
     </svg>
   );
 }

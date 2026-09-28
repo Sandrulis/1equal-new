@@ -78,6 +78,8 @@ export function EventDetails({
   leader = false,
   votingOpen = true,
   rsvp,
+  reservedByUser = null,
+  teamReserved = 0,
   onRsvp,
   onLineup,
   onEdit,
@@ -94,6 +96,8 @@ export function EventDetails({
   leader?: boolean;
   votingOpen?: boolean;
   rsvp: Record<string, Rsvp> | undefined;
+  reservedByUser?: Record<string, number> | null;
+  teamReserved?: number;
   onRsvp: (memberId: string, status: Rsvp) => void;
   onLineup?: () => void;
   onEdit?: () => void;
@@ -149,6 +153,7 @@ export function EventDetails({
         </dl>
         <VoteCountdown deadline={voteDeadline} align="end" className="order-1 shrink-0 min-[600px]:order-2" />
       </div>
+      {teamReserved > 0 ? <p className="px-4 pb-1 text-sm text-muted sm:px-5">{t("finance.reserved.team", { amount: formatMoney(teamReserved) })}</p> : null}
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -176,7 +181,16 @@ export function EventDetails({
         <div className="space-y-3">
           <AttendanceGroup title={t("event.going")} count={going.length} tone="going" empty={t("event.none")}>
             {going.map((member) => (
-              <PersonRow key={member.id} member={member} status="going" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
+              <PersonRow
+                key={member.id}
+                member={member}
+                status="going"
+                actorId={actorId}
+                leader={leader}
+                votingOpen={votingOpen}
+                reservedLabel={reservedByUser && (reservedByUser[member.id] ?? 0) > 0 ? t("finance.reserved", { amount: formatMoney(reservedByUser[member.id] ?? 0) }) : null}
+                onRsvp={onRsvp}
+              />
             ))}
           </AttendanceGroup>
           <AttendanceGroup title={t("event.absent")} count={absent.length} tone="absent" empty={t("event.none")}>
@@ -244,6 +258,7 @@ function PersonRow({
   actorId,
   leader,
   votingOpen,
+  reservedLabel = null,
   onRsvp,
 }: {
   member: Member;
@@ -251,6 +266,7 @@ function PersonRow({
   actorId: string | null;
   leader: boolean;
   votingOpen: boolean;
+  reservedLabel?: string | null;
   onRsvp: (memberId: string, status: Rsvp) => void;
 }) {
   const { t } = useLanguage();
@@ -259,7 +275,7 @@ function PersonRow({
   if (managed && !mine && !leader) {
     return (
       <li className="flex items-center justify-between gap-3 px-3 py-2">
-        <PersonName name={member.name} />
+        <PersonName name={member.name} reserved={reservedLabel} />
       </li>
     );
   }
@@ -267,7 +283,7 @@ function PersonRow({
   const actionsClass = !managed || mine ? "flex shrink-0 gap-1" : "hidden shrink-0 gap-1 group-hover/player:flex max-[599px]:flex";
   return (
     <li className="group/player flex items-center justify-between gap-3 px-3 py-2">
-      <PersonName name={member.name} />
+      <PersonName name={member.name} reserved={reservedLabel} />
       <span className={actionsClass}>
         <Choice
           label={t("event.going")}
@@ -288,11 +304,14 @@ function PersonRow({
   );
 }
 
-function PersonName({ name }: { name: string }) {
+function PersonName({ name, reserved = null }: { name: string; reserved?: string | null }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(name)}</span>
-      <span className="truncate text-sm font-medium">{name}</span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium">{name}</span>
+        {reserved ? <span className="block truncate text-xs text-muted">{reserved}</span> : null}
+      </span>
     </span>
   );
 }
