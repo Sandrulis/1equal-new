@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+export const revalidate = 3600;
 import { LandingPage } from "@/app/components/landing-page";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { siteTitleFor } from "@/app/lib/site-brand";

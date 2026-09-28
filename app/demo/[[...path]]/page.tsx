@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+export const revalidate = 3600;
 import { redirect } from "next/navigation";
 import { DashboardApp } from "@/app/components/dashboard-app";
 import { parseDashboardPath } from "@/app/lib/dashboard-path";

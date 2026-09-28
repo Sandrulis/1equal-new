@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.9
+
+- Google pieslēgums iet ar lapas navigāciju, Umami sūtījumi vairs nav CSP bloķēti, un avatari paliek savā izmērā
+- Demo kalendāra datumi seko tekošajam mēnesim, iepriekšējam un diviem nākamajiem
+
 ## v0.1.8
 
 - Lint iziet tīri. Formu stāvoklis vairs netiek rakstīts efekta iekšienē, un attēli iet caur Next attēlu komponenti

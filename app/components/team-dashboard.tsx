@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { ContentImage } from "@/app/components/content-image";
-import { CURRENT_USER_ID, EVENTS, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { CURRENT_USER_ID, catalogEvents, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
@@ -373,9 +373,9 @@ export function TeamDashboard({
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
   const calendarEvents = useMemo(() => {
-    const source = basePath === "/demo" ? [...EVENTS, ...demoEvents] : (ownedTeam?.events ?? []);
+    const source = basePath === "/demo" ? [...catalogEvents(parseIsoDate(`${todayIso.slice(0, 7)}-01`)), ...demoEvents] : (ownedTeam?.events ?? []);
     return source.filter((event) => !hiddenEventIds.includes(event.id)).map((event) => eventEdits[event.id] ?? event);
-  }, [basePath, demoEvents, eventEdits, hiddenEventIds, ownedTeam]);
+  }, [basePath, demoEvents, eventEdits, hiddenEventIds, ownedTeam, todayIso]);
 
   const filtered = useMemo(() => {
     return calendarEvents.filter((event) => {

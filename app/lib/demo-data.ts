@@ -1,5 +1,6 @@
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { DEMO_EHL } from "@/app/lib/demo-ehl";
+import { isoDate } from "@/app/lib/format";
 
 export type EventType = "game" | "training";
 
@@ -93,29 +94,110 @@ export const MEMBERS: Member[] = ROSTER.map((member) => {
   return { ...member, photoUrl: ehl.photoUrl, ehl };
 });
 
-export const EVENTS: TeamEvent[] = [
-  { id: "e1", date: "2026-08-27", start: "20:00", end: "21:30", type: "training", titleId: "ice", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e2", date: "2026-08-29", start: "18:00", end: "20:00", type: "game", titleId: "vs-riga", subteamId: "virsliga", venueId: "daugava" },
-  { id: "e3", date: "2026-09-01", start: "20:00", end: "21:30", type: "training", titleId: "ice", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e4", date: "2026-09-03", start: "19:30", end: "21:00", type: "training", titleId: "ice", subteamId: "rezerve", venueId: "daugava" },
-  { id: "e5", date: "2026-09-05", start: "18:00", end: "20:00", type: "game", titleId: "vs-jelgava", subteamId: "virsliga", venueId: "inbox" },
-  { id: "e6", date: "2026-09-08", start: "17:30", end: "19:00", type: "training", titleId: "skills", subteamId: "u18", venueId: "ogre" },
-  { id: "e7", date: "2026-09-10", start: "20:00", end: "21:30", type: "training", titleId: "ice", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e8", date: "2026-09-12", start: "16:00", end: "17:30", type: "game", titleId: "vs-ogre", subteamId: "rezerve", venueId: "daugava" },
-  { id: "e9", date: "2026-09-15", start: "20:00", end: "21:30", type: "training", titleId: "situations", subteamId: "virsliga", venueId: "inbox" },
-  { id: "e10", date: "2026-09-17", start: "17:30", end: "19:00", type: "training", titleId: "ice", subteamId: "u18", venueId: "ogre" },
-  { id: "e11", date: "2026-09-19", start: "19:00", end: "21:00", type: "game", titleId: "vs-liepaja", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e12", date: "2026-09-22", start: "19:30", end: "21:00", type: "training", titleId: "ice", subteamId: "rezerve", venueId: "daugava" },
-  { id: "e13", date: "2026-09-24", start: "20:00", end: "21:30", type: "training", titleId: "pregame", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e14", date: "2026-09-25", start: "19:00", end: "21:00", type: "game", titleId: "vs-tukums", subteamId: "virsliga", venueId: "inbox" },
-  { id: "e15", date: "2026-09-28", start: "17:30", end: "19:00", type: "training", titleId: "ice", subteamId: "u18", venueId: "ogre" },
-  { id: "e16", date: "2026-09-29", start: "19:30", end: "21:00", type: "training", titleId: "ice", subteamId: "rezerve", venueId: "daugava" },
-  { id: "e17", date: "2026-09-30", start: "19:30", end: "21:30", type: "game", titleId: "vs-kurbads", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e18", date: "2026-10-02", start: "20:00", end: "21:30", type: "training", titleId: "ice", subteamId: "virsliga", venueId: "volvo" },
-  { id: "e19", date: "2026-10-04", start: "17:00", end: "19:00", type: "game", titleId: "vs-mogo", subteamId: "virsliga", venueId: "inbox" },
-  { id: "e20", date: "2026-10-06", start: "17:30", end: "19:00", type: "training", titleId: "ice", subteamId: "u18", venueId: "ogre" },
-  { id: "e21", date: "2026-10-08", start: "19:30", end: "21:00", type: "training", titleId: "ice", subteamId: "rezerve", venueId: "daugava" },
+const GAME_TITLES = ["vs-riga", "vs-jelgava", "vs-ogre", "vs-liepaja", "vs-tukums", "vs-kurbads", "vs-mogo"] as const;
+const TRAIN_TITLES = ["ice", "skills", "situations", "pregame"] as const;
+
+const MONTH_SLOTS: { type: EventType; start: string; end: string; subteamId: string; venueId: string }[] = [
+  { type: "training", start: "20:00", end: "21:30", subteamId: "virsliga", venueId: "volvo" },
+  { type: "training", start: "19:30", end: "21:00", subteamId: "rezerve", venueId: "daugava" },
+  { type: "game", start: "18:00", end: "20:00", subteamId: "virsliga", venueId: "inbox" },
+  { type: "training", start: "17:30", end: "19:00", subteamId: "u18", venueId: "ogre" },
+  { type: "training", start: "20:00", end: "21:30", subteamId: "virsliga", venueId: "volvo" },
+  { type: "game", start: "16:00", end: "17:30", subteamId: "rezerve", venueId: "daugava" },
+  { type: "training", start: "20:00", end: "21:30", subteamId: "virsliga", venueId: "inbox" },
+  { type: "game", start: "19:00", end: "21:00", subteamId: "virsliga", venueId: "volvo" },
 ];
+
+function monthSeed(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function monthDays(year: number, monthIndex: number, count: number): number[] {
+  const random = monthSeed(year * 100 + monthIndex + 1);
+  const days = Array.from({ length: new Date(year, monthIndex + 1, 0).getDate() }, (_, index) => index + 1);
+  for (let index = days.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    const current = days[index];
+    days[index] = days[swap];
+    days[swap] = current;
+  }
+  return days.slice(0, count).sort((left, right) => left - right);
+}
+
+function eventsForMonth(year: number, monthIndex: number): TeamEvent[] {
+  const days = monthDays(year, monthIndex, MONTH_SLOTS.length);
+  const month = String(monthIndex + 1).padStart(2, "0");
+  return MONTH_SLOTS.map((slot, index) => {
+    const titles = slot.type === "game" ? GAME_TITLES : TRAIN_TITLES;
+    return {
+      id: `demo-${year}${month}-${index + 1}`,
+      date: `${year}-${month}-${String(days[index]).padStart(2, "0")}`,
+      titleId: titles[(year + monthIndex + index) % titles.length],
+      ...slot,
+    };
+  });
+}
+
+function rollingEvents(now: Date): TeamEvent[] {
+  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const events: TeamEvent[] = [];
+  for (let offset = 0; offset < 4; offset += 1) {
+    const cursor = new Date(start.getFullYear(), start.getMonth() + offset, 1);
+    events.push(...eventsForMonth(cursor.getFullYear(), cursor.getMonth()));
+  }
+  return events;
+}
+
+const CHARGE_AMOUNT: Record<string, number> = { volvo: 40, daugava: 36, inbox: 45, ogre: 24 };
+
+function rollingCharges(events: TeamEvent[], now: Date): PlayerCharge[] {
+  const today = isoDate(now);
+  const recent = events.filter((event) => event.date < today).slice(-16);
+  const charges: PlayerCharge[] = [];
+  for (const event of recent) {
+    const members = ROSTER.filter((member) => member.subteamId === event.subteamId).filter((_, index) => index % 2 === 0).slice(0, 3);
+    for (const member of members) {
+      charges.push({
+        id: `c-${event.id}-${member.id}`,
+        memberId: member.id,
+        date: event.date,
+        time: event.start,
+        amount: -(CHARGE_AMOUNT[event.venueId] ?? 30),
+        kind: "event",
+        type: event.type,
+        titleId: event.titleId,
+        venueId: event.venueId,
+      });
+    }
+  }
+  const paidOn = recent.at(-1)?.date ?? today;
+  charges.push(
+    { id: "pay-m4", memberId: "m4", date: paidOn, time: "14:12", amount: 100, kind: "payment" },
+    { id: "pay-m6", memberId: "m6", date: paidOn, time: "16:00", amount: 108, kind: "payment" },
+    { id: "pay-m10", memberId: "m10", date: paidOn, time: "17:05", amount: 121, kind: "payment" },
+  );
+  return charges;
+}
+
+let catalogCache: { key: string; events: TeamEvent[]; charges: PlayerCharge[] } | null = null;
+
+function catalog(now = new Date()) {
+  const key = `${now.getFullYear()}-${now.getMonth()}`;
+  if (catalogCache?.key === key) return catalogCache;
+  const events = rollingEvents(now);
+  catalogCache = { key, events, charges: rollingCharges(events, now) };
+  return catalogCache;
+}
+
+export function catalogEvents(now = new Date()): TeamEvent[] {
+  return catalog(now).events;
+}
 
 export type BalanceEntry = {
   id: string;
@@ -135,41 +217,8 @@ export type PlayerCharge = {
   venueId?: string;
 };
 
-export const PLAYER_CHARGES: PlayerCharge[] = [
-  { id: "c1", memberId: "m1", date: "2026-09-25", time: "19:00", amount: -40, kind: "event", type: "game", titleId: "vs-tukums", venueId: "inbox" },
-  { id: "c2", memberId: "m1", date: "2026-09-24", time: "20:00", amount: -30, kind: "event", type: "training", titleId: "pregame", venueId: "volvo" },
-  { id: "c3", memberId: "m1", date: "2026-09-19", time: "19:00", amount: -50, kind: "event", type: "game", titleId: "vs-liepaja", venueId: "volvo" },
-  { id: "c4", memberId: "m2", date: "2026-09-25", time: "19:00", amount: -95, kind: "event", type: "game", titleId: "vs-tukums", venueId: "inbox" },
-  { id: "c5", memberId: "m2", date: "2026-09-24", time: "20:00", amount: -40, kind: "event", type: "training", titleId: "pregame", venueId: "volvo" },
-  { id: "c6", memberId: "m2", date: "2026-09-19", time: "19:00", amount: -85, kind: "event", type: "game", titleId: "vs-liepaja", venueId: "volvo" },
-  { id: "c7", memberId: "m2", date: "2026-09-15", time: "20:00", amount: -56, kind: "event", type: "training", titleId: "situations", venueId: "inbox" },
-  { id: "c8", memberId: "m3", date: "2026-09-24", time: "20:00", amount: -15, kind: "event", type: "training", titleId: "pregame", venueId: "volvo" },
-  { id: "c9", memberId: "m3", date: "2026-09-19", time: "19:00", amount: -25, kind: "event", type: "game", titleId: "vs-liepaja", venueId: "volvo" },
-  { id: "c10", memberId: "m4", date: "2026-09-22", time: "14:12", amount: 100, kind: "payment" },
-  { id: "c11", memberId: "m4", date: "2026-09-05", time: "18:00", amount: -85, kind: "event", type: "game", titleId: "vs-jelgava", venueId: "inbox" },
-  { id: "c12", memberId: "m5", date: "2026-09-25", time: "19:00", amount: -45, kind: "event", type: "game", titleId: "vs-tukums", venueId: "inbox" },
-  { id: "c13", memberId: "m5", date: "2026-09-24", time: "20:00", amount: -40, kind: "event", type: "training", titleId: "pregame", venueId: "volvo" },
-  { id: "c14", memberId: "m6", date: "2026-09-16", time: "16:00", amount: 108, kind: "payment" },
-  { id: "c15", memberId: "m6", date: "2026-09-12", time: "16:00", amount: -72, kind: "event", type: "game", titleId: "vs-ogre", venueId: "daugava" },
-  { id: "c16", memberId: "m6", date: "2026-09-03", time: "19:30", amount: -36, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c17", memberId: "m7", date: "2026-09-29", time: "19:30", amount: -80, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c18", memberId: "m7", date: "2026-09-22", time: "19:30", amount: -90, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c19", memberId: "m7", date: "2026-09-12", time: "16:00", amount: -150, kind: "event", type: "game", titleId: "vs-ogre", venueId: "daugava" },
-  { id: "c20", memberId: "m7", date: "2026-09-03", time: "19:30", amount: -120, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c21", memberId: "m7", date: "2026-08-20", time: "18:00", amount: -104, kind: "event", type: "game", titleId: "vs-riga", venueId: "daugava" },
-  { id: "c22", memberId: "m8", date: "2026-09-22", time: "19:30", amount: -24, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c23", memberId: "m8", date: "2026-09-12", time: "16:00", amount: -36, kind: "event", type: "game", titleId: "vs-ogre", venueId: "daugava" },
-  { id: "c24", memberId: "m9", date: "2026-09-22", time: "19:30", amount: -18, kind: "event", type: "training", titleId: "ice", venueId: "daugava" },
-  { id: "c25", memberId: "m10", date: "2026-09-21", time: "17:05", amount: 121, kind: "payment" },
-  { id: "c26", memberId: "m10", date: "2026-09-17", time: "17:30", amount: -48, kind: "event", type: "training", titleId: "ice", venueId: "ogre" },
-  { id: "c27", memberId: "m10", date: "2026-09-08", time: "17:30", amount: -48, kind: "event", type: "training", titleId: "skills", venueId: "ogre" },
-  { id: "c28", memberId: "m11", date: "2026-09-17", time: "17:30", amount: -32, kind: "event", type: "training", titleId: "ice", venueId: "ogre" },
-  { id: "c29", memberId: "m12", date: "2026-09-17", time: "17:30", amount: -48, kind: "event", type: "training", titleId: "ice", venueId: "ogre" },
-  { id: "c30", memberId: "m12", date: "2026-09-08", time: "17:30", amount: -48, kind: "event", type: "training", titleId: "skills", venueId: "ogre" },
-];
-
 export function chargesForMember(memberId: string): PlayerCharge[] {
-  return PLAYER_CHARGES.filter((charge) => charge.memberId === memberId).sort(
+  return catalog().charges.filter((charge) => charge.memberId === memberId).sort(
     (a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time),
   );
 }

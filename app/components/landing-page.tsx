@@ -5,9 +5,9 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { EVENTS, VENUES, type EventType } from "@/app/lib/demo-data";
+import { catalogEvents, VENUES, type EventType } from "@/app/lib/demo-data";
 import { sendContactMessage } from "@/app/lib/contact/actions";
-import { isoDate, weekdayHeaders } from "@/app/lib/format";
+import { formatMonthTitle, isoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -252,16 +252,18 @@ function Step({ n, title, text }: { n: string; title: string; text: string }) {
 function ProductPreview() {
   const { formatLang, t } = useLanguage();
   const days = weekdayHeaders(formatLang);
-  const year = 2026;
-  const month = 8;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = isoDate(now);
   const cells = previewMonth(year, month);
-  const nextGame = EVENTS.find((event) => event.date.startsWith("2026-09") && event.type === "game");
+  const nextGame = catalogEvents().find((event) => event.type === "game" && event.date >= today);
   const nextPlace = VENUES.find((venue) => venue.id === nextGame?.venueId)?.area.split(",")[0] ?? "";
 
   return (
     <div aria-hidden="true" className="rounded-3xl bg-paper p-4 shadow-[0_24px_60px_-28px_rgba(16,36,51,0.55)] ring-1 ring-line sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-base font-semibold">{t("landing.preview.month")}</p>
+        <p className="text-base font-semibold">{formatMonthTitle(year, month, formatLang)}</p>
         <div className="flex gap-3 text-xs text-muted">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-game" />
@@ -322,7 +324,7 @@ function previewMonth(year: number, month: number): { iso: string; day: number; 
       iso,
       day: cursor.getDate(),
       muted: cursor.getMonth() !== month,
-      events: EVENTS.filter((event) => event.date === iso).map((event) => ({
+      events: catalogEvents().filter((event) => event.date === iso).map((event) => ({
         id: event.id,
         start: event.start,
         type: event.type,

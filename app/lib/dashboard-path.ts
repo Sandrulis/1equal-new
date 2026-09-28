@@ -1,4 +1,4 @@
-import { EVENTS } from "@/app/lib/demo-data";
+import { catalogEvents } from "@/app/lib/demo-data";
 
 export type DashboardBase = "/dashboard" | "/demo";
 
@@ -33,7 +33,7 @@ export function parseDashboardPath(path: string[] | undefined, options?: { demoE
   const demoEvents = options?.demoEvents ?? true;
   const eventId = parts[1];
   const eventPath = parts[0] === "events" && Boolean(eventId && /^[A-Za-z0-9-]+$/.test(eventId));
-  const catalogEvent = EVENTS.some((event) => event.id === eventId);
+  const catalogEvent = catalogEvents().some((event) => event.id === eventId);
   if (eventPath && (demoEvents || !catalogEvent) && parts.length === 2) {
     return { view: "home", eventId, lineup: false };
   }

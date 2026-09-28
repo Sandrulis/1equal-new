@@ -12,7 +12,7 @@ function contentSecurityPolicy(): { nonce: string; policy: string } {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloud.umami.is https://*.sentry.io https://*.ingest.sentry.io https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloud.umami.is https://gateway.umami.is https://*.sentry.io https://*.ingest.sentry.io https://challenges.cloudflare.com",
     "frame-src https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",

@@ -42,7 +42,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 | `/dashboard/team/:id` | Spēlētāja profils. Bilances vēsture ir redzama tikai ar `module_finance` |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Slēpts, ja `module_subteams` ir izslēgts |
 | `/dashboard/venues` | Komandas laukumi. Treniņa cena. Dzēšana paslēpj rindu, neizdzēš to |
-| `/demo/...` | Tie paši skati bez konta un ar visiem moduļiem. `/demo/admin` nav |
+| `/demo/...` | Tie paši skati bez konta un ar visiem moduļiem. Notikumu datumi ir iepriekšējā, šajā un divos nākamajos mēnešos. `/demo/admin` nav |
 
 Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu un `leader_id`. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, pozīcija, telefons, vairākas apakškomandas un samaksas atbrīvojums. Balsošana ir atvērta `training_voting_hours` (24) un `game_voting_hours` (72) stundas pirms sākuma. Būs, ja finanses ir ieslēgtas un nav atbrīvojuma, noņem laukuma cenu no `balance_entries` un pieskaita `teams.balance` ar `adjust_team_balance`. Pēc notikuma sākuma `settle_finished_events` vienā SQL noņem spēles izdevumus un ieraksta `team_ledger`. Laiks ir `Europe/Riga`. Tas notiek, kad ielādējas komandas, nevis ar cron. Treniņam izdevumu nav. Dzēšana atdod pieteikušos naudu un atgriež jau norautos izdevumus. Joslas Pievienot bilanci glabājas `balance_entries` ar `kind = manual`, un to redz, ja finanses ir ieslēgtas. To drīkst tikai komandas vadītājs. Panelis ielādē pasākumus un virsgrāmatu par pēdējām 400 dienām.
 

@@ -2,7 +2,7 @@
 
 Komandas vadības panelis. Spēles, treniņi, dalība un komandas izdevumi vienuviet. Publiska landing lapa, demo bez konta un ielogots panelis ar Supabase.
 
-**Current version:** `0.1.8`
+**Current version:** `0.1.9`
 
 ## Palaist
 
@@ -21,7 +21,7 @@ Atver [http://localhost:3130](http://localhost:3130).
 
 - **Landing** — `/` ar pilna mēneša kalendāra priekšskatu, priekšrocībām, jautājumiem un kontaktu formu (vārds, e-pasts, temats, ziņa). Galvene: Iespējas, Priekšrocības, Jautājumi, Kā tas strādā
 - **Auth** — `/login`, `/signup`, `/forgot-password`, `/reset-password`. Reģistrācijā vārds un uzvārds, parole ar rādīt/paslēpt, un apstiprinājuma vēstule pirms pirmās sesijas. Pirmais reģistrētais lietotājs ir `is_admin`. Aizmirsi paroli prasa e-pastu un Cloudflare pārbaudi, ja Turnstile ir ieslēgts, un nosūta saiti. Jaunā parole tiek saglabāta tikai pēc saites. Ielogotā izvēlnē Mainīt paroli prasa pašreizējo paroli. 2FA ir Authenticator (TOTP). Google poga ir, ja integrācija ir ieslēgta
-- **Demo** — `/demo` ir publisks panelis ar parauga komandu HK Rīga Amateiri. Daļai spēlētāju ir Entuziastu profils. `/panel` novirza uz `/demo`. Nekas no demo kalendāra netiek glabāts serverī. Demo rāda visus moduļus
+- **Demo** — `/demo` ir publisks panelis ar parauga komandu HK Rīga Amateiri. Daļai spēlētāju ir Entuziastu profils. `/panel` novirza uz `/demo`. Kalendāra datumi seko tekošajam mēnesim. Nekas no demo kalendāra netiek glabāts serverī. Demo rāda visus moduļus
 - **Panelis** — `/dashboard` prasa sesiju. Augšā valoda, lietotājs un komanda. Virs 600px komandas ikona atver komandu sarakstu. Kreisā sānjosla sākas ar Sākumu. Zem 600px apakšējā izvēlne un burger pogas augšā. Admina izvēlne ir pa labi. Izlogošanās aizved uz `/`
 - **Komanda** — izveide, pievienošanās ar kodu, dalībnieki, apakškomandas, laukumi un notikumi glabājas datubāzē. Ielogotā kalendārā nav parauga spēļu un treniņu. Notikumu pievieno, labo un dzēš ar datuma izvēli, veidu, sākumu un laukumu. Būs noņem laukuma cenu no spēlētāja un pievieno komandai. Pēc notikuma sākuma spēles izdevumi vienreiz noiet no komandas. Sastāva sadalījums paliek lapā, kamēr to neaizver. Uzaicinājuma e-pasts vēl netiek nosūtīts
 - **Moduļi** — apakškomandas, spēļu izklājums un finanses var izslēgt. Kalendārs, komanda un laukumi vienmēr ir redzami. Izslēgts izklājums neļauj atvērt sastāvu. Izslēgtas finanses paslēpj komandas un spēlētāja bilanci

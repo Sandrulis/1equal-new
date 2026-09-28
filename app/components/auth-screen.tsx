@@ -42,22 +42,12 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
       return;
     }
     setGooglePending(true);
-    const form = document.createElement("form");
-    form.method = "get";
-    form.action = "/auth/google/sign-in";
-    const fields: Record<string, string> = { from: mode === "signup" ? "signup" : "login" };
+    const url = new URL("/auth/google/sign-in", window.location.origin);
+    url.searchParams.set("from", mode === "signup" ? "signup" : "login");
     const remember = formRef.current?.elements.namedItem("remember");
-    if (remember instanceof HTMLInputElement && remember.checked) fields.remember = "1";
-    if (turnstileToken) fields.turnstile = turnstileToken;
-    for (const [name, fieldValue] of Object.entries(fields)) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name;
-      input.value = fieldValue;
-      form.append(input);
-    }
-    document.body.append(form);
-    form.submit();
+    if (remember instanceof HTMLInputElement && remember.checked) url.searchParams.set("remember", "1");
+    if (turnstileToken) url.searchParams.set("turnstile", turnstileToken);
+    window.location.assign(url.href);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
