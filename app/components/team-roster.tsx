@@ -15,6 +15,8 @@ import { useCurrencySymbol, useFormatMoney } from "@/app/components/currency-pro
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { votingHours } from "@/app/lib/team-defaults";
+import { teamNamesMatch } from "@/app/lib/ehl-team";
+import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDismissed, clearInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
 import { useLanguage } from "@/app/lib/language";
@@ -75,7 +77,7 @@ export function TeamRoster({
   trainingVotingHours?: number;
   gameVotingHours?: number;
   currency?: string | null;
-  onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) => void;
+  onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) => void;
   subteams?: Subteam[];
   memberId: string | null;
   onOpenMember: (id: string) => void;
@@ -353,6 +355,8 @@ export function TeamRoster({
         <TeamSettingsDialog
           open={settingsOpen}
           name={teamName}
+          sourceUrl={sourceUrl}
+          logoUrl={logoUrl}
           currency={currency}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
@@ -478,9 +482,17 @@ function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entrie
   );
 }
 
+const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
+  invalid: "team.link.invalid",
+  not_found: "team.link.not_found",
+  failed: "team.link.failed",
+};
+
 function TeamSettingsDialog({
   open,
   name,
+  sourceUrl,
+  logoUrl,
   currency,
   trainingHours,
   gameHours,
@@ -489,75 +501,154 @@ function TeamSettingsDialog({
 }: {
   open: boolean;
   name: string;
+  sourceUrl: string | null;
+  logoUrl: string | null;
   currency: string | null;
   trainingHours: number;
   gameHours: number;
   onClose: () => void;
-  onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) => Promise<boolean>;
+  onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) => Promise<boolean>;
 }) {
   const { t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
   const [draftName, setDraftName] = useState(name);
+  const [draftLink, setDraftLink] = useState(sourceUrl ?? "");
   const [draftCurrency, setDraftCurrency] = useState(currency);
   const [training, setTraining] = useState(String(trainingHours));
   const [game, setGame] = useState(String(gameHours));
-  const [pending, setPending] = useState(false);
-  const settingsKey = `${open}|${name}|${currency ?? ""}|${trainingHours}|${gameHours}`;
+  const [busy, setBusy] = useState<"lookup" | "save" | null>(null);
+  const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
+  const settingsKey = `${open}|${name}|${sourceUrl ?? ""}|${currency ?? ""}|${trainingHours}|${gameHours}`;
   const [seenSettings, setSeenSettings] = useState(settingsKey);
   if (settingsKey !== seenSettings) {
     setSeenSettings(settingsKey);
     if (open) {
       setDraftName(name);
+      setDraftLink(sourceUrl ?? "");
       setDraftCurrency(currency);
       setTraining(String(trainingHours));
       setGame(String(gameHours));
-      setPending(false);
+      setBusy(null);
+      setMismatch(null);
     }
   }
 
   const trainingValue = votingHours(training);
   const gameValue = votingHours(game);
   const hoursOk = trainingValue != null && gameValue != null;
-  const dirty = draftName.trim() !== name || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours;
+  const linkValue = draftLink.trim();
+  const dirty = draftName.trim() !== name || linkValue !== (sourceUrl ?? "") || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!draftName.trim() || !hoursOk || trainingValue == null || gameValue == null || !dirty || pending) return;
-    setPending(true);
-    const saved = await onSave({ name: draftName.trim(), currency: draftCurrency, trainingVotingHours: trainingValue, gameVotingHours: gameValue });
-    setPending(false);
+  async function persist(nextSource: string | null, nextLogo: string | null) {
+    if (trainingValue == null || gameValue == null) return;
+    setBusy("save");
+    const saved = await onSave({
+      name: draftName.trim(),
+      currency: draftCurrency,
+      trainingVotingHours: trainingValue,
+      gameVotingHours: gameValue,
+      sourceUrl: nextSource,
+      logoUrl: nextLogo,
+    });
+    setBusy(null);
     if (saved) onClose();
   }
 
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!draftName.trim() || !hoursOk || !dirty || busy) return;
+    if (!linkValue) {
+      await persist(null, null);
+      return;
+    }
+    if (linkValue === (sourceUrl ?? "")) {
+      await persist(sourceUrl, logoUrl);
+      return;
+    }
+    setBusy("lookup");
+    const result = await lookupEhlTeamName(linkValue);
+    setBusy(null);
+    if (!result.ok) {
+      showFeedback({ message: t(LINK_ERROR[result.error]), variant: "error" });
+      return;
+    }
+    if (!teamNamesMatch(draftName, result.name)) {
+      setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
+      return;
+    }
+    await persist(result.url, result.logoUrl);
+  }
+
   return (
-    <AdminDialog open={open} title={t("team.settings.title")} onClose={onClose}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
-        <label className="block text-sm">
-          <span className="text-muted">{t("team.settings.name")}</span>
-          <input required value={draftName} maxLength={80} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
-        </label>
-        <MoneyVotingFields
-          idPrefix="team-settings"
-          currency={draftCurrency}
-          trainingHours={training}
-          gameHours={game}
-          systemCurrency={brand.currency}
-          allowSystemCurrency
-          disabled={pending}
-          onCurrency={setDraftCurrency}
-          onTrainingHours={setTraining}
-          onGameHours={setGame}
-        />
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+    <>
+      <AdminDialog open={open && mismatch === null} title={t("team.settings.title")} onClose={onClose}>
+        <form onSubmit={(event) => void submit(event)} className="space-y-4">
+          <label className="block text-sm">
+            <span className="text-muted">{t("team.settings.name")}</span>
+            <input required value={draftName} maxLength={80} disabled={busy !== null} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
+          </label>
+          <label className="block text-sm">
+            <span className="text-muted">{t("team.empty.link")}</span>
+            <span className="ml-2 text-muted">{t("team.empty.link_optional")}</span>
+            <input
+              value={draftLink}
+              onChange={(event) => setDraftLink(event.target.value)}
+              placeholder={t("team.empty.link_placeholder")}
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={busy !== null}
+              className={fieldClass}
+            />
+          </label>
+          <MoneyVotingFields
+            idPrefix="team-settings"
+            currency={draftCurrency}
+            trainingHours={training}
+            gameHours={game}
+            systemCurrency={brand.currency}
+            allowSystemCurrency
+            disabled={busy !== null}
+            onCurrency={setDraftCurrency}
+            onTrainingHours={setTraining}
+            onGameHours={setGame}
+          />
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} disabled={busy !== null} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+              {t("actions.cancel")}
+            </button>
+            <button type="submit" disabled={!dirty || !hoursOk || busy !== null} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+              {busy === "lookup" ? t("team.empty.checking") : t("actions.save")}
+            </button>
+          </div>
+        </form>
+      </AdminDialog>
+      <AdminDialog
+        open={mismatch !== null}
+        title={t("team.name.mismatch.title")}
+        lead={mismatch ? t("team.settings.link_mismatch", { remote: mismatch.remote, entered: draftName.trim() }) : undefined}
+        onClose={() => setMismatch(null)}
+      >
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setMismatch(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
             {t("actions.cancel")}
           </button>
-          <button type="submit" disabled={!dirty || !hoursOk || pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+          <button
+            type="button"
+            onClick={() => {
+              const url = mismatch?.url ?? null;
+              const nextLogo = mismatch?.logoUrl ?? null;
+              setMismatch(null);
+              void persist(url, nextLogo);
+            }}
+            className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white"
+          >
             {t("actions.save")}
           </button>
         </div>
-      </form>
-    </AdminDialog>
+      </AdminDialog>
+    </>
   );
 }
 

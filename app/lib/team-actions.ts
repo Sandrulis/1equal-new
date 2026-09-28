@@ -139,7 +139,9 @@ export async function updateOwnedTeam(input: {
   currency: string | null;
   trainingVotingHours: number;
   gameVotingHours: number;
-}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number } | { ok: false; error: MessageKey }> {
+  sourceUrl: string | null;
+  logoUrl: string | null;
+}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const name = input.name.trim().slice(0, 80);
@@ -149,15 +151,18 @@ export async function updateOwnedTeam(input: {
   if (input.currency && !currency) return { ok: false, error: "site_settings.error.team_defaults" };
   if (!name) return { ok: false, error: "site_settings.error.name" };
   if (training == null || game == null) return { ok: false, error: "site_settings.error.team_defaults" };
+  const source = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl)?.toString() ?? null : null;
+  if (input.sourceUrl && !source) return { ok: false, error: "team.link.invalid" };
+  const logo = source ? cleanLogo(input.logoUrl) : null;
   const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
   const saved = await gate.client
     .from("teams")
-    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, updated_at: new Date().toISOString() })
+    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: source, logo_url: logo, updated_at: new Date().toISOString() })
     .eq("id", input.teamId);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
-  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game };
+  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: source, logoUrl: logo };
 }
 
 export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {

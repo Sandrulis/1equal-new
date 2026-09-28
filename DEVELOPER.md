@@ -38,7 +38,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 | Ceļš | Saturs |
 |---|---|
 | `/dashboard` | Kalendārs bez parauga notikumiem. Pievienot, labot un dzēst saglabā `team_events`. Vadītājs labo savas komandas notikumus. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
-| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
+| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Komandas iestatījumos vadītājs labo nosaukumu, valūtu, balsošanas stundas un Entuziastu saiti. Tukša saite noņem `source_url` un no tās ielādēto logo. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
 | `/dashboard/team/:id` | Spēlētāja profils. Bilances vēsture ir redzama tikai ar `module_finance` |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Slēpts, ja `module_subteams` ir izslēgts |
 | `/dashboard/venues` | Komandas laukumi. Treniņa cena. Dzēšana paslēpj rindu, neizdzēš to |

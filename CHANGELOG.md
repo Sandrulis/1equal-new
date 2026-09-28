@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.10
+
+- Komandas iestatījumos var pievienot, labot vai noņemt Entuziastu saiti
+- Produkcijas lapas vairs nekrīt Sentry startā. Supabase adrese der arī ar `/rest/v1` galā
+
 ## v0.1.9
 
 - Google pieslēgums iet ar lapas navigāciju, Umami sūtījumi vairs nav CSP bloķēti, un avatari paliek savā izmērā

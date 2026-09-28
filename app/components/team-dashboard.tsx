@@ -197,7 +197,7 @@ export function TeamDashboard({
     router.refresh();
   }
 
-  function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number }) {
+  function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null }) {
     if (!ownedTeam) return;
     const next = { ...ownedTeam, ...patch };
     setCurrentTeam(next);

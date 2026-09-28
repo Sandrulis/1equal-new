@@ -4,7 +4,7 @@ import { parseRememberSession, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } 
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
 function contentSecurityPolicy(): { nonce: string; policy: string } {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const nonce = btoa(crypto.randomUUID());
   const devEval = process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
   const policy = [
     "default-src 'self'",

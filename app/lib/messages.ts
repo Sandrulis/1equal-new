@@ -525,6 +525,7 @@ export const messages = {
   "team.link.failed": { lv: "Komandas saiti neizdevās nolasīt.", en: "Could not read the team link.", ru: "Не удалось прочитать ссылку команды." },
   "team.name.mismatch.title": { lv: "Nosaukums nesakrīt", en: "Name does not match", ru: "Название не совпадает" },
   "team.name.mismatch.lead": { lv: "Saitē komanda ir {remote}. Tu ievadīji {entered}. Vai tiešām izveidot ar šo nosaukumu?", en: "The page says {remote}. You entered {entered}. Create the team with this name anyway?", ru: "На странице команда {remote}. Ты ввёл {entered}. Всё равно создать с этим названием?" },
+  "team.settings.link_mismatch": { lv: "Saitē komanda ir {remote}. Tu ievadīji {entered}. Vai saglabāt šo saiti?", en: "The page says {remote}. You entered {entered}. Save this link anyway?", ru: "На странице команда {remote}. Ты ввёл {entered}. Всё равно сохранить эту ссылку?" },
   "team.empty.join_title": { lv: "Pievienoties esošai komandai", en: "Join an existing team", ru: "Вступить в существующую команду" },
   "team.empty.code": { lv: "Ievadi uzaicinājuma kodu", en: "Enter the invite code", ru: "Введи код приглашения" },
   "team.empty.join": { lv: "Pievienoties komandai", en: "Join team", ru: "Вступить в команду" },
