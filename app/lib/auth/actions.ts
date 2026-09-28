@@ -226,11 +226,12 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
   const buttonKey = kind === "recovery" ? "auth.forgot.mail_button" : "auth.signup.mail_button";
   const html = buildEmailHtml({
     systemName: brand.name,
+    eyebrow: translate(lang, kind === "recovery" ? "admin.email.kind.password_reset" : "admin.email.kind.signup"),
     heading: translate(lang, subjectKey),
     bodyText: translate(lang, bodyKey),
     buttonLabel: translate(lang, buttonKey),
     actionLink,
-    footerHint: brand.name,
+    footerHint: translate(lang, "admin.email.footer"),
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;

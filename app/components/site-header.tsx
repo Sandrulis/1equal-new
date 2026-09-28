@@ -1,14 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { type MouseEvent } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { useLanguage } from "@/app/lib/language";
+import { landingSlug, scrollToLandingSection, type LandingSection } from "@/app/lib/landing-sections";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
+import type { MessageKey } from "@/app/lib/messages";
+
+const NAV: { section: LandingSection; label: MessageKey }[] = [
+  { section: "features", label: "landing.nav.features" },
+  { section: "advantages", label: "landing.nav.advantages" },
+  { section: "faq", label: "landing.nav.faq" },
+  { section: "how", label: "landing.nav.how" },
+  { section: "contact", label: "landing.nav.contact" },
+];
 
 export function SiteHeader() {
-  const { t } = useLanguage();
+  const { t, formatLang } = useLanguage();
   const brand = useSiteBrand();
+  const pathname = usePathname();
+  const onHome = pathname === "/";
+
+  function openSection(event: MouseEvent<HTMLAnchorElement>, slug: string) {
+    if (!onHome) return;
+    event.preventDefault();
+    scrollToLandingSection(formatLang, slug, (id) => {
+      window.history.pushState(null, "", `#${id}`);
+    });
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
@@ -19,21 +41,19 @@ export function SiteHeader() {
             {brand.name}
           </Link>
           <nav aria-label={t("nav.sections")} className="hidden items-center gap-6 text-sm text-muted md:flex">
-            <Link href="/#iespejas" className="cursor-pointer hover:text-ink">
-              {t("landing.nav.features")}
-            </Link>
-            <Link href="/#prieksrocibas" className="cursor-pointer hover:text-ink">
-              {t("landing.nav.advantages")}
-            </Link>
-            <Link href="/#jautajumi" className="cursor-pointer hover:text-ink">
-              {t("landing.nav.faq")}
-            </Link>
-            <Link href="/#soli" className="cursor-pointer hover:text-ink">
-              {t("landing.nav.how")}
-            </Link>
-            <Link href="/#kontakti" className="cursor-pointer hover:text-ink">
-              {t("landing.nav.contact")}
-            </Link>
+            {NAV.map((item) => {
+              const slug = landingSlug(formatLang, item.section);
+              return (
+                <a
+                  key={item.section}
+                  href={onHome ? `#${slug}` : `/#${slug}`}
+                  onClick={(event) => openSection(event, slug)}
+                  className="cursor-pointer hover:text-ink"
+                >
+                  {t(item.label)}
+                </a>
+              );
+            })}
           </nav>
         </div>
         <div className="flex items-center gap-2">

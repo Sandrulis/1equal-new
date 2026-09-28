@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { castMemberVote } from "@/app/lib/attendance-vote";
-import { buildEmailHtml, fillEmailText } from "@/app/lib/email/build-email-html";
+import { buildEmailHtml, fillEmailText, plainDash } from "@/app/lib/email/build-email-html";
 import { eventHref } from "@/app/lib/dashboard-path";
 import { eventVotingOpen } from "@/app/lib/event-voting";
 import { formatClock, formatDisplayDate, formatMoney } from "@/app/lib/format";
@@ -67,7 +67,7 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<
       date: formatDisplayDate(event.date, brand.display),
       time: formatClock(event.start, brand.display.timeFormat),
       type: translate(lang, typeKey),
-      venue: venue.data?.name?.trim() || "—",
+      venue: venue.data?.name?.trim() || "-",
       price: formatMoney(Number.isFinite(price) ? price : 0, currency),
     };
     const subjectTemplate = template.data?.subject?.trim() || messages["admin.email.kind.event"][lang];
@@ -109,14 +109,21 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<
           if (saved.error) return;
           const links = voteLinks(token);
           const filled = { ...params, name: personName(person) };
+          const subject = plainDash(fillEmailText(subjectTemplate, filled));
           const html = buildEmailHtml({
             systemName: brand.name,
-            heading: translate(lang, "admin.email.kind.event"),
+            eyebrow: translate(lang, "admin.email.kind.event"),
+            heading: subject,
             bodyText: fillEmailText(bodyTemplate, filled),
             buttonLabel: fillEmailText(buttonTemplate, filled),
             actionLink: systemLink,
             footerHint: translate(lang, "admin.email.footer"),
             language: lang,
+            card: {
+              label: translate(lang, "admin.users.team"),
+              title: params.team,
+              detail: `${params.date} ${params.time}\n${params.type}\n${params.venue}`,
+            },
             vote: {
               hint: translate(lang, "email.vote.hint"),
               goingLabel: translate(lang, "email.vote.going"),
@@ -131,7 +138,7 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<
             body: JSON.stringify({
               from,
               to: [person.email.trim()],
-              subject: fillEmailText(subjectTemplate, filled),
+              subject,
               html,
               reply_to: replyTo,
             }),

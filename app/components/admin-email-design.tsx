@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { buildEmailHtml, fillEmailText } from "@/app/lib/email/build-email-html";
+import { buildEmailHtml, fillEmailText, plainDash } from "@/app/lib/email/build-email-html";
 import { useLanguage } from "@/app/lib/language";
 import { asLang, translate, type Lang, type MessageKey } from "@/app/lib/messages";
 import { saveEmailTemplates } from "@/app/lib/site-admin/actions";
@@ -76,20 +76,26 @@ export function AdminEmailDesign({
     if (!active || !language) return { subject: "", html: "" };
     const mailLang = asLang(language.code);
     const params = previewParams(mailLang, systemName);
-    const subject = fillEmailText(active.subjects[language.code] ?? "", params);
-    const body = fillEmailText(active.bodies[language.code] ?? "", params);
-    const button = fillEmailText(active.buttons[language.code] ?? "", params);
-    const heading = kind === "invite" ? params.team : kind === "event" ? translate(mailLang, "admin.email.kind.event") : systemName;
+    const subject = plainDash(fillEmailText(active.subjects[language.code] ?? "", params));
+    const body = plainDash(fillEmailText(active.bodies[language.code] ?? "", params));
+    const button = plainDash(fillEmailText(active.buttons[language.code] ?? "", params));
+    const card = kind === "invite"
+      ? { label: translate(mailLang, "admin.users.team"), title: params.team, detail: translate(mailLang, "email.invite.by", { name: params.inviter }) }
+      : kind === "event"
+        ? { label: translate(mailLang, "admin.users.team"), title: params.team, detail: `${params.date} ${params.time}\n${params.type}\n${params.venue}` }
+        : undefined;
     return {
       subject,
       html: buildEmailHtml({
         systemName,
-        heading,
+        eyebrow: translate(mailLang, KIND_LABEL[kind]),
+        heading: subject || systemName,
         bodyText: body,
         buttonLabel: button,
         actionLink: params.link,
         footerHint: translate(mailLang, "admin.email.footer"),
         language: mailLang,
+        card,
         vote: kind === "event"
           ? {
               hint: translate(mailLang, "email.vote.hint"),
@@ -206,8 +212,8 @@ export function AdminEmailDesign({
         </form>
         <aside className="rounded-2xl bg-paper p-5 ring-1 ring-line">
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">{t("admin.email.preview")}</p>
-          <p className="mt-3 text-sm font-semibold">{preview.subject || "—"}</p>
-          <iframe title={t("admin.email.preview")} srcDoc={preview.html} sandbox="" className="mt-3 h-[420px] w-full rounded-xl bg-ice ring-1 ring-line" />
+          <p className="mt-3 text-sm font-semibold">{preview.subject || "-"}</p>
+          <iframe title={t("admin.email.preview")} srcDoc={preview.html} sandbox="" className="mt-3 h-[640px] w-full rounded-xl bg-ice ring-1 ring-line" />
         </aside>
       </div>
     </div>

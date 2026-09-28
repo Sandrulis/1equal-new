@@ -119,6 +119,43 @@ function eventTitleKey(titleId: string): MessageKey {
   return `event.${titleId}` as MessageKey;
 }
 
+type HomeView = "calendar" | "poll";
+
+const HOME_VIEW_KEY = "1equal-home-view";
+const homeViewListeners = new Set<() => void>();
+let homeViewValue: HomeView | null = null;
+
+function readHomeView(): HomeView | null {
+  if (homeViewValue) return homeViewValue;
+  try {
+    const stored = sessionStorage.getItem(HOME_VIEW_KEY);
+    if (stored === "calendar" || stored === "poll") {
+      homeViewValue = stored;
+      return stored;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function subscribeHomeView(listener: () => void) {
+  homeViewListeners.add(listener);
+  return () => {
+    homeViewListeners.delete(listener);
+  };
+}
+
+function writeHomeView(value: HomeView) {
+  homeViewValue = value;
+  try {
+    sessionStorage.setItem(HOME_VIEW_KEY, value);
+  } catch {
+    // Session storage can be unavailable. The in-memory value still keeps the view for this tab.
+  }
+  for (const listener of homeViewListeners) listener();
+}
+
 export function TeamDashboard({
   basePath,
   account = null,
@@ -282,7 +319,7 @@ export function TeamDashboard({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [homeView, setHomeView] = useState<"calendar" | "poll" | null>(null);
+  const homeView = useSyncExternalStore(subscribeHomeView, readHomeView, () => null);
   const [votingId, setVotingId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
@@ -886,7 +923,7 @@ export function TeamDashboard({
         {account && ownedTeam && !ownedTeam.watching && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
           <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
         ) : null}
-        {!showStart && pendingVoteEvents.length ? (
+        {!showStart && pendingVoteEvents.length && !(view === "home" && showPoll && !lineupEvent) ? (
           <div role="status" className="mb-4 rounded-2xl bg-game-soft px-4 py-3 ring-1 ring-line">
             <p className="text-sm font-medium">{t("event.vote.needed")}</p>
             <ul className="mt-2 flex flex-wrap gap-2">
@@ -1023,7 +1060,7 @@ export function TeamDashboard({
         <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
         {pendingVoteEvents.length ? (
           <div className="mb-4">
-            <CalendarPollSwitch value={resolvedHomeView} onChange={setHomeView} />
+            <CalendarPollSwitch value={resolvedHomeView} onChange={writeHomeView} />
           </div>
         ) : null}
         <section id="kalendars" className={`scroll-mt-4 ${showPoll ? "space-y-4" : "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"}`}>
@@ -1185,6 +1222,7 @@ export function TeamDashboard({
                               type="button"
                               onClick={(click) => {
                                 click.stopPropagation();
+                                writeHomeView("calendar");
                                 showEvent(event, date);
                               }}
                               className={`truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 max-[499px]:text-clip ${

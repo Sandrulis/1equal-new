@@ -2,33 +2,43 @@ import type { Metadata } from "next";
 
 export const revalidate = 3600;
 import { LandingPage } from "@/app/components/landing-page";
-import { getSiteBrand } from "@/app/lib/site-admin/repository";
-import { siteTitleFor } from "@/app/lib/site-brand";
-import { getSiteUrl, siteDescription, siteSocialDescription } from "@/app/lib/site";
+import { getPublicI18n, getSiteBrand } from "@/app/lib/site-admin/repository";
+import { asLang, translate } from "@/app/lib/messages";
+import { getSiteUrl } from "@/app/lib/site";
+
+function pageLocale(lang: string): string {
+  if (lang === "en") return "en_US";
+  if (lang === "ru") return "ru_RU";
+  return "lv_LV";
+}
 
 export async function generateMetadata(): Promise<Metadata> {
-  const brand = await getSiteBrand();
-  const title = siteTitleFor(brand.name);
+  const [brand, i18n] = await Promise.all([getSiteBrand(), getPublicI18n()]);
+  const lang = asLang(i18n.defaultCode);
+  const title = `${brand.name} · ${translate(lang, "landing.hero.title")}`;
+  const description = translate(lang, "landing.seo.description");
+  const locale = pageLocale(lang);
+  const alternates = ["lv_LV", "en_US", "ru_RU"].filter((item) => item !== locale);
   return {
   title: { absolute: title },
-  description: siteDescription,
+  description,
   applicationName: brand.name,
   authors: [{ name: brand.name, url: getSiteUrl() }],
   creator: brand.name,
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
-    locale: "lv_LV",
-    alternateLocale: ["en_US", "ru_RU"],
+    locale,
+    alternateLocale: alternates,
     url: "/",
     siteName: brand.name,
     title,
-    description: siteSocialDescription,
+    description,
   },
   twitter: {
     card: "summary_large_image",
     title,
-    description: siteSocialDescription,
+    description,
   },
   robots: {
     index: true,
@@ -45,8 +55,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const brand = await getSiteBrand();
-  const title = siteTitleFor(brand.name);
+  const [brand, i18n] = await Promise.all([getSiteBrand(), getPublicI18n()]);
+  const lang = asLang(i18n.defaultCode);
+  const title = `${brand.name} · ${translate(lang, "landing.hero.title")}`;
+  const description = translate(lang, "landing.seo.description");
   const url = getSiteUrl();
   const jsonLd = {
     "@context": "https://schema.org",
@@ -63,8 +75,8 @@ export default async function HomePage() {
         "@id": `${url}/#website`,
         name: brand.name,
         url,
-        description: siteDescription,
-        inLanguage: "lv",
+        description,
+        inLanguage: lang,
         publisher: { "@id": `${url}/#organization` },
       },
       {
@@ -72,8 +84,8 @@ export default async function HomePage() {
         "@id": `${url}/#webpage`,
         url,
         name: title,
-        description: siteDescription,
-        inLanguage: "lv",
+        description,
+        inLanguage: lang,
         isPartOf: { "@id": `${url}/#website` },
         about: { "@id": `${url}/#app` },
       },
@@ -84,8 +96,8 @@ export default async function HomePage() {
         applicationCategory: "SportsApplication",
         operatingSystem: "Web",
         url,
-        description: siteDescription,
-        inLanguage: "lv",
+        description,
+        inLanguage: lang,
         ...(brand.logoUrl ? { image: brand.logoUrl } : {}),
         publisher: { "@id": `${url}/#organization` },
       },
@@ -94,7 +106,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <script id="landing-jsonld" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <LandingPage />
     </>
   );

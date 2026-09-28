@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.11
+
+- Sākumlapas izvēlne ritina līdz sadaļai, un enkurs seko aktīvajai valodai
+- Vēstulēm ir vienots izkārtojums. Tekstā garā domuzīme ir defise, un saite zem pogas ir tā pati, kas pogai
+- Kalendāra notikums paliek kalendāra skatā. Balsojuma skatā vairs nav atsevišķā jābalso bloka
+
 ## v0.1.10
 
 - Komandas iestatījumos var pievienot, labot vai noņemt Entuziastu saiti

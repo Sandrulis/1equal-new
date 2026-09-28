@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -9,22 +9,99 @@ import { catalogEvents, VENUES, type EventType } from "@/app/lib/demo-data";
 import { sendContactMessage } from "@/app/lib/contact/actions";
 import { formatMonthTitle, isoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
+import { landingSectionFromSlug, landingSlug, scrollToLandingSection } from "@/app/lib/landing-sections";
 import type { MessageKey } from "@/app/lib/messages";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
+
+function ogLocale(lang: string): string {
+  if (lang === "en") return "en_US";
+  if (lang === "ru") return "ru_RU";
+  return "lv_LV";
+}
+
+function setHeadMeta(name: string, content: string, attr: "name" | "property" = "name") {
+  const selector = `meta[${attr}="${name}"]`;
+  let node = document.head.querySelector(selector);
+  if (!node) {
+    node = document.createElement("meta");
+    node.setAttribute(attr, name);
+    document.head.appendChild(node);
+  }
+  node.setAttribute("content", content);
+}
+
+function LandingSeo() {
+  const { formatLang, t } = useLanguage();
+  const brand = useSiteBrand();
+
+  useEffect(() => {
+    const title = `${brand.name} · ${t("landing.hero.title")}`;
+    const description = t("landing.seo.description");
+    document.title = title;
+    setHeadMeta("description", description);
+    setHeadMeta("og:title", title, "property");
+    setHeadMeta("og:description", description, "property");
+    setHeadMeta("og:locale", ogLocale(formatLang), "property");
+    setHeadMeta("twitter:title", title);
+    setHeadMeta("twitter:description", description);
+
+    const script = document.getElementById("landing-jsonld");
+    if (!script?.textContent) return;
+    try {
+      const data = JSON.parse(script.textContent) as { "@graph"?: Array<Record<string, unknown>> };
+      for (const item of data["@graph"] ?? []) {
+        if ("inLanguage" in item) item.inLanguage = formatLang;
+        if ("description" in item) item.description = description;
+        if (item["@type"] === "WebPage") item.name = title;
+        if (item["@type"] === "WebSite" || item["@type"] === "Organization" || item["@type"] === "SoftwareApplication") item.name = brand.name;
+      }
+      script.textContent = JSON.stringify(data).replace(/</g, "\\u003c");
+    } catch {
+      return;
+    }
+  }, [brand.name, formatLang, t]);
+
+  return null;
+}
 
 export function LandingPage() {
-  const { t } = useLanguage();
+  const { formatLang, t } = useLanguage();
+  const contentSlug = landingSlug(formatLang, "content");
+  const openedHash = useRef(false);
+
+  useLayoutEffect(() => {
+    const raw = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+    if (!raw) return;
+    const section = landingSectionFromSlug(raw);
+    const id = section ? landingSlug(formatLang, section) : raw;
+    if (!openedHash.current) {
+      openedHash.current = true;
+      scrollToLandingSection(formatLang, raw, (id) => {
+        if (id !== raw) window.history.replaceState(null, "", `#${id}`);
+      });
+      return;
+    }
+    if (id !== raw) window.history.replaceState(null, "", `#${id}`);
+  }, [formatLang]);
 
   return (
     <div className="min-h-screen bg-ice text-ink">
+      <LandingSeo />
       <a
-        href="#saturs"
+        href={`#${contentSlug}`}
+        onClick={(event) => {
+          event.preventDefault();
+          scrollToLandingSection(formatLang, contentSlug, (id) => {
+            window.history.pushState(null, "", `#${id}`);
+          });
+        }}
         className="sr-only cursor-pointer rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50"
       >
         {t("landing.skip")}
       </a>
       <SiteHeader />
 
-      <main id="saturs">
+      <main id={contentSlug}>
         <section className="relative overflow-hidden" aria-labelledby="hero-title">
           <div className="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-train-soft blur-3xl" />
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:py-16">
@@ -46,7 +123,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="iespejas" aria-labelledby="features-title" className="scroll-mt-20 border-t border-line bg-paper">
+        <section id={landingSlug(formatLang, "features")} aria-labelledby="features-title" className="scroll-mt-20 border-t border-line bg-paper">
           <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="features-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.features.title")}
@@ -61,7 +138,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="prieksrocibas" aria-labelledby="advantages-title" className="scroll-mt-20 border-t border-line">
+        <section id={landingSlug(formatLang, "advantages")} aria-labelledby="advantages-title" className="scroll-mt-20 border-t border-line">
           <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="advantages-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.advantages.title")}
@@ -78,7 +155,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="soli" aria-labelledby="steps-title" className="scroll-mt-20">
+        <section id={landingSlug(formatLang, "how")} aria-labelledby="steps-title" className="scroll-mt-20">
           <div className="mx-auto max-w-6xl px-4 py-12">
             <h2 id="steps-title" className="text-2xl font-semibold tracking-tight">
               {t("landing.steps.title")}
@@ -145,7 +222,7 @@ const FAQ: { q: MessageKey; a: MessageKey }[] = [
 ];
 
 function ContactSection() {
-  const { t } = useLanguage();
+  const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const [pending, setPending] = useState(false);
 
@@ -165,7 +242,7 @@ function ContactSection() {
   }
 
   return (
-    <section id="kontakti" aria-labelledby="contact-title" className="scroll-mt-20 border-t border-line">
+    <section id={landingSlug(formatLang, "contact")} aria-labelledby="contact-title" className="scroll-mt-20 border-t border-line">
       <div className="mx-auto max-w-xl px-4 py-12">
         <h2 id="contact-title" className="text-2xl font-semibold tracking-tight">
           {t("landing.contact.title")}
@@ -201,11 +278,12 @@ function ContactSection() {
 }
 
 function FaqSection() {
-  const { t } = useLanguage();
+  const { formatLang, t } = useLanguage();
   const items = FAQ.map((item) => ({ q: t(item.q), a: t(item.a) }));
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
+    inLanguage: formatLang,
     mainEntity: items.map((item) => ({
       "@type": "Question",
       name: item.q,
@@ -214,7 +292,7 @@ function FaqSection() {
   };
 
   return (
-    <section id="jautajumi" aria-labelledby="faq-title" className="scroll-mt-20 border-t border-line bg-paper">
+    <section id={landingSlug(formatLang, "faq")} aria-labelledby="faq-title" className="scroll-mt-20 border-t border-line bg-paper">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="mx-auto max-w-3xl px-4 py-12">
         <h2 id="faq-title" className="text-2xl font-semibold tracking-tight">

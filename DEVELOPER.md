@@ -15,7 +15,7 @@
 
 | Ceļš | Saturs |
 |---|---|
-| `/` | Landing. Ielogotam joprojām redzama, panelis ir `/dashboard` |
+| `/` | Landing. Ielogotam joprojām redzama, panelis ir `/dashboard`. Izvēlnes saites ritina līdz sadaļai. Enkurs seko valodai, piemēram `#kontakti` un `#contact` |
 | `/login` | Ienākt |
 | `/signup` | Reģistrēties. Service role `admin.createUser` ar `email_confirm: false`, tad apstiprinājuma vēstule caur Resend. Ja vēstuli nevar nosūtīt, lietotājs tiek dzēsts |
 | `/forgot-password` | Tikai e-pasts. Ja Turnstile ir ieslēgts, prasa Cloudflare pārbaudi. Nosūta recovery saiti. Neatklāj, vai e-pasts eksistē |
@@ -37,7 +37,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard` | Kalendārs bez parauga notikumiem. Pievienot, labot un dzēst saglabā `team_events`. Vadītājs labo savas komandas notikumus. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
+| `/dashboard` | Kalendārs bez parauga notikumiem. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst saglabā `team_events`. Vadītājs labo savas komandas notikumus. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
 | `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāju. Labot un Noņemt saglabājas. Komandas iestatījumos vadītājs labo nosaukumu, valūtu, balsošanas stundas un Entuziastu saiti. Tukša saite noņem `source_url` un no tās ielādēto logo. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
 | `/dashboard/team/:id` | Spēlētāja profils. Bilances vēsture ir redzama tikai ar `module_finance` |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Slēpts, ja `module_subteams` ir izslēgts |
@@ -75,7 +75,7 @@ Tabula `site_integrations`. Secret lauki klientam atpakaļ netiek sūtīti, tika
 |---|---|---|
 | `turnstile` | Site Key, Secret Key | Ienākšana, reģistrācija, Google pieslēgums un aizmirstā parole prasa pārbaudi |
 | `google_oauth` | Client ID, Client Secret, Redirect URI `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu |
-| `resend` | From, Reply-To, API Key | Reģistrācijas, paroles un notikumu vēstules. Bez šīs integrācijas jaunu kontu ar paroli izveidot nevar |
+| `resend` | From, Reply-To, API Key | Reģistrācijas, paroles un notikumu vēstules ar vienotu izkārtojumu. Saite zem pogas ir tā pati, kas pogai. Tekstā garā domuzīme ir defise. Bez šīs integrācijas jaunu kontu ar paroli izveidot nevar |
 | `umami` | Website ID, Script URL tikai `https://cloud.umami.is` | Skripts ielādējas tikai ar statistikas sīkdatņu piekrišanu |
 | `sentry` | Environment, DSN | Pārlūka un servera kļūdas. Sesiju replay ir izslēgts. Kļūdu replay maskē tekstu un ievadi |
 
@@ -128,6 +128,7 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `030_advisor_warnings.sql` | Noņem brendinga saraksta politiku un `update_own_profile` |
 | `031_audit_rate_limit.sql` | `rate_limit_buckets`, `consume_rate_limit`, `audit_log` |
 | `032_rls_deny_policies.sql` | Lieguma RLS politikas tabulām bez politikas |
+| `033_email_plain_dash.sql` | E-pasta sagatavēs garā domuzīme ir defise |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 
