@@ -7,20 +7,23 @@ import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
 import { castMemberVote } from "@/app/lib/attendance-vote";
+import { isEmailAddress } from "@/app/lib/email/email-address";
+import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
 import { notifyNewEvent } from "@/app/lib/email/event-mail";
 import { eventHasEnded } from "@/app/lib/event-voting";
 import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
-import { eventFromRow, memberFromRow, requireUserAdmin } from "@/app/lib/team-membership";
+import { eventFromRow, memberFromRow, requireUserAdmin, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
+import { normalizePositionCode, serializeExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-type SaveResult = { ok: true; member: Member; teamCode: string } | { ok: false; error: MessageKey };
+type SaveResult = { ok: true; member: Member; teamCode: string; emailSent?: boolean } | { ok: false; error: MessageKey };
 type CreateResult = { ok: true; team: IssuedTeam } | { ok: false; error: MessageKey };
 type LookupResult = { ok: true; number: string; position: string; profile: EhlPlayerProfile } | { ok: false; error: MessageKey };
 
@@ -35,6 +38,16 @@ async function attachSport(
   if (ids.length === 1) return { ok: true, sportId: ids[0] };
   if (requested && ids.includes(requested)) return { ok: true, sportId: requested };
   return { ok: false, error: "sports.error.required" };
+}
+
+type GateClient = NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"];
+
+async function managesTeam(client: GateClient, teamId: string, userId: string): Promise<boolean> {
+  const team = await client.from("teams").select("leader_id").eq("id", teamId).maybeSingle();
+  if (team.error || !team.data) return false;
+  if (team.data.leader_id === userId) return true;
+  const row = await client.from("team_members").select("is_team_admin").eq("team_id", teamId).eq("user_id", userId).maybeSingle();
+  return !row.error && row.data?.is_team_admin === true;
 }
 
 function inviteCode(): string {
@@ -68,6 +81,10 @@ function cleanText(value: string, max: number): string {
   return value.trim().slice(0, max);
 }
 
+function cleanPersonName(value: string): string {
+  return value.trim().replace(/\s+/g, " ").slice(0, 80);
+}
+
 async function fetchPlayer(raw: string): Promise<{ profile: EhlPlayerProfile } | { error: MessageKey }> {
   const url = parseEhlPlayerUrl(raw);
   if (!url) return { error: "user.player.invalid" };
@@ -97,7 +114,7 @@ export async function lookupPlayerLink(raw: string): Promise<LookupResult> {
   return {
     ok: true,
     number: loaded.profile.number ?? "",
-    position: loaded.profile.position ?? "",
+    position: normalizePositionCode(loaded.profile.position) || loaded.profile.position || "",
     profile: loaded.profile,
   };
 }
@@ -129,7 +146,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   }
   if (!teamId) return { ok: false, error: "auth.error.generic" };
 
-  const memberInsert = await gate.client.from("team_members").insert({ team_id: teamId, user_id: gate.account.id }).select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at").single();
+  const memberInsert = await gate.client.from("team_members").insert({ team_id: teamId, user_id: gate.account.id }).select(TEAM_MEMBER_COLUMNS).single();
   if (memberInsert.error || !memberInsert.data) {
     await gate.client.from("teams").delete().eq("id", teamId);
     return { ok: false, error: "auth.error.generic" };
@@ -178,8 +195,7 @@ export async function updateOwnedTeam(input: {
     if (!sport.ok) return sport;
     sportId = sport.sportId;
   }
-  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const saved = await gate.client
     .from("teams")
     .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: source, logo_url: logo, ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
@@ -195,8 +211,7 @@ export async function saveTeamAvatar(formData: FormData): Promise<{ ok: true; ur
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const teamId = String(formData.get("teamId") ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("leader_id").eq("id", teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "avatar.error.file" };
   const uploaded = await uploadAvatarJpeg(file, `teams/${teamId}.jpg`, gate.account.id);
@@ -216,7 +231,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   await gate.client.from("team_members").upsert({ team_id: found.data.id, user_id: gate.account.id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
   const members = await gate.client
     .from("team_members")
-    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name, avatar_url)")
+    .select(TEAM_MEMBER_USER_COLUMNS)
     .eq("team_id", found.data.id);
   if (members.error || !members.data) return { ok: false, error: "auth.error.generic" };
   const [groups, links, places, events] = await Promise.all([
@@ -261,18 +276,58 @@ export async function saveMemberProfile(input: {
   userId: string;
   number: string;
   position: string;
+  extraPositions: string[];
   phone: string;
   playerUrl: string;
   subteamIds: string[];
   feeExempt: boolean;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  teamAdmin?: boolean;
 }): Promise<SaveResult> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
   const target = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", input.userId).maybeSingle();
   if (actor.error || !actor.data || target.error || !target.data) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("invite_code").eq("id", input.teamId).maybeSingle();
+  const team = await gate.client.from("teams").select("invite_code, leader_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data?.invite_code) return { ok: false, error: "auth.error.generic" };
+
+  if ((input.teamAdmin === true || input.teamAdmin === false) && (team.data.leader_id !== gate.account.id || input.userId === team.data.leader_id)) {
+    return { ok: false, error: "auth.error.generic" };
+  }
+
+  const manager = await managesTeam(gate.client, input.teamId, gate.account.id);
+  const self = input.userId === gate.account.id;
+  if (!manager && !self) return { ok: false, error: "auth.error.generic" };
+
+  const wantsIdentity = input.firstName !== undefined || input.lastName !== undefined || input.email !== undefined;
+  let pendingEmail: string | null = null;
+  if (wantsIdentity) {
+    const firstName = cleanPersonName(input.firstName ?? "");
+    const lastName = cleanPersonName(input.lastName ?? "");
+    const email = (input.email ?? "").trim().toLowerCase();
+    if (!firstName || !lastName) return { ok: false, error: "roster.error.name" };
+    if (!isEmailAddress(email)) return { ok: false, error: "roster.error.email" };
+    const account = await gate.client.from("users").select("email").eq("id", input.userId).maybeSingle();
+    if (account.error || !account.data) return { ok: false, error: "auth.error.generic" };
+    const currentEmail = account.data.email.trim().toLowerCase();
+    if (email !== currentEmail) {
+      if (await rateLimit(`email-change:${input.userId}`, 5, 15 * 60 * 1000)) return { ok: false, error: "auth.error.rate" };
+      const taken = await emailTakenByOther(gate.client, email, input.userId);
+      if (taken === null) return { ok: false, error: "auth.error.generic" };
+      if (taken) return { ok: false, error: "auth.error.exists" };
+      pendingEmail = email;
+    }
+    const fullName = `${firstName} ${lastName}`.trim();
+    const named = await gate.client.from("users").update({ first_name: firstName, last_name: lastName, name: fullName }).eq("id", input.userId);
+    if (named.error) return { ok: false, error: "auth.error.generic" };
+    const authUser = await gate.client.auth.admin.getUserById(input.userId);
+    const metadata = authUser.data.user?.user_metadata;
+    const userMetadata = metadata && typeof metadata === "object" ? metadata : {};
+    await gate.client.auth.admin.updateUserById(input.userId, { user_metadata: { ...userMetadata, first_name: firstName, last_name: lastName, name: fullName } });
+  }
 
   let player: EhlPlayerProfile | null = null;
   const rawUrl = input.playerUrl.trim();
@@ -282,25 +337,43 @@ export async function saveMemberProfile(input: {
     player = loaded.profile;
   }
 
-  const allowed = await gate.client.from("subteams").select("id").eq("team_id", input.teamId);
-  const allowedIds = new Set((allowed.data ?? []).map((row) => row.id));
-  const subteamIds = [...new Set(input.subteamIds.filter((id) => allowedIds.has(id)))];
+  const allowed = manager ? await gate.client.from("subteams").select("id").eq("team_id", input.teamId) : null;
+  if (allowed?.error) return { ok: false, error: "auth.error.generic" };
+  const allowedIds = new Set((allowed?.data ?? []).map((row) => row.id));
+  const keptLinks = manager ? null : await gate.client.from("team_member_subteams").select("subteam_id").eq("team_id", input.teamId).eq("user_id", input.userId);
+  if (keptLinks?.error) return { ok: false, error: "auth.error.generic" };
+  const subteamIds = manager ? [...new Set(input.subteamIds.filter((id) => allowedIds.has(id)))] : (keptLinks?.data ?? []).map((row) => row.subteam_id);
   const number = cleanNumber(input.number) ?? (player?.number ? cleanNumber(player.number) : null);
-  const position = cleanText(input.position || player?.position || "", 40);
+  const position = normalizePositionCode(input.position) || normalizePositionCode(player?.position || "");
+  const extraPositions = serializeExtraPositions(input.extraPositions, position);
   const phone = cleanText(input.phone, 40);
+  const memberPatch: {
+    jersey_number: number | null;
+    position: string;
+    extra_positions: string;
+    phone: string;
+    ehl_player: EhlPlayerProfile | null;
+    fee_exempt?: boolean;
+    updated_at: string;
+    is_team_admin?: boolean;
+  } = { jersey_number: number, position, extra_positions: extraPositions, phone, ehl_player: player, updated_at: new Date().toISOString() };
+  if (manager) memberPatch.fee_exempt = input.feeExempt;
+  if (manager && (input.teamAdmin === true || input.teamAdmin === false)) memberPatch.is_team_admin = input.teamAdmin;
   const updated = await gate.client
     .from("team_members")
-    .update({ jersey_number: number, position, phone, ehl_player: player, fee_exempt: input.feeExempt, updated_at: new Date().toISOString() })
+    .update(memberPatch)
     .eq("team_id", input.teamId)
     .eq("user_id", input.userId)
-    .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name, avatar_url)")
+    .select(TEAM_MEMBER_USER_COLUMNS)
     .single();
   if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
 
-  await gate.client.from("team_member_subteams").delete().eq("team_id", input.teamId).eq("user_id", input.userId);
-  if (subteamIds.length) {
-    const linked = await gate.client.from("team_member_subteams").insert(subteamIds.map((subteamId) => ({ team_id: input.teamId, user_id: input.userId, subteam_id: subteamId })));
-    if (linked.error) return { ok: false, error: "auth.error.generic" };
+  if (manager) {
+    await gate.client.from("team_member_subteams").delete().eq("team_id", input.teamId).eq("user_id", input.userId);
+    if (subteamIds.length) {
+      const linked = await gate.client.from("team_member_subteams").insert(subteamIds.map((subteamId) => ({ team_id: input.teamId, user_id: input.userId, subteam_id: subteamId })));
+      if (linked.error) return { ok: false, error: "auth.error.generic" };
+    }
   }
 
   if (input.userId === gate.account.id && /^[A-Z0-9]{4,16}$/.test(team.data.invite_code)) {
@@ -311,10 +384,41 @@ export async function saveMemberProfile(input: {
   }
 
   const member = memberFromRow(updated.data, subteamIds);
-  if (player?.name) member.name = player.name;
   member.role = roleFromPosition(member.position);
+  let emailSent = false;
+  if (pendingEmail) {
+    emailSent = await requestEmailChange(gate.client, input.userId, pendingEmail);
+    if (!emailSent) return { ok: false, error: "auth.email.unavailable" };
+    await writeAudit("member.email_request", "users", input.userId, { teamId: input.teamId });
+  }
+  if (wantsIdentity) await writeAudit("member.profile", "users", input.userId, { teamId: input.teamId });
+  if (input.teamAdmin === true || input.teamAdmin === false) await writeAudit("member.admin", "team_members", input.userId, { teamId: input.teamId, admin: input.teamAdmin });
   refreshTeamData();
-  return { ok: true, member, teamCode: team.data.invite_code };
+  return { ok: true, member, teamCode: team.data.invite_code, emailSent };
+}
+
+export async function setMemberTeamAdmin(input: {
+  teamId: string;
+  userId: string;
+  admin: boolean;
+}): Promise<{ ok: true; admin: boolean } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (input.admin !== true && input.admin !== false) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (input.userId === team.data.leader_id) return { ok: false, error: "auth.error.generic" };
+  const updated = await gate.client
+    .from("team_members")
+    .update({ is_team_admin: input.admin, updated_at: new Date().toISOString() })
+    .eq("team_id", input.teamId)
+    .eq("user_id", input.userId)
+    .select("user_id")
+    .maybeSingle();
+  if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("member.admin", "team_members", input.userId, { teamId: input.teamId, admin: input.admin });
+  refreshTeamData();
+  return { ok: true, admin: input.admin };
 }
 
 export async function removeOwnedMember(teamId: string, userId: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
@@ -322,6 +426,8 @@ export async function removeOwnedMember(teamId: string, userId: string): Promise
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const actor = await gate.client.from("team_members").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
   if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  const self = userId === gate.account.id;
+  if (!self && !(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const removed = await gate.client.from("team_members").delete().eq("team_id", teamId).eq("user_id", userId);
   if (removed.error) return { ok: false, error: "auth.error.generic" };
   await writeAudit("member.remove", "team_members", userId, { teamId });
@@ -334,8 +440,7 @@ export async function removeOwnedMember(teamId: string, userId: string): Promise
 export async function saveOwnedSubteam(input: { teamId: string; id: string | null; name: string; color: string }): Promise<{ ok: true; subteam: Subteam } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const name = input.name.trim().slice(0, 80);
   const color = /^#[0-9A-Fa-f]{6}$/.test(input.color) ? input.color : "#0f6e82";
   if (!name) return { ok: false, error: "admin.error.name" };
@@ -357,8 +462,7 @@ export async function adjustMemberBalance(input: {
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const amount = Math.round(Number(input.amount) * 100) / 100;
   if (!Number.isFinite(amount) || amount === 0) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const target = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", input.userId).maybeSingle();
   if (target.error || !target.data) return { ok: false, error: "auth.error.generic" };
   const inserted = await gate.client
@@ -395,8 +499,7 @@ function venueFromRow(row: { id: string; name: string; price_per_hour: number | 
 export async function saveOwnedVenue(input: { teamId: string; id: string | null; name: string; pricePerHour: number }): Promise<{ ok: true; venue: Venue } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const name = input.name.trim().slice(0, 80);
   const price = Math.round(Number(input.pricePerHour) * 100) / 100;
   if (!name || !Number.isFinite(price) || price < 0) return { ok: false, error: "admin.error.name" };
@@ -412,8 +515,7 @@ export async function saveOwnedVenue(input: { teamId: string; id: string | null;
 export async function hideOwnedVenue(teamId: string, venueId: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const hidden = await gate.client.from("venues").update({ hidden: true, updated_at: new Date().toISOString() }).eq("id", venueId).eq("team_id", teamId);
   if (hidden.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
@@ -432,8 +534,7 @@ export async function createOwnedEvent(input: {
 }): Promise<{ ok: true; event: TeamEvent } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start)) return { ok: false, error: "auth.error.generic" };
   if (input.type !== "game" && input.type !== "training") return { ok: false, error: "auth.error.generic" };
   const venue = await gate.client.from("venues").select("id").eq("id", input.venueId).eq("team_id", input.teamId).eq("hidden", false).maybeSingle();
@@ -550,8 +651,7 @@ export async function updateOwnedEvent(input: {
 }): Promise<{ ok: true; event: TeamEvent; teamBalance: number; ledger: TeamLedgerLine[] } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start)) return { ok: false, error: "auth.error.generic" };
   if (input.type !== "game" && input.type !== "training") return { ok: false, error: "auth.error.generic" };
   const existing = await gate.client.from("team_events").select("id, settled_at").eq("id", input.eventId).eq("team_id", input.teamId).maybeSingle();
@@ -596,8 +696,8 @@ export async function deleteOwnedEvent(input: {
 }): Promise<{ ok: true; teamBalance: number; ledger: TeamLedgerLine[]; refunds: { userId: string; balance: number; ledger: BalanceEntry[] }[] } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("leader_id, balance").eq("id", input.teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("balance").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data || !(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const event = await gate.client.from("team_events").select("id").eq("id", input.eventId).eq("team_id", input.teamId).maybeSingle();
   if (event.error || !event.data) return { ok: false, error: "auth.error.generic" };
   const charges = await gate.client.from("balance_entries").select("user_id, amount").eq("event_id", input.eventId).eq("kind", "event");
@@ -643,17 +743,17 @@ export async function setEventAttendance(input: {
   if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };
   const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
-  const leader = team.data.leader_id === gate.account.id;
-  const actor = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
+  const actor = await gate.client.from("team_members").select("user_id, is_team_admin").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
   if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
-  if (input.userId !== gate.account.id && !leader) return { ok: false, error: "auth.error.generic" };
+  const manage = team.data.leader_id === gate.account.id || actor.data.is_team_admin === true;
+  if (input.userId !== gate.account.id && !manage) return { ok: false, error: "auth.error.generic" };
   const result = await castMemberVote(gate.client, {
     teamId: input.teamId,
     eventId: input.eventId,
     userId: input.userId,
     status: input.status,
     actorId: gate.account.id,
-    enforceDeadline: !leader,
+    enforceDeadline: !manage,
   });
   if (result.ok) refreshTeamData();
   return result;
@@ -662,8 +762,7 @@ export async function setEventAttendance(input: {
 export async function deleteOwnedSubteam(teamId: string, subteamId: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
-  const actor = await gate.client.from("team_members").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const removed = await gate.client.from("subteams").delete().eq("id", subteamId).eq("team_id", teamId);
   if (removed.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();

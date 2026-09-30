@@ -4,19 +4,27 @@ import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { Subteam } from "@/app/lib/demo-data";
+import { displayPosition, parseExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 type UserName = { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null };
+
+export const TEAM_MEMBER_COLUMNS =
+  "team_id, user_id, jersey_number, position, extra_positions, phone, ehl_player, fee_exempt, is_team_admin, joined_on, updated_at";
+
+export const TEAM_MEMBER_USER_COLUMNS = `${TEAM_MEMBER_COLUMNS}, users(email, name, first_name, last_name, avatar_url)`;
 
 type MemberRow = {
   team_id: string;
   user_id: string;
   jersey_number: number | null;
   position: string;
+  extra_positions?: string;
   phone: string;
   ehl_player: unknown;
   fee_exempt: boolean;
+  is_team_admin?: boolean;
   joined_on: string;
   updated_at: string;
   users: UserName | UserName[] | null;
@@ -83,21 +91,31 @@ function personName(user: UserName | null, fallback: string): string {
   return parts.join(" ") || user.name.trim() || user.email || fallback;
 }
 
+function accountName(user: UserName | null): string {
+  if (!user) return "";
+  const parts = [user.first_name, user.last_name].map((part) => part.trim()).filter(Boolean);
+  return parts.join(" ") || user.name.trim();
+}
+
 export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member {
   const user = one(row.users);
   const ehl = readStoredEhlPlayer(row.ehl_player);
-  const position = row.position.trim() || ehl?.position || "";
+  const position = displayPosition(row.position) || displayPosition(ehl?.position);
   return {
     id: row.user_id,
-    name: ehl?.name || personName(user, ""),
+    name: accountName(user) || ehl?.name || personName(user, ""),
+    firstName: user?.first_name?.trim() ?? "",
+    lastName: user?.last_name?.trim() ?? "",
     email: user?.email ?? "",
     phone: row.phone ?? "",
     number: row.jersey_number,
     position,
+    extraPositions: parseExtraPositions(row.extra_positions, position),
     role: roleFromPosition(position),
     subteamId: subteamIds[0] ?? "",
     subteamIds,
     feeExempt: row.fee_exempt === true,
+    teamAdmin: row.is_team_admin === true,
     balance: 0,
     ledger: [],
     joined: row.joined_on,
@@ -144,7 +162,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     admin
       .from("team_members")
-      .select("team_id, user_id, jersey_number, position, phone, ehl_player, fee_exempt, joined_on, updated_at, users(email, name, first_name, last_name, avatar_url)")
+      .select(TEAM_MEMBER_USER_COLUMNS)
       .in("team_id", teamIds),
     admin.from("subteams").select("id, team_id, name, color, updated_at").in("team_id", teamIds),
     admin.from("team_member_subteams").select("team_id, user_id, subteam_id").in("team_id", teamIds),

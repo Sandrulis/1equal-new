@@ -5,6 +5,7 @@ import { messages } from "@/app/lib/messages";
 import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
 import { getSiteUrl } from "@/app/lib/site";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
+import { displayPosition } from "@/app/lib/positions";
 import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
@@ -181,7 +182,7 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
         name: ehl?.name || displayName(user),
         email: user.email,
         number: link.jersey_number,
-        position: link.position.trim() || ehl?.position || "",
+        position: displayPosition(link.position) || displayPosition(ehl?.position),
         phone: link.phone ?? "",
         photoUrl: ehl?.photoUrl ?? user.avatar_url ?? null,
       },

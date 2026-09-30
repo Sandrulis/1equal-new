@@ -182,7 +182,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
@@ -885,6 +885,14 @@ export function TeamDashboard({
   const cells = monthGrid(year, month, display.weekStartDay);
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
+  const managesTeam = Boolean(
+    profile && activeTeam && !activeTeam.demo && (activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
+  );
+  const canManageTeam = basePath === "/demo" || managesTeam;
+  useEffect(() => {
+    if (canManageTeam || (view !== "venues" && view !== "subteams")) return;
+    router.replace(basePath);
+  }, [basePath, canManageTeam, router, view]);
 
   return (
     <CurrencyProvider currency={currencyCode}>
@@ -925,8 +933,8 @@ export function TeamDashboard({
         >
           <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
           <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
-          {moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
-          <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} />
+          {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
+          {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
         </nav>
         {account ? (
           <nav
@@ -1062,7 +1070,7 @@ export function TeamDashboard({
             }))}
           />
         ) : null}
-        {view === "subteams" && !showStart && moduleVisible ? (
+        {view === "subteams" && !showStart && moduleVisible && canManageTeam ? (
           <SubteamAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1076,7 +1084,7 @@ export function TeamDashboard({
             }}
           />
         ) : null}
-        {view === "venues" && !showStart && moduleVisible ? (
+        {view === "venues" && !showStart && moduleVisible && canManageTeam ? (
           <VenueAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1325,12 +1333,12 @@ export function TeamDashboard({
           </div>
 
           <div className={`flex flex-col gap-3 xl:sticky xl:top-5 ${showPoll ? "hidden" : ""}`}>
-          {activeTeam?.watching ? null : (
+          {canManageTeam && !activeTeam?.watching ? (
             <button type="button" onClick={() => setAddingEvent(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
               <IconPlus />
               {t("event.add")}
             </button>
-          )}
+          ) : null}
           <aside className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
             <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, formatLang)}</p>
             <h2 className="mt-1 text-lg font-semibold">{formatDate(selectedIso)}</h2>
@@ -1409,15 +1417,15 @@ export function TeamDashboard({
             voteDeadline={eventVotingDeadline(openEvent, voteTraining, voteGame)}
             knownRsvp={knownRsvp}
             actorId={profile && activeTeam && !activeTeam.demo ? profile.id : null}
-            leader={Boolean(profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id)}
+            leader={managesTeam}
             votingOpen={eventVotingOpen(openEvent, voteTraining, voteGame)}
             rsvp={rsvp[openEvent.id]}
             reservedByUser={financeReserve ? Object.fromEntries(reservations.filter((row) => row.eventId === openEvent.id).map((row) => [row.userId, row.amount])) : null}
             teamReserved={teamHold(openEvent)}
             onRsvp={setMemberRsvp}
             onLineup={lineupAllowed ? () => openLineup(openEvent) : undefined}
-            onEdit={basePath === "/demo" || (profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id) ? () => setEditingEvent(openEvent) : undefined}
-            onDelete={basePath === "/demo" || (profile && activeTeam && !activeTeam.demo && activeTeam.leaderId === profile.id) ? () => setDeleteTarget(openEvent) : undefined}
+            onEdit={basePath === "/demo" || managesTeam ? () => setEditingEvent(openEvent) : undefined}
+            onDelete={basePath === "/demo" || managesTeam ? () => setDeleteTarget(openEvent) : undefined}
             onClose={() => router.push(basePath)}
           />
         ) : null}

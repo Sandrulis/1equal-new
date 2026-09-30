@@ -1,6 +1,7 @@
 import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import type { Member } from "@/app/lib/demo-data";
 import { isoDate, toLocalDateTimeStamp } from "@/app/lib/format";
+import { normalizePositionCode } from "@/app/lib/positions";
 
 export function creatorMember(account: AccountProfile, teamCode: string, now = new Date()): Member {
   const player = teamPlayer(account, teamCode);
@@ -25,10 +26,13 @@ export function creatorMember(account: AccountProfile, teamCode: string, now = n
 }
 
 export function roleFromPosition(position: string | null | undefined): Member["role"] {
+  const code = normalizePositionCode(position);
+  if (code === "G") return "goalie";
+  if (code === "D") return "defender";
+  if (code === "LW" || code === "C" || code === "RW") return "forward";
   const value = (position ?? "").toLocaleLowerCase("lv");
   if (value.includes("vārtsarg")) return "goalie";
   if (value.includes("aizsarg")) return "defender";
-  if (value.includes("trener")) return "coach";
   if (value.includes("uzbruc")) return "forward";
   return "captain";
 }

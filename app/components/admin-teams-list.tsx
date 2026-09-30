@@ -8,6 +8,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
+import { positionLabel } from "@/app/lib/positions";
 import { deleteTeam, saveTeam, setAdminTeamWatch } from "@/app/lib/site-admin/actions";
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 
@@ -246,7 +247,7 @@ export function AdminTeamsList({
                       <span className="block truncate text-sm text-muted">
                         {player.number != null ? `#${player.number}` : ""}
                         {player.number != null && player.position ? " " : ""}
-                        {player.position}
+                        {player.position ? positionLabel(player.position, t) : ""}
                       </span>
                     ) : null}
                     {player.phone ? <span className="block truncate text-sm text-muted">{player.phone}</span> : null}

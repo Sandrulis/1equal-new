@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.13
+
+- Komandas vadītājs ieceļ administratorus. Spēlētājam ir galvenā un papildu pozīcijas, bez trenera
+- Dalībnieka labošanā ir vārds un e-pasts. Jaunais e-pasts stājas spēkā tikai pēc saites uz jauno adresi
+- Parasts spēlētājs labo tikai sevi, var noņemt sevi pēc apstiprinājuma un neredz laukumus, apakškomandas un notikumu izveidi
+
 ## v0.1.12
 
 - Bez Entuziastu saites var izgriezt kvadrāta avataru lietotājam un komandai. Paziņojumos var izslēgt e-pastus par jauniem notikumiem

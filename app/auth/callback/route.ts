@@ -7,6 +7,7 @@ import {
   googleOAuthStatesMatch,
   parseGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
+import { createAdminClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -26,8 +27,13 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      const email = data.user?.email?.trim().toLowerCase();
+      if (data.user && email) {
+        const admin = createAdminClient();
+        if (admin) await admin.from("users").update({ email }).eq("id", data.user.id);
+      }
       const next = searchParams.get("next");
       const destination = next === "/reset-password" ? "/reset-password" : "/dashboard";
       return NextResponse.redirect(`${origin}${destination}`);

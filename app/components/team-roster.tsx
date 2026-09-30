@@ -8,7 +8,7 @@ import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { TeamMark } from "@/app/components/team-mark";
 import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo-data";
-import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, updateOwnedTeam } from "@/app/lib/team-actions";
+import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useDisplayFormat } from "@/app/components/display-preferences";
@@ -24,6 +24,7 @@ import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDismissed, clearInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
 import { useLanguage } from "@/app/lib/language";
+import { positionLabel } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -111,13 +112,17 @@ export function TeamRoster({
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [removing, setRemoving] = useState<Member | null>(null);
+  const [removePending, setRemovePending] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [balancing, setBalancing] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
   const [teamEntries, setTeamEntries] = useState<TeamEntry[]>([]);
   const [adjusting, setAdjusting] = useState<Member | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const canAdjust = Boolean(teamId && leaderId && accountId && leaderId === accountId);
+  const [appointing, setAppointing] = useState(false);
+  const isLeader = Boolean(teamId && leaderId && accountId && leaderId === accountId);
+  const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
   const player = memberId ? members.find((member) => member.id === memberId) : undefined;
@@ -133,17 +138,21 @@ export function TeamRoster({
     return members.filter((member) => {
       const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
       const subteam = ids.map((id) => (groupList.find((item) => item.id === id) ?? subteamById(id))?.name ?? "").join(" ");
-      return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", member.position, subteam]
+      const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => `${code} ${positionLabel(code, t)}`);
+      return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", ...positions, subteam]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [groupList, members, query, subteamById]);
+  }, [groupList, members, query, subteamById, t]);
 
   async function removeMember(id: string) {
+    if (removePending) return;
+    setRemovePending(true);
     if (teamId) {
       const result = await removeOwnedMember(teamId, id);
       if (!result.ok) {
+        setRemovePending(false);
         showFeedback({ message: t(result.error), variant: "error" });
         return;
       }
@@ -151,6 +160,8 @@ export function TeamRoster({
     }
     setMembers((current) => current.filter((item) => item.id !== id));
     onMemberRemoved?.(id);
+    setRemoving(null);
+    setRemovePending(false);
   }
 
   async function saveAdjustment(member: Member, amount: number) {
@@ -167,18 +178,19 @@ export function TeamRoster({
     showFeedback({ message: t("roster.balance.saved"), variant: "success" });
   }
 
-  if (player) {
-    return (
-      <div>
-        <div className="mb-5">
-          <button type="button" onClick={onCloseMember} className="inline-flex items-center gap-1.5 text-sm font-medium text-train">
-            <ChevronLeft />
-            {t("player.back")}
-          </button>
-        </div>
-        <PlayerProfile member={player} subteams={groupList} finance={finance} />
-      </div>
-    );
+  async function toggleAdmin(member: Member) {
+    if (!teamId || appointing) return;
+    setAppointing(true);
+    const result = await setMemberTeamAdmin({ teamId, userId: member.id, admin: member.teamAdmin !== true });
+    setAppointing(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    const next = { ...member, teamAdmin: result.admin };
+    setMembers((current) => current.map((item) => (item.id === member.id ? next : item)));
+    onMemberSaved?.(next, inviteCode);
+    showFeedback({ message: t(result.admin ? "roster.admin.on" : "roster.admin.off"), variant: "success" });
   }
 
   return (
@@ -222,7 +234,7 @@ export function TeamRoster({
         ) : null}
       </div>
 
-      {inviteVisible ? (
+      {(!teamId || canAdjust) && inviteVisible ? (
       <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-paper px-4 py-3.5 ring-1 ring-line min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-between">
         <p className="flex items-center gap-2 text-sm text-muted">
           <IconLock />
@@ -267,10 +279,12 @@ export function TeamRoster({
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
         </label>
-        <button type="button" onClick={() => setInviting(true)} className="h-9 shrink-0 rounded-lg bg-navy px-4 text-sm font-medium text-white hover:bg-navy/90">
-          {t("roster.invite")}
-        </button>
-        {inviteVisible === false ? (
+        {!teamId || canAdjust ? (
+          <button type="button" onClick={() => setInviting(true)} className="h-9 shrink-0 rounded-lg bg-navy px-4 text-sm font-medium text-white hover:bg-navy/90">
+            {t("roster.invite")}
+          </button>
+        ) : null}
+        {(!teamId || canAdjust) && inviteVisible === false ? (
           <button
             type="button"
             aria-label={t("team.invite.show")}
@@ -311,7 +325,7 @@ export function TeamRoster({
                       className="cursor-pointer border-b border-line last:border-b-0 hover:bg-ice"
                     >
                       <td className="w-full max-w-0 px-4 py-3">
-                        <MemberIdentity member={member} />
+                        <MemberIdentity member={member} leader={member.id === leaderId} />
                       </td>
                       <td className="hidden px-4 py-3 text-center min-[768px]:table-cell">
                         <MemberMark member={member} groups={groupList} />
@@ -332,9 +346,8 @@ export function TeamRoster({
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                         <MemberActions
-                          memberId={member.id}
-                          onEdit={() => setEditing(member)}
-                          onRemove={(id) => void removeMember(id)}
+                          onEdit={!teamId || canAdjust || accountId === member.id ? () => setEditing(member) : undefined}
+                          onRemove={!teamId || canAdjust || accountId === member.id ? () => setRemoving(member) : undefined}
                         />
                       </td>
                     </tr>
@@ -350,13 +363,31 @@ export function TeamRoster({
           teamId={teamId}
           remote={Boolean(teamId)}
           self={Boolean(accountId) && accountId === editing.id}
+          canManage={!teamId || canAdjust || accountId === editing.id}
+          canRoster={!teamId || canAdjust}
+          canAppoint={isLeader && editing.id !== leaderId}
           subteams={groupList}
           onClose={() => setEditing(null)}
           onSaved={(member, teamCode) => {
-            setMembers((current) => current.map((item) => (item.id === member.id ? member : item)));
-            if (teamCode) onMemberSaved?.(member, teamCode);
+            const previous = members.find((item) => item.id === member.id);
+            const saved = previous ? { ...member, balance: previous.balance, ledger: previous.ledger } : member;
+            setMembers((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+            if (teamCode) onMemberSaved?.(saved, teamCode);
           }}
         />
+      ) : null}
+      {removing ? (
+        <AdminDialog open title={t("roster.remove.title")} onClose={() => { if (!removePending) setRemoving(null); }}>
+          <p className="text-sm text-muted">{t("roster.remove.confirm", { name: removing.name })}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" disabled={removePending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+              {t("actions.cancel")}
+            </button>
+            <button type="button" disabled={removePending} onClick={() => void removeMember(removing.id)} className="rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+              {t("roster.remove")}
+            </button>
+          </div>
+        </AdminDialog>
       ) : null}
       <InvitePlayerDialog
         open={inviting}
@@ -410,6 +441,30 @@ export function TeamRoster({
           if (adjusting) void saveAdjustment(adjusting, amount);
         }}
       />
+      {player ? (
+        <AdminDialog open size="player" closeButton title={player.name} onClose={onCloseMember}>
+          {isLeader && player.id !== leaderId ? (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-ice px-3 py-2.5">
+              <span>
+                <span className="block text-sm font-medium">{t("roles.admin")}</span>
+                <span className="block text-xs text-muted">{t("roster.admin.hint")}</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={player.teamAdmin === true}
+                aria-label={t("roles.admin")}
+                disabled={appointing}
+                onClick={() => void toggleAdmin(player)}
+                className={`relative h-6 w-11 shrink-0 rounded-full disabled:cursor-not-allowed ${player.teamAdmin ? "bg-train" : "bg-line"}`}
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper ${player.teamAdmin ? "left-5" : "left-0.5"}`} />
+              </button>
+            </div>
+          ) : null}
+          <PlayerProfile member={player} subteams={groupList} finance={finance} leader={player.id === leaderId} embedded />
+        </AdminDialog>
+      ) : null}
     </div>
   );
 }
@@ -803,7 +858,7 @@ function BalanceDialog({
   );
 }
 
-function MemberIdentity({ member }: { member: Member }) {
+function MemberIdentity({ member, leader = false }: { member: Member; leader?: boolean }) {
   const { t } = useLanguage();
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -815,6 +870,8 @@ function MemberIdentity({ member }: { member: Member }) {
       <span className="min-w-0 leading-5">
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate font-medium">{member.name}</span>
+          {leader ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("team.leader")}</span> : null}
+          {member.teamAdmin ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("roles.admin")}</span> : null}
           {member.feeExempt ? (
             <span onClick={(event) => event.stopPropagation()}>
               <IconTipButton label={t("roster.fee_exempt.tip")} tone="muted" compact>
@@ -831,15 +888,21 @@ function MemberIdentity({ member }: { member: Member }) {
 }
 
 function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
+  const { t } = useLanguage();
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const marks = ids.map((id) => groups?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const jersey = formatJersey(member.number);
-  if (!jersey && !member.position && marks.length === 0) return null;
+  const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
+  if (!jersey && positions.length === 0 && marks.length === 0) return null;
   return (
     <span className="flex flex-col items-center gap-1.5">
       {jersey ? <span className="text-sm font-semibold tabular-nums">{jersey}</span> : null}
-      {member.position ? <span className="rounded-lg bg-ice px-2.5 py-1 text-xs font-semibold">{member.position}</span> : null}
+      {positions.map((code) => (
+        <span key={code} className="rounded-lg bg-ice px-2.5 py-1 text-xs font-semibold">
+          {positionLabel(code, t)}
+        </span>
+      ))}
       {marks.length ? (
         <span className="flex flex-row flex-wrap justify-center gap-1">
           {marks.map((subteam) => (
@@ -902,16 +965,21 @@ function MemberDates({ member }: { member: Member }) {
   );
 }
 
-function MemberActions({ memberId, onEdit, onRemove }: { memberId: string; onEdit: () => void; onRemove: (id: string) => void }) {
+function MemberActions({ onEdit, onRemove }: { onEdit?: () => void; onRemove?: () => void }) {
   const { t } = useLanguage();
+  if (!onEdit && !onRemove) return null;
   return (
     <div className="flex gap-1">
-      <IconTipButton label={t("roster.edit")} tone="train" onClick={onEdit}>
-        <IconPencil />
-      </IconTipButton>
-      <IconTipButton label={t("roster.remove")} tone="game" onClick={() => onRemove(memberId)}>
-        <IconTrash />
-      </IconTipButton>
+      {onEdit ? (
+        <IconTipButton label={t("roster.edit")} tone="train" onClick={onEdit}>
+          <IconPencil />
+        </IconTipButton>
+      ) : null}
+      {onRemove ? (
+        <IconTipButton label={t("roster.remove")} tone="game" onClick={onRemove}>
+          <IconTrash />
+        </IconTipButton>
+      ) : null}
     </div>
   );
 }
@@ -932,14 +1000,6 @@ function IconUsers() {
       <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
       <circle cx="9.5" cy="7" r="3" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 4.13a3 3 0 0 1 0 5.75" />
-    </svg>
-  );
-}
-
-function ChevronLeft() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M15 18l-6-6 6-6" />
     </svg>
   );
 }

@@ -23,14 +23,18 @@ export type Subteam = {
 export type Member = {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
   number: number | null;
   position: string;
+  extraPositions?: string[];
   role: "coach" | "captain" | "goalie" | "defender" | "forward";
   subteamId: string;
   subteamIds?: string[];
   feeExempt?: boolean;
+  teamAdmin?: boolean;
   balance: number;
   ledger?: BalanceEntry[];
   joined: string;
@@ -74,16 +78,16 @@ export const SUBTEAMS: Subteam[] = [
 ];
 
 const ROSTER: Member[] = [
-  { id: "m1", name: "Edgars Liepiņš", email: "edgars.liepins@example.com", phone: "+371 26 111 201", number: 30, position: "TR", role: "coach", subteamId: "virsliga", balance: -120, joined: "2025-08-12", updatedAt: "2026-09-20T18:10" },
-  { id: "m2", name: "Kārlis Bērziņš", email: "karlis.berzins@example.com", phone: "+371 26 111 202", number: 91, position: "LW", role: "captain", subteamId: "virsliga", balance: -276, joined: "2025-09-02", updatedAt: "2026-09-24T21:05" },
+  { id: "m1", name: "Edgars Liepiņš", email: "edgars.liepins@example.com", phone: "+371 26 111 201", number: 30, position: "", role: "coach", subteamId: "virsliga", balance: -120, joined: "2025-08-12", updatedAt: "2026-09-20T18:10" },
+  { id: "m2", name: "Kārlis Bērziņš", email: "karlis.berzins@example.com", phone: "+371 26 111 202", number: 91, position: "LW", extraPositions: ["C"], role: "captain", subteamId: "virsliga", balance: -276, joined: "2025-09-02", updatedAt: "2026-09-24T21:05" },
   { id: "m3", name: "Mārtiņš Ozols", email: "martins.ozols@example.com", phone: "+371 26 111 203", number: 31, position: "G", role: "goalie", subteamId: "virsliga", balance: -40, joined: "2025-09-02", updatedAt: "2026-09-18T09:40" },
-  { id: "m4", name: "Rihards Kalns", email: "rihards.kalns@example.com", phone: "+371 26 111 204", number: 4, position: "LD", role: "defender", subteamId: "virsliga", balance: 15, joined: "2025-09-08", updatedAt: "2026-09-22T14:12" },
-  { id: "m5", name: "Andris Priede", email: "andris.priede@example.com", phone: "+371 26 111 205", number: 19, position: "RW", role: "forward", subteamId: "virsliga", balance: -85, joined: "2025-09-15", updatedAt: "2026-09-25T11:20" },
-  { id: "m6", name: "Jānis Vītols", email: "janis.vitols@example.com", phone: "+371 26 222 301", number: 8, position: "TR", role: "coach", subteamId: "rezerve", balance: 0, joined: "2025-08-20", updatedAt: "2026-09-16T16:00" },
-  { id: "m7", name: "Toms Eglītis", email: "toms.eglitis@example.com", phone: "+371 26 222 302", number: 12, position: "C", role: "captain", subteamId: "rezerve", balance: -544, joined: "2025-09-20", updatedAt: "2026-09-23T19:33" },
+  { id: "m4", name: "Rihards Kalns", email: "rihards.kalns@example.com", phone: "+371 26 111 204", number: 4, position: "D", role: "defender", subteamId: "virsliga", balance: 15, joined: "2025-09-08", updatedAt: "2026-09-22T14:12" },
+  { id: "m5", name: "Andris Priede", email: "andris.priede@example.com", phone: "+371 26 111 205", number: 19, position: "RW", extraPositions: ["LW"], role: "forward", subteamId: "virsliga", balance: -85, joined: "2025-09-15", updatedAt: "2026-09-25T11:20" },
+  { id: "m6", name: "Jānis Vītols", email: "janis.vitols@example.com", phone: "+371 26 222 301", number: 8, position: "", role: "coach", subteamId: "rezerve", balance: 0, joined: "2025-08-20", updatedAt: "2026-09-16T16:00" },
+  { id: "m7", name: "Toms Eglītis", email: "toms.eglitis@example.com", phone: "+371 26 222 302", number: 12, position: "C", extraPositions: ["LW", "RW"], role: "captain", subteamId: "rezerve", balance: -544, joined: "2025-09-20", updatedAt: "2026-09-23T19:33" },
   { id: "m8", name: "Roberts Krūmiņš", email: "roberts.krumins@example.com", phone: "+371 26 222 303", number: 1, position: "G", role: "goalie", subteamId: "rezerve", balance: -60, joined: "2025-10-01", updatedAt: "2026-09-11T08:15" },
-  { id: "m9", name: "Emīls Saulītis", email: "emils.saulitis@example.com", phone: "+371 26 222 304", number: 5, position: "RD", role: "defender", subteamId: "rezerve", balance: -18, joined: "2025-10-04", updatedAt: "2026-09-19T12:48" },
-  { id: "m10", name: "Laura Mežale", email: "laura.mezale@example.com", phone: "+371 26 333 401", number: 21, position: "TR", role: "coach", subteamId: "u18", balance: 25, joined: "2025-09-01", updatedAt: "2026-09-21T17:05" },
+  { id: "m9", name: "Emīls Saulītis", email: "emils.saulitis@example.com", phone: "+371 26 222 304", number: 5, position: "D", role: "defender", subteamId: "rezerve", balance: -18, joined: "2025-10-04", updatedAt: "2026-09-19T12:48" },
+  { id: "m10", name: "Laura Mežale", email: "laura.mezale@example.com", phone: "+371 26 333 401", number: 21, position: "", role: "coach", subteamId: "u18", balance: 25, joined: "2025-09-01", updatedAt: "2026-09-21T17:05" },
   { id: "m11", name: "Gustavs Reinis", email: "gustavs.reinis@example.com", phone: "+371 26 333 402", number: 17, position: "LW", role: "captain", subteamId: "u18", balance: -32, joined: "2025-09-18", updatedAt: "2026-09-25T07:55" },
   { id: "m12", name: "Elīna Kalna", email: "elina.kalna@example.com", phone: "+371 26 333 403", number: 11, position: "C", role: "forward", subteamId: "u18", balance: -96, joined: "2025-09-28", updatedAt: "2026-09-14T20:22" },
 ];

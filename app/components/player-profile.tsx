@@ -8,6 +8,7 @@ import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
+import { positionLabel } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 function initials(name: string): string {
@@ -27,12 +28,13 @@ function roleKey(role: Member["role"]): MessageKey {
   return `role.${role}` as MessageKey;
 }
 
-export function PlayerProfile({ member, subteams, finance = true }: { member: Member; subteams?: Subteam[]; finance?: boolean }) {
+export function PlayerProfile({ member, subteams, finance = true, leader = false, embedded = false }: { member: Member; subteams?: Subteam[]; finance?: boolean; leader?: boolean; embedded?: boolean }) {
   const { t } = useLanguage();
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const groups = ids.map((id) => subteams?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const jersey = formatJersey(member.number);
+  const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -44,16 +46,30 @@ export function PlayerProfile({ member, subteams, finance = true }: { member: Me
             <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-navy text-xl font-semibold text-white">{initials(member.name)}</span>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{member.name}</h1>
+            {embedded ? null : <h1 className="text-2xl font-semibold tracking-tight">{member.name}</h1>}
             <p className="truncate text-sm leading-5 text-muted">{member.email}</p>
             {member.phone ? <p className="truncate text-sm leading-5 text-muted">{member.phone}</p> : null}
-            <p className="mt-2 inline-flex rounded-full bg-ice px-2.5 py-0.5 text-xs font-medium text-muted">
-              {t(roleKey(member.role))}
+            <p className="mt-2 flex flex-wrap gap-1.5">
+              {leader ? <span className="inline-flex rounded-full bg-ice px-2.5 py-0.5 text-xs font-medium text-muted">{t("team.leader")}</span> : null}
+              {member.teamAdmin ? <span className="inline-flex rounded-full bg-ice px-2.5 py-0.5 text-xs font-medium text-muted">{t("roles.admin")}</span> : null}
+              <span className="inline-flex rounded-full bg-ice px-2.5 py-0.5 text-xs font-medium text-muted">{t(roleKey(member.role))}</span>
             </p>
           </div>
         </div>
-        {jersey || groups.length ? (
+        {jersey || positions.length || groups.length ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {positions.length ? (
+              <div className="rounded-xl bg-ice px-4 py-3">
+                <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("roster.fields.position")}</p>
+                <ul className="mt-1 space-y-1">
+                  {positions.map((code, index) => (
+                    <li key={code} className={`text-sm font-semibold ${index === 0 ? "text-train" : ""}`}>
+                      {positionLabel(code, t)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {jersey ? (
               <div className="rounded-xl bg-ice px-4 py-3">
                 <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.number")}</p>
