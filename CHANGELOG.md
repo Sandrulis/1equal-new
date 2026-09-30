@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.15
+
+- Next.js ir 16.3.8. Tas aizver kritisko `next/og` attēlu ģenerēšanas ievainojamību
+
 ## v0.1.14
 
 - E-pasta maiņas saite paliek vienreizējs tokens. Drošības pārbaude to vairs neuzskata par maršrutu bez autentifikācijas
