@@ -2,6 +2,7 @@
 
 import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { BalanceHistory, type BalanceHistoryItem } from "@/app/components/balance-history";
 import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useFormatMoney } from "@/app/components/currency-provider";
@@ -18,10 +19,6 @@ function initials(name: string): string {
     .map((part) => part[0] ?? "")
     .join("")
     .toUpperCase();
-}
-
-function eventTitleKey(titleId: string): MessageKey {
-  return `event.${titleId}` as MessageKey;
 }
 
 function roleKey(role: Member["role"]): MessageKey {
@@ -98,7 +95,7 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
       {finance ? (
         <section className="rounded-2xl bg-paper ring-1 ring-line">
           <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
-          <PlayerBalanceLog member={member} />
+          <PlayerBalanceLog member={member} inset />
         </section>
       ) : null}
     </div>
@@ -109,54 +106,20 @@ export function PlayerBalanceDialog({ member, reserved = 0, onClose }: { member:
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
   return (
-    <AdminDialog open title={t("player.log")} onClose={onClose} wide closeButton>
+    <AdminDialog open title={t("player.log")} onClose={onClose} closeButton>
       {reserved > 0 ? <p className="px-4 text-sm font-medium text-train sm:px-5">{t("finance.reserved", { amount: formatMoney(reserved) })}</p> : null}
       <PlayerBalanceLog member={member} />
     </AdminDialog>
   );
 }
 
-export function PlayerBalanceLog({ member }: { member: Member }) {
+export function PlayerBalanceLog({ member, inset = false }: { member: Member; inset?: boolean }) {
   const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
+  const { formatDate, formatTime, formatDateTime } = useDisplayFormat();
   const usingLedger = member.ledger != null;
   const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
-  const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
-  if (charges.length === 0) {
-    return <p className="px-4 py-8 text-sm text-muted sm:px-5">{t(usingLedger ? "player.ledger.empty" : "player.empty")}</p>;
-  }
-  return (
-    <>
-      <ul className="mt-3 divide-y divide-line md:hidden">
-        {charges.map((charge) => (
-          <ChargeRow key={charge.id} charge={charge} />
-        ))}
-        <TotalRow total={total} />
-      </ul>
-      <div className="mt-2 hidden overflow-x-auto md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs tracking-wide text-muted uppercase">
-              <th className="px-5 py-3 font-medium">{t("player.date")}</th>
-              <th className="px-5 py-3 font-medium">{t("player.event")}</th>
-              <th className="px-5 py-3 text-right font-medium">{t("player.payment")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {charges.map((charge) => (
-              <ChargeTableRow key={charge.id} charge={charge} />
-            ))}
-            <tr className="border-t border-line">
-              <td className="px-5 py-3 font-semibold" colSpan={2}>
-                {t("player.total")}
-              </td>
-              <td className={`px-5 py-3 text-right font-semibold tabular-nums ${total < 0 ? "text-game" : "text-ink"}`}>{formatMoney(total)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
+  const items = charges.map((charge) => historyItem(charge, t, formatDate, formatTime, formatDateTime));
+  return <BalanceHistory items={items} empty={t(usingLedger ? "player.ledger.empty" : "player.empty")} inset={inset} />;
 }
 
 function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
@@ -201,78 +164,47 @@ function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
   );
 }
 
-function ChargeRow({ charge }: { charge: PlayerCharge }) {
-  const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
-  const { formatDate, formatTime } = useDisplayFormat();
-  const details = chargeDetails(charge, t);
-  return (
-    <li className="flex items-start justify-between gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <p className="font-medium tabular-nums">{formatDate(charge.date)}</p>
-        <p className="text-xs text-muted tabular-nums">{formatTime(charge.time)}</p>
-        <p className="mt-2 font-medium">{details.title}</p>
-        {details.meta ? <p className="text-sm text-muted">{details.meta}</p> : null}
-      </div>
-      <p className={`shrink-0 font-medium tabular-nums ${charge.amount < 0 ? "text-game" : "text-ink"}`}>
-        {formatMoney(charge.amount)}
-      </p>
-    </li>
-  );
-}
-
-function ChargeTableRow({ charge }: { charge: PlayerCharge }) {
-  const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
-  const { formatDate, formatTime } = useDisplayFormat();
-  const details = chargeDetails(charge, t);
-  return (
-    <tr className="border-b border-line">
-      <td className="px-5 py-3 align-top">
-        <span className="block tabular-nums">{formatDate(charge.date)}</span>
-        <span className="block text-xs text-muted tabular-nums">{formatTime(charge.time)}</span>
-      </td>
-      <td className="px-5 py-3 align-top">
-        <span className="block font-medium">{details.title}</span>
-        {details.meta ? <span className="block text-sm text-muted">{details.meta}</span> : null}
-      </td>
-      <td className={`px-5 py-3 text-right align-top font-medium tabular-nums ${charge.amount < 0 ? "text-game" : "text-ink"}`}>
-        {formatMoney(charge.amount)}
-      </td>
-    </tr>
-  );
-}
-
-function TotalRow({ total }: { total: number }) {
-  const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
-  return (
-    <li className="flex items-center justify-between gap-3 px-4 py-3">
-      <span className="font-semibold">{t("player.total")}</span>
-      <span className={`font-semibold tabular-nums ${total < 0 ? "text-game" : "text-ink"}`}>{formatMoney(total)}</span>
-    </li>
-  );
-}
-
 function ledgerCharges(member: Member): PlayerCharge[] {
   return (member.ledger ?? []).map((entry) => {
     const [date, time = ""] = entry.at.split("T");
-    return { id: entry.id, memberId: member.id, date, time: time.slice(0, 5), amount: entry.amount, kind: "manual" };
+    const kind = entry.kind === "event" ? "event" : "manual";
+    return {
+      id: entry.id,
+      memberId: member.id,
+      date: entry.eventDate || date,
+      time: entry.eventStart || time.slice(0, 5),
+      amount: entry.amount,
+      kind,
+      type: entry.eventType ?? undefined,
+      venueName: entry.venueName ?? undefined,
+      recordedAt: entry.at,
+    };
   });
 }
 
-function chargeDetails(
+function historyItem(
   charge: PlayerCharge,
   t: (key: MessageKey, params?: Record<string, string | number>) => string,
-): { title: string; meta: string | null } {
-  if (charge.kind === "manual") return { title: t("player.manual"), meta: null };
-  if (charge.kind === "payment" || !charge.type || !charge.titleId || !charge.venueId) {
-    return { title: t("player.deposit"), meta: null };
-  }
-  const venue = venueById(charge.venueId);
-  const typeLabel = t(charge.type === "game" ? "legend.game" : "legend.training");
-  return {
-    title: t(eventTitleKey(charge.titleId)),
-    meta: t("player.eventMeta", { type: typeLabel, place: venue.area }),
-  };
+  formatDate: (value: string) => string,
+  formatTime: (value: string) => string,
+  formatDateTime: (value: string) => string,
+): BalanceHistoryItem {
+  const facts = chargeFacts(charge, t);
+  const about = charge.type ? t("team.ledger.event", { type: facts.type, date: formatDate(charge.date) }) : facts.action;
+  const title = charge.type && facts.place !== "—" ? `${about} · ${facts.place}` : about;
+  const stamp = charge.recordedAt
+    ? formatDateTime(charge.recordedAt)
+    : [formatDate(charge.date), charge.time ? formatTime(charge.time) : ""].filter(Boolean).join(" ");
+  const when = charge.type ? `${stamp} · ${facts.action}` : stamp;
+  return { id: charge.id, title, when, amount: charge.amount };
+}
+
+function chargeFacts(
+  charge: PlayerCharge,
+  t: (key: MessageKey, params?: Record<string, string | number>) => string,
+): { type: string; place: string; action: string } {
+  const type = charge.type ? t(charge.type === "game" ? "legend.game" : "legend.training") : "—";
+  const named = charge.venueName?.trim() || (charge.venueId ? venueById(charge.venueId).name : "");
+  const action = charge.kind === "manual" ? t("player.manual") : charge.kind === "payment" ? t("player.deposit") : t("player.source.system");
+  return { type, place: named || "—", action };
 }

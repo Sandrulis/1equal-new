@@ -1,5 +1,6 @@
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
+import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
@@ -55,6 +56,7 @@ type EventRow = {
   subteam_id: string | null;
   expense: number | string | null;
   with_coach: boolean;
+  lineup?: unknown;
 };
 
 export function eventFromRow(row: EventRow): TeamEvent {
@@ -69,15 +71,35 @@ export function eventFromRow(row: EventRow): TeamEvent {
     venueId: row.venue_id,
     expense: row.expense == null ? null : Number(row.expense),
     withCoach: row.with_coach === true,
+    ...lineupFromJson(row.lineup),
   };
 }
 
-type EntryRow = {
-  id: string;
+function lineupFromJson(value: unknown): Pick<TeamEvent, "lineupSlots" | "lineupSides"> {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as { slots?: unknown; sides?: unknown };
+  const lineupSlots: Record<number, string> = {};
+  if (raw.slots && typeof raw.slots === "object") {
+    for (const [key, memberId] of Object.entries(raw.slots)) {
+      const slot = Number(key);
+      if (Number.isInteger(slot) && slot >= 1 && slot <= 16 && typeof memberId === "string") lineupSlots[slot] = memberId;
+    }
+  }
+  const lineupSides: Record<string, "black" | "white"> = {};
+  if (raw.sides && typeof raw.sides === "object") {
+    for (const [memberId, side] of Object.entries(raw.sides)) {
+      if (side === "black" || side === "white") lineupSides[memberId] = side;
+    }
+  }
+  return {
+    ...(Object.keys(lineupSlots).length ? { lineupSlots } : {}),
+    ...(Object.keys(lineupSides).length ? { lineupSides } : {}),
+  };
+}
+
+type EntryRow = BalanceEntryRow & {
   team_id: string;
   user_id: string;
-  amount: number | string;
-  created_at: string;
 };
 
 function one<T>(value: T | T[] | null): T | null {
@@ -166,9 +188,9 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
       .in("team_id", teamIds),
     admin.from("subteams").select("id, team_id, name, color, updated_at").in("team_id", teamIds),
     admin.from("team_member_subteams").select("team_id, user_id, subteam_id").in("team_id", teamIds),
-    admin.from("balance_entries").select("id, team_id, user_id, amount, created_at").in("team_id", teamIds).order("created_at", { ascending: false }),
+    admin.from("balance_entries").select(BALANCE_ENTRY_SELECT).in("team_id", teamIds).order("created_at", { ascending: false }),
     admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").in("team_id", teamIds),
-    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach").in("team_id", teamIds).gte("event_date", historySince()).order("event_date").order("start_time"),
+    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, lineup").in("team_id", teamIds).gte("event_date", historySince()).order("event_date").order("start_time"),
     admin.from("team_event_rsvps").select("team_id, event_id, user_id, status").in("team_id", teamIds),
     admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").in("team_id", teamIds).gte("event_date", historySince()).order("created_at", { ascending: false }),
     admin.from("finance_reservations").select("team_id, event_id, user_id, amount").in("team_id", teamIds),
@@ -185,7 +207,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
   for (const row of (entries.data ?? []) as EntryRow[]) {
     const key = `${row.team_id}:${row.user_id}`;
     const list = entriesByMember.get(key) ?? [];
-    list.push({ id: row.id, amount: Number(row.amount), at: toLocalDateTimeStamp(row.created_at) });
+    list.push(mapBalanceEntry(row));
     entriesByMember.set(key, list);
   }
   const byTeam = new Map<string, Member[]>();

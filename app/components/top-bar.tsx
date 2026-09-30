@@ -10,6 +10,7 @@ import { ChangePasswordDialog } from "@/app/components/change-password-dialog";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { PlayerBalanceDialog } from "@/app/components/player-profile";
+import { HoldDialog, type BalanceHold } from "@/app/components/team-roster";
 import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
@@ -46,7 +47,7 @@ export function TopBar({
   onOpenMenu,
   onOpenAdmin,
   balanceMember = null,
-  reservedBalance = 0,
+  reservedHolds = [],
   calendarIntegration = false,
   sports = [],
 }: {
@@ -65,7 +66,7 @@ export function TopBar({
   onOpenMenu?: () => void;
   onOpenAdmin?: () => void;
   balanceMember?: Member | null;
-  reservedBalance?: number;
+  reservedHolds?: BalanceHold[];
   calendarIntegration?: boolean;
   sports?: Sport[];
 }) {
@@ -78,6 +79,8 @@ export function TopBar({
   const linkedPhoto = teamPlayer(profile, team?.code)?.photoUrl ?? null;
   const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
   const [balanceOpen, setBalanceOpen] = useState(false);
+  const [holdsOpen, setHoldsOpen] = useState(false);
+  const reservedBalance = Math.round(reservedHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
 
   function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) {
     setProfile((current) => (current ? { ...current, ...next } : current));
@@ -85,7 +88,7 @@ export function TopBar({
   }
 
   return (
-    <header className="sticky top-0 z-30 order-1 flex h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 sm:px-6 lg:order-none lg:px-8">
+    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 sm:px-6 lg:order-none lg:px-8">
       <div className="flex min-w-0 items-center gap-2">
         {onOpenMenu ? (
           <button type="button" aria-label={t("nav.sections")} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
@@ -106,15 +109,26 @@ export function TopBar({
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <LanguageMenu />
         {balanceMember ? (
-          <button
-            type="button"
-            aria-label={t("roster.balance")}
-            onClick={() => setBalanceOpen(true)}
-            className={`rounded-lg px-2 py-1 text-sm font-semibold tabular-nums hover:bg-ice ${balanceMember.balance < 0 ? "text-game" : balanceMember.balance > 0 ? "text-[#1b7a46]" : "text-muted"}`}
-          >
-            <span className="block">{formatMoney(balanceMember.balance)}</span>
-            {reservedBalance > 0 ? <span className="block text-xs font-medium text-muted">{t("finance.reserved", { amount: formatMoney(reservedBalance) })}</span> : null}
-          </button>
+          <div className="text-right">
+            <button
+              type="button"
+              aria-label={t("roster.balance")}
+              onClick={() => setBalanceOpen(true)}
+              className={`rounded-lg px-2 py-1 text-sm font-semibold tabular-nums hover:bg-ice ${balanceMember.balance < 0 ? "text-game" : balanceMember.balance > 0 ? "text-[#1b7a46]" : "text-muted"}`}
+            >
+              {formatMoney(balanceMember.balance)}
+            </button>
+            {reservedBalance > 0 ? (
+              <button
+                type="button"
+                onClick={() => setHoldsOpen(true)}
+                aria-label={t("finance.reserved", { amount: formatMoney(reservedBalance) })}
+                className="block w-full px-2 text-xs font-medium text-muted tabular-nums hover:underline"
+              >
+                ({formatMoney(reservedBalance)})
+              </button>
+            ) : null}
+          </div>
         ) : null}
         <UserMenu
           name={name}
@@ -139,6 +153,7 @@ export function TopBar({
         ) : null}
       </div>
       {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
+      <HoldDialog holds={holdsOpen ? reservedHolds : null} onClose={() => setHoldsOpen(false)} />
     </header>
   );
 }

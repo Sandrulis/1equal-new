@@ -47,7 +47,7 @@ export function settleDemoCharges(events: ChargeEvent[], now: number) {
   let team = session.team;
   let changed = false;
   for (const event of events) {
-    const cost = event.type === "game" && event.expense != null ? Math.round(event.expense * 100) / 100 : 0;
+    const cost = event.expense != null ? Math.round(event.expense * 100) / 100 : 0;
     const existing = charges.find((line) => line.eventId === event.id);
     if (!eventHasEnded(event, now) || cost <= 0) {
       if (!existing) continue;

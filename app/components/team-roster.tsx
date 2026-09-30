@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { BalanceHistory } from "@/app/components/balance-history";
 import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
@@ -48,6 +49,14 @@ type TeamEntry = {
   at: string;
 };
 
+export type BalanceHold = {
+  id: string;
+  amount: number;
+  when: string;
+  where: string;
+  what: string;
+};
+
 export function TeamRoster({
   teamName,
   inviteCode,
@@ -72,7 +81,8 @@ export function TeamRoster({
   finance = true,
   persistedBalance = 0,
   persistedEntries = [],
-  reservedTeam = 0,
+  teamHolds = [],
+  memberHolds = {},
 }: {
   teamName: string;
   inviteCode: string;
@@ -97,7 +107,8 @@ export function TeamRoster({
   finance?: boolean;
   persistedBalance?: number;
   persistedEntries?: TeamEntry[];
-  reservedTeam?: number;
+  teamHolds?: BalanceHold[];
+  memberHolds?: Record<string, BalanceHold[]>;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -117,6 +128,7 @@ export function TeamRoster({
   const [inviting, setInviting] = useState(false);
   const [balancing, setBalancing] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
+  const [openHolds, setOpenHolds] = useState<BalanceHold[] | null>(null);
   const [teamEntries, setTeamEntries] = useState<TeamEntry[]>([]);
   const [adjusting, setAdjusting] = useState<Member | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -124,6 +136,7 @@ export function TeamRoster({
   const isLeader = Boolean(teamId && leaderId && accountId && leaderId === accountId);
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
+  const teamReserved = Math.round(teamHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
   const player = memberId ? members.find((member) => member.id === memberId) : undefined;
 
@@ -219,12 +232,23 @@ export function TeamRoster({
           </div>
         </div>
         {finance ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={() => setStatementOpen(true)} className="rounded-lg px-2 py-1 text-right hover:bg-paper">
-              <span className="block text-xs text-muted">{t("roster.balance.team")}</span>
-              <span className={`block text-lg font-semibold tabular-nums ${teamBalance < 0 ? "text-game" : "text-ink"}`}>{formatMoney(teamBalance)}</span>
-              {reservedTeam > 0 ? <span className="block text-xs text-muted">{t("finance.reserved.team", { amount: formatMoney(reservedTeam) })}</span> : null}
-            </button>
+          <div className="flex shrink-0 items-start gap-2">
+            <div className="text-right">
+              <button type="button" onClick={() => setStatementOpen(true)} className="rounded-lg px-2 py-1 text-right hover:bg-paper">
+                <span className="block text-xs text-muted">{t("roster.balance.team")}</span>
+                <span className={`block text-lg font-semibold tabular-nums ${teamBalance < 0 ? "text-game" : "text-ink"}`}>{formatMoney(teamBalance)}</span>
+              </button>
+              {teamReserved > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setOpenHolds(teamHolds)}
+                  aria-label={t("finance.reserved.team", { amount: formatMoney(teamReserved) })}
+                  className="block w-full px-2 text-right text-xs text-muted tabular-nums hover:underline"
+                >
+                  ({formatMoney(teamReserved)})
+                </button>
+              ) : null}
+            </div>
             {canAdjust ? (
               <button type="button" onClick={() => setBalancing(true)} className="shrink-0 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy/90">
                 {t("roster.balance.add")}
@@ -332,13 +356,12 @@ export function TeamRoster({
                       </td>
                       {finance ? (
                         <td className="px-4 py-3 whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                          {canAdjust ? (
-                            <button type="button" onClick={() => setAdjusting(member)} className={`font-medium tabular-nums hover:underline ${member.balance < 0 ? "text-game" : "text-ink"}`}>
-                              {formatMoney(member.balance)}
-                            </button>
-                          ) : (
-                            <MemberBalance member={member} />
-                          )}
+                          <MemberBalance
+                            member={member}
+                            holds={memberHolds[member.id] ?? []}
+                            onHolds={(holds) => setOpenHolds(holds)}
+                            onAdjust={canAdjust ? () => setAdjusting(member) : undefined}
+                          />
                         </td>
                       ) : null}
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
@@ -432,7 +455,8 @@ export function TeamRoster({
           showFeedback({ message: t("roster.balance.saved"), variant: "success" });
         }}
       />
-      <TeamStatementDialog open={statementOpen} entries={statementEntries} reservedTeam={reservedTeam} onClose={() => setStatementOpen(false)} />
+      <TeamStatementDialog open={statementOpen} entries={statementEntries} onClose={() => setStatementOpen(false)} />
+      <HoldDialog holds={openHolds} onClose={() => setOpenHolds(null)} />
       <BalanceDialog
         open={adjusting !== null}
         title={t("roster.balance.adjust")}
@@ -508,42 +532,19 @@ function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose:
   );
 }
 
-function signedMoney(amount: number, format: (value: number) => string): string {
-  return amount > 0 ? `+${format(amount)}` : format(amount);
-}
-
-function TeamStatementDialog({ open, entries, reservedTeam = 0, onClose }: { open: boolean; entries: TeamEntry[]; reservedTeam?: number; onClose: () => void }) {
+function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entries: TeamEntry[]; onClose: () => void }) {
   const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
   const { formatDateTime } = useDisplayFormat();
-  const total = Math.round(entries.reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100;
+  const items = entries.map((entry) => ({
+    id: entry.id,
+    title: entry.description,
+    when: `${formatDateTime(entry.at)} · ${t("player.source.system")}`,
+    amount: entry.amount,
+  }));
 
   return (
     <AdminDialog open={open} title={t("roster.balance.statement")} onClose={onClose}>
-      {reservedTeam > 0 ? <p className="mb-3 text-sm text-muted">{t("finance.reserved.team", { amount: formatMoney(reservedTeam) })}</p> : null}
-      {entries.length === 0 ? (
-        <p className="text-sm text-muted">{t("roster.balance.statement.empty")}</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {entries.map((entry) => {
-            return (
-              <li key={entry.id} className="flex items-start justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{entry.description}</p>
-                  <p className="text-sm text-muted">
-                    {formatDateTime(entry.at)}
-                  </p>
-                </div>
-                <p className={`shrink-0 font-medium tabular-nums ${entry.amount < 0 ? "text-game" : "text-train"}`}>{signedMoney(entry.amount, formatMoney)}</p>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
-        <span className="font-semibold">{t("player.total")}</span>
-        <span className={`font-semibold tabular-nums ${total < 0 ? "text-game" : "text-ink"}`}>{formatMoney(total)}</span>
-      </div>
+      <BalanceHistory items={items} empty={t("roster.balance.statement.empty")} />
       <div className="mt-4 flex justify-end">
         <button type="button" onClick={onClose} className="rounded-lg bg-ice px-4 py-2 text-sm font-medium">
           {t("event.close")}
@@ -944,12 +945,55 @@ function SubteamSwatch({ color, name }: { color: string; name: string }) {
   );
 }
 
-function MemberBalance({ member }: { member: Member }) {
+function MemberBalance({ member, holds, onHolds, onAdjust }: { member: Member; holds: BalanceHold[]; onHolds: (holds: BalanceHold[]) => void; onAdjust?: () => void }) {
+  const { t } = useLanguage();
   const formatMoney = useFormatMoney();
-  return (
-    <span className={`font-medium tabular-nums ${member.balance < 0 ? "text-game" : "text-ink"}`}>
+  const reserved = Math.round(holds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
+  const figure = onAdjust ? (
+    <button type="button" onClick={onAdjust} className={`font-medium tabular-nums hover:underline ${member.balance < 0 ? "text-game" : "text-ink"}`}>
       {formatMoney(member.balance)}
-    </span>
+    </button>
+  ) : (
+    <span className={`font-medium tabular-nums ${member.balance < 0 ? "text-game" : "text-ink"}`}>{formatMoney(member.balance)}</span>
+  );
+  return (
+    <div>
+      {figure}
+      {reserved > 0 ? (
+        <button
+          type="button"
+          onClick={() => onHolds(holds)}
+          aria-label={t("finance.reserved", { amount: formatMoney(reserved) })}
+          className="mt-0.5 block text-xs text-muted tabular-nums hover:underline"
+        >
+          ({formatMoney(reserved)})
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function HoldDialog({ holds, onClose }: { holds: BalanceHold[] | null; onClose: () => void }) {
+  const { t } = useLanguage();
+  const rows = holds ?? [];
+  const items = rows.map((hold) => {
+    const about = t("finance.hold.about", { what: hold.what });
+    return {
+      id: hold.id,
+      title: hold.where ? `${about} · ${hold.where}` : about,
+      when: hold.when,
+      amount: hold.amount,
+    };
+  });
+  return (
+    <AdminDialog open={holds !== null} title={t("finance.hold.title")} onClose={onClose}>
+      <BalanceHistory items={items} empty={t("player.ledger.empty")} tone="due" />
+      <div className="mt-4 flex justify-end">
+        <button type="button" onClick={onClose} className="rounded-lg bg-ice px-4 py-2 text-sm font-medium">
+          {t("event.close")}
+        </button>
+      </div>
+    </AdminDialog>
   );
 }
 

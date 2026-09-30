@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BalanceEntry, TeamEvent } from "@/app/lib/demo-data";
+import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
 import { eventVotingOpen } from "@/app/lib/event-voting";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
-import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { MessageKey } from "@/app/lib/messages";
 import { listEnabledFrontendModuleKeys } from "@/app/lib/site-admin/repository";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS } from "@/app/lib/team-defaults";
@@ -148,9 +148,9 @@ export async function castMemberVote(
       }
     }
   }
-  const rows = await client.from("balance_entries").select("id, amount, created_at").eq("team_id", input.teamId).eq("user_id", input.userId).order("created_at", { ascending: false });
+  const rows = await client.from("balance_entries").select(BALANCE_ENTRY_SELECT).eq("team_id", input.teamId).eq("user_id", input.userId).order("created_at", { ascending: false });
   if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
-  const ledger = rows.data.map((row) => ({ id: row.id, amount: Number(row.amount), at: toLocalDateTimeStamp(row.created_at) }));
+  const ledger = rows.data.map((row) => mapBalanceEntry(row));
   const memberBalance = roundMoney(ledger.reduce((sum, item) => sum + item.amount, 0));
   const hold = await client.from("finance_reservations").select("amount").eq("event_id", input.eventId).eq("user_id", input.userId).maybeSingle();
   const reservation = !hold.error && hold.data ? { eventId: input.eventId, userId: input.userId, amount: roundMoney(Number(hold.data.amount)) } : null;

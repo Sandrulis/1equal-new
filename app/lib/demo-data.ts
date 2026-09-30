@@ -54,6 +54,8 @@ export type TeamEvent = {
   venueId: string;
   expense?: number | null;
   withCoach?: boolean;
+  lineupSlots?: Record<number, string>;
+  lineupSides?: Record<string, "black" | "white">;
 };
 
 export function formatJersey(number: number | null | undefined): string | null {
@@ -207,6 +209,12 @@ export type BalanceEntry = {
   id: string;
   amount: number;
   at: string;
+  kind?: "manual" | "event";
+  eventId?: string | null;
+  eventDate?: string | null;
+  eventStart?: string | null;
+  eventType?: EventType | null;
+  venueName?: string | null;
 };
 
 export type PlayerCharge = {
@@ -219,6 +227,8 @@ export type PlayerCharge = {
   type?: EventType;
   titleId?: string;
   venueId?: string;
+  venueName?: string;
+  recordedAt?: string;
 };
 
 export function chargesForMember(memberId: string): PlayerCharge[] {

@@ -17,7 +17,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
-import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveTeamAvatar, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
+import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveOwnedLineup, saveTeamAvatar, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
 import { setAdminTeamWatch } from "@/app/lib/site-admin/actions";
 import { mergeDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -41,6 +41,7 @@ import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } f
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
 import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
+import { TeamRoster, type BalanceHold } from "@/app/components/team-roster";
 import { SiteFooter } from "@/app/components/site-footer";
 import { AdminIntegrationsPage } from "@/app/components/admin-integrations-page";
 import { AdminModulesPage } from "@/app/components/admin-modules-page";
@@ -61,7 +62,6 @@ import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
 import { NoTeamStart } from "@/app/components/no-team-start";
 import { SubteamAdmin } from "@/app/components/subteam-admin";
-import { TeamRoster } from "@/app/components/team-roster";
 import { VenueAdmin } from "@/app/components/venue-admin";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
 import { eventAudienceIncludes, eventVotingDeadline } from "@/app/lib/event-voting";
@@ -72,11 +72,20 @@ type TypeFilter = "all" | EventType;
 type DashboardView = "home" | "team" | "subteams" | "venues";
 
 function eventCost(event: TeamEvent, pricePerHour: number): number | null {
-  if (event.type === "game" && event.expense != null) return event.expense;
+  if (event.expense != null) return event.expense;
   if (!event.end) return null;
   return hoursBetween(event.start, event.end) * pricePerHour;
 }
 
+
+function LineupOpenButton({ pending, label, onClick, className }: { pending: boolean; label: string; onClick: () => void; className: string }) {
+  return (
+    <button type="button" onClick={onClick} disabled={pending} aria-busy={pending} className={`inline-flex items-center gap-1.5 rounded-lg bg-navy text-sm font-medium text-white disabled:cursor-not-allowed ${className}`}>
+      {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+      {label}
+    </button>
+  );
+}
 
 function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; game: boolean; cost: number | null; subteamName?: string }) {
   const { t } = useLanguage();
@@ -86,19 +95,15 @@ function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; g
   const hours = event.end ? hoursBetween(event.start, event.end) : null;
   return (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
-            {game ? t("legend.game") : t("legend.training")}
-          </p>
-          {event.titleId ? <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p> : null}
-          {!event.titleId && !game ? <p className="mt-0.5 text-sm">{event.withCoach ? t("event.add.coach") : t("event.add.coach.off")}</p> : null}
-        </div>
-        {cost != null ? <p className="text-sm font-semibold tabular-nums">{formatMoney(cost)}</p> : null}
-      </div>
+      <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
+        {game ? t("legend.game") : t("legend.training")}
+      </p>
+      {event.titleId ? <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p> : null}
+      {!event.titleId && !game ? <p className="mt-0.5 text-sm">{event.withCoach ? t("event.add.coach") : t("event.add.coach.off")}</p> : null}
       <p className="mt-2 text-sm text-muted">
         {hours != null ? `${formatTime(event.start)}-${formatTime(event.end)}, ${formatDuration(hours)}` : formatTime(event.start)}
       </p>
+      {cost != null ? <p className="mt-1 text-sm font-semibold tabular-nums">{formatMoney(cost)}</p> : null}
       {subteam ? <p className="mt-1 text-sm">{subteam}</p> : null}
     </>
   );
@@ -123,41 +128,6 @@ function eventTitleKey(titleId: string): MessageKey {
 }
 
 type HomeView = "calendar" | "poll";
-
-const HOME_VIEW_KEY = "1equal-home-view";
-const homeViewListeners = new Set<() => void>();
-let homeViewValue: HomeView | null = null;
-
-function readHomeView(): HomeView | null {
-  if (homeViewValue) return homeViewValue;
-  try {
-    const stored = sessionStorage.getItem(HOME_VIEW_KEY);
-    if (stored === "calendar" || stored === "poll") {
-      homeViewValue = stored;
-      return stored;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function subscribeHomeView(listener: () => void) {
-  homeViewListeners.add(listener);
-  return () => {
-    homeViewListeners.delete(listener);
-  };
-}
-
-function writeHomeView(value: HomeView) {
-  homeViewValue = value;
-  try {
-    sessionStorage.setItem(HOME_VIEW_KEY, value);
-  } catch {
-    // Session storage can be unavailable. The in-memory value still keeps the view for this tab.
-  }
-  for (const listener of homeViewListeners) listener();
-}
 
 export function TeamDashboard({
   basePath,
@@ -246,9 +216,11 @@ export function TeamDashboard({
   }
 
   function selectTeam(code: string) {
-    const team = selectMyTeam(code);
-    if (!team) return;
-    setOwnedTeam(team);
+    guardLeave(() => {
+      const team = selectMyTeam(code);
+      if (!team) return;
+      setOwnedTeam(team);
+    });
   }
 
   async function unwatchTeam(teamId: string) {
@@ -343,6 +315,13 @@ export function TeamDashboard({
   }
   const openEventId = route.view === "home" ? route.eventId : null;
   const lineup = route.view === "home" && route.lineup;
+  const [homePick, setHomePick] = useState<HomeView | null>(null);
+  const [homeVisit, setHomeVisit] = useState<string | null>(null);
+  const homeVisitKey = view === "home" && !openEventId && !lineup ? pathname : "";
+  if (homeVisitKey !== homeVisit) {
+    setHomeVisit(homeVisitKey);
+    setHomePick(null);
+  }
   const { subteams, venues, subteamById, venueById } = useTeamCatalog();
   const filterSubteams = activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.subteams ?? []) : subteams;
   const todayIso = isoDate(new Date());
@@ -353,12 +332,12 @@ export function TeamDashboard({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subteamId, setSubteamId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
-  const homeView = useSyncExternalStore(subscribeHomeView, readHomeView, () => null);
   const [votingId, setVotingId] = useState<string | null>(null);
   const [addingEvent, setAddingEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
+  const [lineupPendingId, setLineupPendingId] = useState<string | null>(null);
   const demo = useSyncExternalStore(subscribeDemoSession, getDemoSession, getDemoSession);
   const demoEvents = demo.events;
   const eventEdits = demo.edits;
@@ -402,6 +381,20 @@ export function TeamDashboard({
 
   const [savedSlots, setSavedSlots] = useState<Record<string, SlotMap>>({});
   const [savedSides, setSavedSides] = useState<Record<string, SideMap>>({});
+  const lineupUnsavedRef = useRef(false);
+  const [leaveRun, setLeaveRun] = useState<(() => void) | null>(null);
+
+  function rememberLineupUnsaved(unsaved: boolean) {
+    lineupUnsavedRef.current = unsaved;
+  }
+
+  function guardLeave(run: () => void) {
+    if (!lineupUnsavedRef.current) {
+      run();
+      return;
+    }
+    setLeaveRun(() => run);
+  }
   const [rsvp, setRsvp] = useState<Record<string, Record<string, Rsvp>>>(() => {
     const next: Record<string, Record<string, Rsvp>> = {};
     for (const [eventId, rows] of Object.entries(getDemoSession().rsvp)) next[eventId] = { ...rows };
@@ -729,9 +722,17 @@ export function TeamDashboard({
   }
 
   function openLineup(event: TeamEvent) {
-    router.push(eventHref(basePath, event.id, true));
-    window.scrollTo({ top: 0 });
+    if (lineupPendingId) return;
+    guardLeave(() => setLineupPendingId(event.id));
   }
+
+  if (lineupPendingId && lineup && openEventId === lineupPendingId) setLineupPendingId(null);
+
+  useEffect(() => {
+    if (!lineupPendingId) return;
+    window.history.pushState(null, "", eventHref(basePath, lineupPendingId, true));
+    window.scrollTo({ top: 0 });
+  }, [basePath, lineupPendingId]);
 
   function collapseIfNarrow() {
     if (window.matchMedia("(max-width: 1023px)").matches) setSidebarCollapsed(true);
@@ -746,7 +747,7 @@ export function TeamDashboard({
       return;
     }
     pendingAnchor.current = anchor ?? "";
-    router.push(basePath);
+    guardLeave(() => router.push(basePath));
   }
 
   useEffect(() => {
@@ -770,8 +771,10 @@ export function TeamDashboard({
 
   function showView(next: Exclude<DashboardView, "home">) {
     collapseIfNarrow();
-    router.push(`${basePath}/${next}`);
-    window.scrollTo({ top: 0 });
+    guardLeave(() => {
+      router.push(`${basePath}/${next}`);
+      window.scrollTo({ top: 0 });
+    });
   }
 
   function moduleOn(key: string) {
@@ -814,8 +817,10 @@ export function TeamDashboard({
 
   function showAdmin(section: AdminSection) {
     collapseIfNarrow();
-    router.push(`${basePath}/admin/${section}`);
-    window.scrollTo({ top: 0 });
+    guardLeave(() => {
+      router.push(`${basePath}/admin/${section}`);
+      window.scrollTo({ top: 0 });
+    });
   }
 
   const now = useNow();
@@ -847,18 +852,11 @@ export function TeamDashboard({
   const financeReserve = Boolean(financeAllowed && activeTeam && !activeTeam.demo && activeTeam.financeReserve);
   const reservations = financeReserve ? (activeTeam?.reservations ?? []) : [];
   const settledEventIds = new Set((activeTeam?.ledger ?? []).map((line) => line.eventId).filter((id): id is string => Boolean(id)));
-  const selfReserved = selfMember ? reservations.filter((row) => row.userId === selfMember.id).reduce((sum, row) => sum + row.amount, 0) : 0;
-  const teamReserved = financeReserve
-    ? (activeTeam?.events ?? []).reduce((sum, event) => {
-        const expense = event.type === "game" ? (event.expense ?? 0) : 0;
-        return expense > 0 && !settledEventIds.has(event.id) ? sum + expense : sum;
-      }, 0)
-    : 0;
   function playerHold(eventId: string, userId: string) {
     return reservations.find((row) => row.eventId === eventId && row.userId === userId)?.amount ?? 0;
   }
   function teamHold(event: TeamEvent) {
-    const expense = event.type === "game" ? (event.expense ?? 0) : 0;
+    const expense = event.expense ?? 0;
     return financeReserve && expense > 0 && !settledEventIds.has(event.id) ? expense : 0;
   }
   const pendingVoteEvents = selfMember
@@ -874,13 +872,40 @@ export function TeamDashboard({
         .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
     : [];
   const pendingVoteIds = new Set(pendingVoteEvents.map((event) => event.id));
-  const resolvedHomeView = homeView ?? (pendingVoteEvents.length > 0 ? "poll" : "calendar");
+  const resolvedHomeView = homePick ?? (pendingVoteEvents.length > 0 ? "poll" : "calendar");
   const showPoll = resolvedHomeView === "poll" && pendingVoteEvents.length > 0;
   const display = mergeDisplayPreferences(brand.display, profile?.display);
   const currencyCode = activeTeam?.currency && isCurrency(activeTeam.currency) ? activeTeam.currency : normalizeCurrency(brand.currency);
   const money = (value: number) => formatMoney(value, currencyCode);
   const formatDate = (value: string) => formatDisplayDate(value, display);
   const formatTime = (value: string) => formatClock(value, display.timeFormat);
+  function toHold(event: TeamEvent, amount: number, id: string): BalanceHold {
+    const venue = venueSource.find((item) => item.id === event.venueId)?.name ?? "";
+    const when = event.end ? `${formatDate(event.date)} ${formatTime(event.start)}-${formatTime(event.end)}` : `${formatDate(event.date)} ${formatTime(event.start)}`;
+    const what = event.titleId ? t(eventTitleKey(event.titleId)) : t(event.type === "game" ? "legend.game" : "legend.training");
+    return { id, amount, when, where: venue, what };
+  }
+  const teamHolds: BalanceHold[] = financeReserve
+    ? (activeTeam?.events ?? [])
+        .filter((event) => (event.expense ?? 0) > 0 && !settledEventIds.has(event.id))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+        .map((event) => toHold(event, event.expense ?? 0, event.id))
+    : [];
+  const memberHolds: Record<string, BalanceHold[]> = {};
+  if (financeReserve) {
+    const source = activeTeam?.events ?? [];
+    const rows = reservations
+      .flatMap((row) => {
+        const event = source.find((item) => item.id === row.eventId);
+        return event && row.amount > 0 ? [{ row, event }] : [];
+      })
+      .sort((a, b) => a.event.date.localeCompare(b.event.date) || a.event.start.localeCompare(b.event.start));
+    for (const { row, event } of rows) {
+      const list = memberHolds[row.userId] ?? [];
+      list.push(toHold(event, row.amount, `${row.eventId}:${row.userId}`));
+      memberHolds[row.userId] = list;
+    }
+  }
   const dayHeaders = weekdayHeaders(formatLang, display.weekStartDay);
   const cells = monthGrid(year, month, display.weekStartDay);
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
@@ -889,6 +914,7 @@ export function TeamDashboard({
     profile && activeTeam && !activeTeam.demo && (activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
   );
   const canManageTeam = basePath === "/demo" || managesTeam;
+  const canEditLineup = Boolean(managesTeam && !activeTeam?.watching);
   useEffect(() => {
     if (canManageTeam || (view !== "venues" && view !== "subteams")) return;
     router.replace(basePath);
@@ -983,7 +1009,7 @@ export function TeamDashboard({
         onOpenMenu={account ? () => { setAdminOpen(false); setMenuOpen((value) => !value); } : undefined}
         onOpenAdmin={account?.isAdmin ? () => { setMenuOpen(false); setAdminOpen((value) => !value); } : undefined}
         balanceMember={financeAllowed ? selfMember : null}
-        reservedBalance={selfReserved}
+        reservedHolds={selfMember ? (memberHolds[selfMember.id] ?? []) : []}
         calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
         sports={sports}
       />
@@ -1022,11 +1048,31 @@ export function TeamDashboard({
             subteamName={filterSubteams.find((item) => item.id === lineupEvent.subteamId)?.name ?? ""}
             knownRsvp={knownRsvp}
             rsvp={rsvp[lineupEvent.id]}
-            savedSlots={savedSlots[lineupEvent.id] ?? {}}
-            savedSides={savedSides[lineupEvent.id] ?? {}}
-            onSaveSlots={(slots) => setSavedSlots((current) => ({ ...current, [lineupEvent.id]: slots }))}
-            onSaveSides={(sides) => setSavedSides((current) => ({ ...current, [lineupEvent.id]: sides }))}
-            onBack={() => router.push(eventHref(basePath, lineupEvent.id))}
+            savedSlots={savedSlots[lineupEvent.id] ?? lineupEvent.lineupSlots ?? {}}
+            savedSides={savedSides[lineupEvent.id] ?? lineupEvent.lineupSides ?? {}}
+            onSaveSlots={async (slots) => {
+              setSavedSlots((current) => ({ ...current, [lineupEvent.id]: slots }));
+              if (basePath === "/demo" || !ownedTeam?.id || ownedTeam.demo) return true;
+              const result = await saveOwnedLineup({ teamId: ownedTeam.id, eventId: lineupEvent.id, slots });
+              if (!result.ok) {
+                showFeedback({ message: t(result.error), variant: "error" });
+                return false;
+              }
+              return true;
+            }}
+            onSaveSides={async (sides) => {
+              setSavedSides((current) => ({ ...current, [lineupEvent.id]: sides }));
+              if (basePath === "/demo" || !ownedTeam?.id || ownedTeam.demo) return true;
+              const result = await saveOwnedLineup({ teamId: ownedTeam.id, eventId: lineupEvent.id, sides });
+              if (!result.ok) {
+                showFeedback({ message: t(result.error), variant: "error" });
+                return false;
+              }
+              return true;
+            }}
+            onBack={() => guardLeave(() => router.push(eventHref(basePath, lineupEvent.id)))}
+            onUnsaved={rememberLineupUnsaved}
+            editable={canEditLineup}
           />
         ) : null}
         {view === "team" && !showStart && activeTeam && moduleVisible ? (
@@ -1058,16 +1104,22 @@ export function TeamDashboard({
             onMemberRemoved={forgetMember}
             finance={financeAllowed}
             persistedBalance={activeTeam.demo ? demoTeamDelta : (activeTeam.balance ?? 0)}
-            reservedTeam={teamReserved}
-            persistedEntries={(activeTeam.demo ? demoCharges : (activeTeam.ledger ?? [])).map((line) => ({
-              id: line.id,
-              amount: line.amount,
-              at: line.at,
-              description: t("team.ledger.event", {
+            teamHolds={teamHolds}
+            memberHolds={memberHolds}
+            persistedEntries={(activeTeam.demo ? demoCharges : (activeTeam.ledger ?? [])).map((line) => {
+              const event = (activeTeam.events ?? []).find((item) => item.id === line.eventId);
+              const venue = (activeTeam.venues ?? []).find((item) => item.id === event?.venueId)?.name;
+              const description = t("team.ledger.event", {
                 type: t(line.eventType === "game" ? "legend.game" : "legend.training"),
                 date: formatDate(line.eventDate),
-              }),
-            }))}
+              });
+              return {
+                id: line.id,
+                amount: line.amount,
+                at: line.at,
+                description: venue ? `${description} · ${venue}` : description,
+              };
+            })}
           />
         ) : null}
         {view === "subteams" && !showStart && moduleVisible && canManageTeam ? (
@@ -1133,7 +1185,7 @@ export function TeamDashboard({
         <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
         {pendingVoteEvents.length ? (
           <div className="mb-4">
-            <CalendarPollSwitch value={resolvedHomeView} onChange={writeHomeView} />
+            <CalendarPollSwitch value={resolvedHomeView} onChange={setHomePick} />
           </div>
         ) : null}
         <section id="kalendars" className={`scroll-mt-4 ${showPoll ? "space-y-4" : "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"}`}>
@@ -1189,7 +1241,7 @@ export function TeamDashboard({
               </ul>
             </>
           ) : null}
-          <div className={`rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5 ${showPoll ? "hidden" : ""}`}>
+          <div className={`rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5 ${showPoll ? "hidden" : "order-2 xl:order-1"}`}>
             <div className="mb-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <IconButton label={t("month.prev")} onClick={() => shiftMonth(-1)}>
@@ -1301,7 +1353,7 @@ export function TeamDashboard({
                               type="button"
                               onClick={(click) => {
                                 click.stopPropagation();
-                                writeHomeView("calendar");
+                                setHomePick("calendar");
                                 showEvent(event, date);
                               }}
                               className={`truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 max-[499px]:text-clip ${
@@ -1332,14 +1384,14 @@ export function TeamDashboard({
             </div>
           </div>
 
-          <div className={`flex flex-col gap-3 xl:sticky xl:top-5 ${showPoll ? "hidden" : ""}`}>
+          <div className={showPoll ? "hidden" : "contents xl:sticky xl:top-5 xl:flex xl:flex-col xl:gap-3 xl:order-2"}>
           {canManageTeam && !activeTeam?.watching ? (
-            <button type="button" onClick={() => setAddingEvent(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+            <button type="button" onClick={() => setAddingEvent(true)} className="order-1 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white xl:order-none">
               <IconPlus />
               {t("event.add")}
             </button>
           ) : null}
-          <aside className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
+          <aside className="order-3 rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5 xl:order-none">
             <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, formatLang)}</p>
             <h2 className="mt-1 text-lg font-semibold">{formatDate(selectedIso)}</h2>
             {selectedEvents.length === 0 ? (
@@ -1355,35 +1407,54 @@ export function TeamDashboard({
                   const game = event.type === "game";
                   return (
                     <li key={event.id} className={`rounded-xl bg-ice p-3 ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
-                      {lineupAllowed ? (
-                        <button type="button" onClick={() => openLineup(event)} className="w-full text-left">
-                          <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
-                        </button>
-                      ) : (
-                        <div>
-                          <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {lineupAllowed ? (
+                            <button type="button" disabled={lineupPendingId === event.id} onClick={() => openLineup(event)} className="w-full text-left disabled:cursor-not-allowed">
+                              <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
+                            </button>
+                          ) : (
+                            <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
+                          )}
+                          {venue ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleVenue(event.venueId)}
+                              className="mt-1 text-left text-sm text-train hover:underline"
+                            >
+                              {venue.name}
+                            </button>
+                          ) : null}
+                          {event.end ? (
+                            <p className="mt-1 text-xs text-muted">
+                              {formatDuration(hoursBetween(event.start, event.end))} × {money(venue?.pricePerHour ?? 0)}/h
+                            </p>
+                          ) : null}
+                          {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
+                            <p className="mt-2 text-xs font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
+                          ) : null}
+                          {teamHold(event) > 0 ? (
+                            <p className="mt-1 text-xs text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
+                          ) : null}
                         </div>
-                      )}
-                      {venue ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleVenue(event.venueId)}
-                          className="mt-1 text-left text-sm text-train hover:underline"
-                        >
-                          {venue.name}
-                        </button>
-                      ) : null}
-                      {event.end ? (
-                        <p className="mt-1 text-xs text-muted">
-                          {formatDuration(hoursBetween(event.start, event.end))} × {money(venue?.pricePerHour ?? 0)}/h
-                        </p>
-                      ) : null}
-                      <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} className="mt-2" />
-                      {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
-                        <p className="mt-2 text-xs font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
-                      ) : null}
-                      {teamHold(event) > 0 ? (
-                        <p className="mt-1 text-xs text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
+                        <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} align="end" compact className="shrink-0" />
+                      </div>
+                      {basePath === "/demo" || managesTeam || lineupAllowed ? (
+                        <div className="mt-3 flex flex-nowrap items-center gap-1.5">
+                          {basePath === "/demo" || managesTeam ? (
+                            <button type="button" onClick={() => setEditingEvent(event)} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-paper">
+                              {t("actions.edit")}
+                            </button>
+                          ) : null}
+                          {basePath === "/demo" || managesTeam ? (
+                            <button type="button" onClick={() => setDeleteTarget(event)} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium text-game hover:bg-game-soft">
+                              {t("actions.delete")}
+                            </button>
+                          ) : null}
+                          {lineupAllowed ? (
+                            <LineupOpenButton pending={lineupPendingId === event.id} label={t("frontend_modules.game_layout")} onClick={() => openLineup(event)} className="shrink-0 whitespace-nowrap px-2 py-1.5" />
+                          ) : null}
+                        </div>
                       ) : null}
                     </li>
                   );
@@ -1424,10 +1495,33 @@ export function TeamDashboard({
             teamReserved={teamHold(openEvent)}
             onRsvp={setMemberRsvp}
             onLineup={lineupAllowed ? () => openLineup(openEvent) : undefined}
+            lineupPending={lineupPendingId === openEvent.id}
             onEdit={basePath === "/demo" || managesTeam ? () => setEditingEvent(openEvent) : undefined}
             onDelete={basePath === "/demo" || managesTeam ? () => setDeleteTarget(openEvent) : undefined}
             onClose={() => router.push(basePath)}
           />
+        ) : null}
+        {leaveRun ? (
+          <AdminDialog open title={t("lineup.leave.title")} onClose={() => setLeaveRun(null)}>
+            <p className="text-sm text-muted">{t("lineup.leave.body")}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setLeaveRun(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
+                {t("actions.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const run = leaveRun;
+                  lineupUnsavedRef.current = false;
+                  setLeaveRun(null);
+                  run();
+                }}
+                className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white"
+              >
+                {t("lineup.leave.confirm")}
+              </button>
+            </div>
+          </AdminDialog>
         ) : null}
         {deleteTarget ? (
           <AdminDialog open title={t("event.delete.title")} onClose={() => { if (!savingEvent) setDeleteTarget(null); }}>

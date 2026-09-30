@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { ContentImage } from "@/app/components/content-image";
 import { IconCheck, IconTipButton, IconX } from "@/app/components/icon-tip-button";
-import { type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { formatJersey, type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
-import { formatWeekday } from "@/app/lib/format";
+import { formatWeekday, hoursBetween } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 export type Rsvp = "going" | "absent" | "pending";
@@ -35,7 +36,7 @@ export function memberRsvp(
 
 export { eventVotingOpen };
 
-export function VoteCountdown({ deadline, align = "start", className = "" }: { deadline: number | null; align?: "start" | "end"; className?: string }) {
+export function VoteCountdown({ deadline, align = "start", compact = false, className = "" }: { deadline: number | null; align?: "start" | "end"; compact?: boolean; className?: string }) {
   const { t } = useLanguage();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -54,11 +55,11 @@ export function VoteCountdown({ deadline, align = "start", className = "" }: { d
   const end = align === "end";
   return (
     <div className={className}>
-      <p className={`text-xs text-muted ${end ? "text-right" : ""}`}>{t("event.vote.left")}</p>
-      <p className={`mt-1.5 flex flex-wrap gap-1 ${end ? "justify-end" : ""}`}>
+      {compact ? null : <p className={`text-xs text-muted ${end ? "text-right" : ""}`}>{t("event.vote.left")}</p>}
+      <p className={`flex gap-1 ${compact ? "flex-nowrap" : "mt-1.5 flex-wrap"} ${end ? "justify-end" : ""}`}>
         {bits.map((bit) => (
-          <span key={bit.unit} className="inline-flex min-w-11 items-baseline justify-center gap-0.5 rounded-lg bg-paper px-1.5 py-1 ring-1 ring-line">
-            <span className="text-sm font-semibold tabular-nums text-ink">{bit.value}</span>
+          <span key={bit.unit} className={`inline-flex items-baseline justify-center gap-0.5 rounded-lg bg-paper ring-1 ring-line ${compact ? "min-w-8 px-1 py-0.5" : "min-w-11 px-1.5 py-1"}`}>
+            <span className={`font-semibold tabular-nums text-ink ${compact ? "text-xs" : "text-sm"}`}>{bit.value}</span>
             <span className="text-[10px] text-muted">{bit.unit}</span>
           </span>
         ))}
@@ -82,6 +83,7 @@ export function EventDetails({
   teamReserved = 0,
   onRsvp,
   onLineup,
+  lineupPending = false,
   onEdit,
   onDelete,
   onClose,
@@ -100,6 +102,7 @@ export function EventDetails({
   teamReserved?: number;
   onRsvp: (memberId: string, status: Rsvp) => void;
   onLineup?: () => void;
+  lineupPending?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -108,14 +111,17 @@ export function EventDetails({
   const formatMoney = useFormatMoney();
   const { formatDate, formatTime } = useDisplayFormat();
   const fee = feeProp ?? eventPlayerFee(event.type);
-  const billable = members.filter((member) => !member.feeExempt);
-  const requested = fee * billable.length;
   const statuses = members.map((member, index) => memberRsvp(event.id, member.id, index, rsvp, knownRsvp));
   const going = members.filter((_, index) => statuses[index] === "going");
   const absent = members.filter((_, index) => statuses[index] === "absent");
   const pending = members.filter((_, index) => statuses[index] === "pending");
   const collected = fee * going.filter((member) => !member.feeExempt).length;
-  const percent = requested === 0 ? 0 : Math.round((collected / requested) * 100);
+  const exemptGoing = going.filter((member) => member.feeExempt).length;
+  const signupCount = exemptGoing > 0 ? `${going.length} (${exemptGoing})` : String(going.length);
+  const hours = event.end ? hoursBetween(event.start, event.end) : 0;
+  const derived = hours > 0 && fee > 0 ? Math.round(hours * fee * 100) / 100 : 0;
+  const requested = event.expense != null && event.expense > 0 ? event.expense : derived;
+  const percent = requested === 0 ? 0 : Math.min(100, Math.round((collected / requested) * 100));
 
   return (
     <section id="event-details" className="mt-4 scroll-mt-4 rounded-2xl bg-paper ring-1 ring-line">
@@ -133,7 +139,8 @@ export function EventDetails({
             </button>
           ) : null}
           {onLineup ? (
-            <button type="button" onClick={onLineup} className="rounded-lg bg-navy px-3 py-1.5 text-sm font-medium text-white">
+            <button type="button" onClick={onLineup} disabled={lineupPending} aria-busy={lineupPending} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed">
+              {lineupPending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
               {t("frontend_modules.game_layout")}
             </button>
           ) : null}
@@ -157,9 +164,9 @@ export function EventDetails({
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Summary label={t("event.requested")} value={formatMoney(requested)} />
+          <Summary label={t("event.add.expense")} value={formatMoney(requested)} />
           <Summary label={t("event.collected")} value={formatMoney(collected)} />
-          <Summary label={t("event.participants")} value={String(going.length)} />
+          <Summary label={t("event.participants")} value={signupCount} />
         </div>
         <div className="mt-3 flex items-center gap-3">
           <div
@@ -179,7 +186,7 @@ export function EventDetails({
       <div className="border-t border-line px-4 py-4 sm:px-5">
         <h3 className="mb-3 text-sm font-semibold text-train">{t("event.attendance")}</h3>
         <div className="space-y-3">
-          <AttendanceGroup title={t("event.going")} count={going.length} tone="going" empty={t("event.none")}>
+          <AttendanceGroup title={t("event.going")} count={going.length} extra={exemptGoing} tone="going" empty={t("event.none")}>
             {going.map((member) => (
               <PersonRow
                 key={member.id}
@@ -230,22 +237,25 @@ function Summary({ label, value }: { label: string; value: string }) {
 function AttendanceGroup({
   title,
   count,
+  extra = 0,
   tone,
   empty,
   children,
 }: {
   title: string;
   count: number;
+  extra?: number;
   tone: Rsvp;
   empty: string;
   children: ReactNode;
 }) {
   const bar = tone === "going" ? "bg-train" : tone === "absent" ? "bg-game" : "bg-navy";
+  const label = extra > 0 ? `${count} (${extra})` : String(count);
   return (
     <div className="overflow-hidden rounded-xl ring-1 ring-line">
       <div className={`flex items-center justify-between px-3 py-2 text-sm font-medium text-white ${bar}`}>
         <span>{title}</span>
-        <span className="grid h-6 min-w-6 place-items-center rounded-full bg-white/20 px-1.5 text-xs tabular-nums">{count}</span>
+        <span className="grid h-6 min-w-6 place-items-center rounded-full bg-white/20 px-1.5 text-xs tabular-nums">{label}</span>
       </div>
       {count === 0 ? <p className="px-3 py-6 text-center text-sm text-muted">{empty}</p> : <ul className="divide-y divide-line">{children}</ul>}
     </div>
@@ -275,7 +285,7 @@ function PersonRow({
   if (managed && !mine && !leader) {
     return (
       <li className="flex items-center justify-between gap-3 px-3 py-2">
-        <PersonName name={member.name} reserved={reservedLabel} />
+        <PersonName member={member} reserved={reservedLabel} />
       </li>
     );
   }
@@ -283,7 +293,7 @@ function PersonRow({
   const actionsClass = !managed || mine ? "flex shrink-0 gap-1" : "hidden shrink-0 gap-1 group-hover/player:flex max-[599px]:flex";
   return (
     <li className="group/player flex items-center justify-between gap-3 px-3 py-2">
-      <PersonName name={member.name} reserved={reservedLabel} />
+      <PersonName member={member} reserved={reservedLabel} />
       <span className={actionsClass}>
         <Choice
           label={t("event.going")}
@@ -304,15 +314,39 @@ function PersonRow({
   );
 }
 
-function PersonName({ name, reserved = null }: { name: string; reserved?: string | null }) {
+function PersonName({ member, reserved = null }: { member: Member; reserved?: string | null }) {
+  const { t } = useLanguage();
+  const jersey = formatJersey(member.number);
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(name)}</span>
+      {member.photoUrl ? (
+        <ContentImage src={member.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg bg-ice object-contain object-center" />
+      ) : (
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
+      )}
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium">{name}</span>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-sm font-medium">{member.name}</span>
+          {member.feeExempt ? (
+            <IconTipButton label={t("roster.fee_exempt.tip")} tone="muted" compact>
+              <IconNoFee />
+            </IconTipButton>
+          ) : null}
+        </span>
+        {jersey ? <span className="block text-xs text-muted tabular-nums">{jersey}</span> : null}
         {reserved ? <span className="block truncate text-xs text-muted">{reserved}</span> : null}
       </span>
     </span>
+  );
+}
+
+function IconNoFee() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M8 12h8" />
+      <path d="M7 7l10 10" />
+    </svg>
   );
 }
 

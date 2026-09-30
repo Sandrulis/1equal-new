@@ -70,6 +70,16 @@ button.todo-drag-handle:active {
   cursor: grabbing;
 }
 
+.lineup-drag {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.lineup-drag:active {
+  cursor: grabbing;
+}
+
 @keyframes vote-pulse {
   0%,
   100% {

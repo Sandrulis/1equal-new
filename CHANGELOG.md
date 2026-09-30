@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.16
+
+- Spēļu izklājums ir uz ledus un saglabājas uzreiz. To labo tikai komandas vadītājs un administrators
+- Notikuma laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Treniņa izdevumi nav obligāti
+- Bilances vēsture un rezervācijas ir vienā sarakstā komandai, spēlētājam un augšējai joslai
+
 ## v0.1.15
 
 - Next.js ir 16.3.8. Tas aizver kritisko `next/og` attēlu ģenerēšanas ievainojamību

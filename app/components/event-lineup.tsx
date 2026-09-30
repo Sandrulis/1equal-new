@@ -1,54 +1,59 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import { ContentImage } from "@/app/components/content-image";
 import { memberRsvp, type Rsvp } from "@/app/components/event-details";
-import { IconCheck, IconChevronLeft } from "@/app/components/icon-tip-button";
-import { type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { IconChevronLeft, IconChevronRight, IconX } from "@/app/components/icon-tip-button";
+import { formatJersey, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { normalizePositionCode, type PositionCode } from "@/app/lib/positions";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 
 export type SlotMap = Record<number, string>;
 export type SideMap = Record<string, "black" | "white">;
 
-type Tone = "game" | "mid" | "def" | "goal";
+type ShiftSlot = { code: string; match: PositionCode };
 
-const SLOTS: { n: number; x: number; y: number; tone: Tone }[] = [
-  { n: 1, x: 28, y: 14.5, tone: "game" },
-  { n: 2, x: 50, y: 14.5, tone: "game" },
-  { n: 3, x: 72, y: 14.5, tone: "game" },
-  { n: 4, x: 39, y: 28, tone: "game" },
-  { n: 5, x: 61, y: 28, tone: "game" },
-  { n: 6, x: 28, y: 42, tone: "mid" },
-  { n: 7, x: 50, y: 42, tone: "mid" },
-  { n: 8, x: 72, y: 42, tone: "mid" },
-  { n: 9, x: 39, y: 52, tone: "mid" },
-  { n: 10, x: 61, y: 52, tone: "mid" },
-  { n: 11, x: 30, y: 68, tone: "def" },
-  { n: 12, x: 50, y: 68, tone: "def" },
-  { n: 13, x: 70, y: 68, tone: "def" },
-  { n: 14, x: 34, y: 76, tone: "def" },
-  { n: 15, x: 66, y: 76, tone: "def" },
-  { n: 16, x: 50, y: 93, tone: "goal" },
+const LINE_SLOTS: ShiftSlot[] = [
+  { code: "LW", match: "LW" },
+  { code: "C", match: "C" },
+  { code: "RW", match: "RW" },
+  { code: "LD", match: "D" },
+  { code: "RD", match: "D" },
 ];
 
-const TONE: Record<Tone, { idle: string; filled: string }> = {
-  game: {
-    idle: "border-game bg-paper text-game",
-    filled: "border-game bg-game text-white",
-  },
-  mid: {
-    idle: "border-[#2f6fbf] bg-paper text-[#2f6fbf]",
-    filled: "border-[#2f6fbf] bg-[#2f6fbf] text-white",
-  },
-  def: {
-    idle: "border-[#1f8a4c] bg-paper text-[#1f8a4c]",
-    filled: "border-[#1f8a4c] bg-[#1f8a4c] text-white",
-  },
-  goal: {
-    idle: "border-[#e07a2f] bg-paper text-[#e07a2f]",
-    filled: "border-[#e07a2f] bg-[#e07a2f] text-white",
-  },
-};
+const GOAL_SLOT = 16;
+
+const SHIFT_TONE = [
+  { ring: "", fill: "" },
+  { ring: "ring-[#b4332a]", fill: "bg-[#b4332a]" },
+  { ring: "ring-[#2f6fbf]", fill: "bg-[#2f6fbf]" },
+  { ring: "ring-[#1f8a4c]", fill: "bg-[#1f8a4c]" },
+] as const;
+const GOAL_TONE = { ring: "ring-[#d97706]", fill: "bg-[#d97706]" };
+
+const ICE_SPOTS: { shift: number; index: number; x: string; y: string }[] = [
+  { shift: 1, index: 0, x: "22%", y: "16%" },
+  { shift: 1, index: 1, x: "50%", y: "12%" },
+  { shift: 1, index: 2, x: "78%", y: "16%" },
+  { shift: 1, index: 3, x: "35%", y: "27%" },
+  { shift: 1, index: 4, x: "65%", y: "27%" },
+  { shift: 2, index: 0, x: "18%", y: "40%" },
+  { shift: 2, index: 1, x: "50%", y: "40%" },
+  { shift: 2, index: 2, x: "82%", y: "40%" },
+  { shift: 2, index: 3, x: "34%", y: "51%" },
+  { shift: 2, index: 4, x: "66%", y: "51%" },
+  { shift: 3, index: 0, x: "28%", y: "63%" },
+  { shift: 3, index: 1, x: "50%", y: "66%" },
+  { shift: 3, index: 2, x: "72%", y: "63%" },
+  { shift: 3, index: 3, x: "30%", y: "77%" },
+  { shift: 3, index: 4, x: "70%", y: "77%" },
+];
+
+function shiftSlotId(shift: number, index: number): number {
+  return (shift - 1) * LINE_SLOTS.length + index + 1;
+}
 
 function goingMembers(event: TeamEvent, members: Member[], rsvp: Record<string, Rsvp> | undefined, knownRsvp: boolean): Member[] {
   return members.filter((member, index) => memberRsvp(event.id, member.id, index, rsvp, knownRsvp) === "going");
@@ -99,6 +104,8 @@ export function EventLineup({
   onSaveSlots,
   onSaveSides,
   onBack,
+  onUnsaved,
+  editable = false,
 }: {
   event: TeamEvent;
   members: Member[];
@@ -108,9 +115,11 @@ export function EventLineup({
   rsvp: Record<string, Rsvp> | undefined;
   savedSlots: SlotMap;
   savedSides: SideMap;
-  onSaveSlots: (slots: SlotMap) => void;
-  onSaveSides: (sides: SideMap) => void;
+  onSaveSlots: (slots: SlotMap) => boolean | Promise<boolean>;
+  onSaveSides: (sides: SideMap) => boolean | Promise<boolean>;
   onBack: () => void;
+  onUnsaved?: (unsaved: boolean) => void;
+  editable?: boolean;
 }) {
   const going = useMemo(() => goingMembers(event, members, rsvp, knownRsvp), [event, members, rsvp, knownRsvp]);
   if (event.type === "game") {
@@ -123,6 +132,8 @@ export function EventLineup({
         saved={pruneSlots(savedSlots, going)}
         onSave={onSaveSlots}
         onBack={onBack}
+        onUnsaved={onUnsaved}
+        editable={editable}
       />
     );
   }
@@ -132,8 +143,67 @@ export function EventLineup({
       saved={pruneSides(savedSides, going)}
       onSave={onSaveSides}
       onBack={onBack}
+      onUnsaved={onUnsaved}
+      editable={editable}
     />
   );
+}
+
+function useLiveSave<T>(value: T, key: string, enabled: boolean, save: (value: T) => boolean | Promise<boolean>, onUnsaved?: (unsaved: boolean) => void) {
+  const [acked, setAcked] = useState(key);
+  const saveRef = useRef(save);
+  const valueRef = useRef(value);
+  const reportRef = useRef(onUnsaved);
+  const keyRef = useRef(key);
+  useEffect(() => {
+    saveRef.current = save;
+    valueRef.current = value;
+    reportRef.current = onUnsaved;
+    keyRef.current = key;
+  });
+  const unsaved = enabled && key !== acked;
+
+  useEffect(() => {
+    reportRef.current?.(unsaved);
+  }, [unsaved]);
+
+  useEffect(() => () => reportRef.current?.(false), []);
+
+  useEffect(() => {
+    if (!unsaved) return;
+    const snapshot = key;
+    const timer = window.setTimeout(() => {
+      void Promise.resolve(saveRef.current(valueRef.current)).then(
+        (ok) => {
+          if (ok !== false && keyRef.current === snapshot) setAcked(snapshot);
+        },
+        () => undefined,
+      );
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [key, unsaved]);
+
+  useEffect(() => {
+    if (!unsaved) return;
+    function onLeave(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [unsaved]);
+}
+
+function playsPosition(member: Member, code: PositionCode): boolean {
+  if (normalizePositionCode(member.position) === code) return true;
+  return (member.extraPositions ?? []).some((item) => normalizePositionCode(item) === code);
+}
+
+function matchesQuery(member: Member, query: string): boolean {
+  const needle = query.trim().toLocaleLowerCase("lv");
+  if (!needle) return true;
+  const name = memberName(member).toLocaleLowerCase("lv");
+  const number = member.number == null ? "" : String(member.number);
+  return name.includes(needle) || number.includes(needle);
 }
 
 function GameLineup({
@@ -144,171 +214,423 @@ function GameLineup({
   saved,
   onSave,
   onBack,
+  onUnsaved,
+  editable,
 }: {
   event: TeamEvent;
   going: Member[];
   venueName: string;
   subteamName: string;
   saved: SlotMap;
-  onSave: (slots: SlotMap) => void;
+  onSave: (slots: SlotMap) => boolean | Promise<boolean>;
   onBack: () => void;
+  onUnsaved?: (unsaved: boolean) => void;
+  editable: boolean;
 }) {
   const { t } = useLanguage();
   const { formatDate, formatTime } = useDisplayFormat();
   const [slots, setSlots] = useState<SlotMap>(saved);
-  const [baseline, setBaseline] = useState(slotKey(saved));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const dirty = slotKey(slots) !== baseline;
-  const placed = new Set(Object.values(slots));
-  const waiting = going.filter((member) => !placed.has(member.id));
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
   const byId = new Map(going.map((member) => [member.id, member]));
+  useLiveSave(slots, slotKey(slots), editable, onSave, onUnsaved);
 
-  function place(slot: number) {
-    if (!selectedId) {
-      const current = slots[slot];
-      if (!current) return;
-      setSlots((map) => {
-        const next = { ...map };
-        delete next[slot];
-        return next;
-      });
-      setSelectedId(current);
-      return;
+  useEffect(() => {
+    if (openSlot == null) return;
+    function onPointer(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-lineup-slot]")) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpenSlot(null);
+      setQuery("");
     }
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpenSlot(null);
+      setQuery("");
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openSlot]);
+
+  function assign(slot: number, memberId: string) {
     setSlots((map) => {
       const next = { ...map };
       for (const key of Object.keys(next)) {
-        if (next[Number(key)] === selectedId) delete next[Number(key)];
+        if (next[Number(key)] === memberId) delete next[Number(key)];
       }
-      next[slot] = selectedId;
+      next[slot] = memberId;
       return next;
     });
-    setSelectedId(null);
+    setOpenSlot(null);
+    setQuery("");
+  }
+
+  function clearSlot(slot: number) {
+    setSlots((map) => {
+      if (!map[slot]) return map;
+      const next = { ...map };
+      delete next[slot];
+      return next;
+    });
+  }
+
+  function toggle(slot: number) {
+    setQuery("");
+    setOpenSlot((current) => (current === slot ? null : slot));
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col items-center pb-8">
-      <h1 className="text-2xl font-semibold tracking-tight">{subteamName}</h1>
-      <p className="mt-1 text-sm text-muted">
-        {formatDate(event.date)} {formatTime(event.start)}
-      </p>
-      <p className="text-sm text-muted">{venueName}</p>
-
-      <p className="mt-4 text-center text-sm text-muted">{t("lineup.pick")}</p>
-      <div className="mt-2 flex min-h-9 flex-wrap justify-center gap-2">
-        {waiting.map((member) => {
-          const active = selectedId === member.id;
-          return (
-            <button
-              key={member.id}
-              type="button"
-              onClick={() => setSelectedId(active ? null : member.id)}
-              className={`rounded-full px-3 py-1 text-sm ring-1 ${
-                active ? "bg-navy text-white ring-navy" : "bg-paper text-ink ring-line"
-              }`}
-            >
-              {member.number == null ? member.name : `${member.number} ${member.name}`}
-            </button>
-          );
-        })}
-        {going.length === 0 ? <p className="text-sm text-muted">{t("lineup.going.empty")}</p> : null}
+    <div className="pb-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg bg-paper px-3 py-2 text-sm ring-1 ring-line">
+          <IconChevronLeft />
+          {t("lineup.back")}
+        </button>
+        <div className="min-w-0 text-center">
+          <h1 className="text-xl font-semibold tracking-tight">{subteamName}</h1>
+          <p className="text-sm text-muted">
+            {formatDate(event.date)} {formatTime(event.start)}
+          </p>
+          <p className="text-sm text-muted">{venueName}</p>
+        </div>
+        <span className="w-28" />
       </div>
 
-      <div className="relative mt-3 w-full">
-        <Rink />
-        {SLOTS.map((slot) => {
-          const member = byId.get(slots[slot.n] ?? "");
-          const tone = TONE[slot.tone];
-          return (
-            <button
-              key={slot.n}
-              type="button"
-              title={member ? member.name : String(slot.n)}
-              aria-label={member ? `${slot.n} ${member.name}` : String(slot.n)}
-              onClick={() => place(slot.n)}
-              style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-              className={`absolute grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 text-sm font-semibold shadow-sm ${
-                member ? tone.filled : tone.idle
-              }`}
-            >
-              {member ? member.number : slot.n}
-            </button>
-          );
-        })}
-      </div>
+      {going.length === 0 ? <p className="mb-4 text-sm text-muted">{t("lineup.going.empty")}</p> : null}
 
-      <button
-        type="button"
-        disabled={!dirty}
-        onClick={() => {
-          onSave(slots);
-          setBaseline(slotKey(slots));
-        }}
-        className={`mt-6 inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
-          dirty ? "bg-navy text-white" : "bg-ice text-muted ring-1 ring-line"
-        }`}
-      >
-        <IconCheck />
-        {t("lineup.save")}
-      </button>
-      <button type="button" onClick={onBack} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-paper px-4 py-2 text-sm ring-1 ring-line">
-        <IconChevronLeft />
-        {t("lineup.back")}
-      </button>
+      <div className="mx-auto w-full max-w-lg">
+        <div className="mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">
+          {[1, 2, 3].map((shift) => (
+            <span key={shift} className="inline-flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${SHIFT_TONE[shift].fill}`} />
+              {t("lineup.shift", { n: shift })}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${GOAL_TONE.fill}`} />
+            {t("position.g")}
+          </span>
+        </div>
+        <div className="relative">
+          <Rink />
+          {ICE_SPOTS.map((spot) => {
+            const slot = LINE_SLOTS[spot.index];
+            const id = shiftSlotId(spot.shift, spot.index);
+            const x = Number.parseFloat(spot.x);
+            return (
+              <div key={id} className={`absolute -translate-x-1/2 -translate-y-1/2 ${openSlot === id ? "z-30" : "z-10"}`} style={{ left: spot.x, top: spot.y }}>
+                <PositionPick
+                  slot={id}
+                  code={slot.code}
+                  match={slot.match}
+                  align={x > 65 ? "right" : x < 35 ? "left" : "center"}
+                  ring={SHIFT_TONE[spot.shift].ring}
+                  fill={SHIFT_TONE[spot.shift].fill}
+                  compact
+                  member={byId.get(slots[id] ?? "")}
+                  going={going}
+                  query={query}
+                  open={editable && openSlot === id}
+                  editable={editable}
+                  menuRef={openSlot === id ? menuRef : undefined}
+                  onQuery={setQuery}
+                  onToggle={() => toggle(id)}
+                  onClear={() => clearSlot(id)}
+                  onPick={(memberId) => assign(id, memberId)}
+                />
+              </div>
+            );
+          })}
+          <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${openSlot === GOAL_SLOT ? "z-30" : "z-10"}`} style={{ left: "50%", top: "88%" }}>
+            <PositionPick
+              slot={GOAL_SLOT}
+              code="G"
+              match="G"
+              align="center"
+              ring={GOAL_TONE.ring}
+              fill={GOAL_TONE.fill}
+              compact
+              member={byId.get(slots[GOAL_SLOT] ?? "")}
+              going={going}
+              query={query}
+              open={editable && openSlot === GOAL_SLOT}
+              editable={editable}
+              menuRef={openSlot === GOAL_SLOT ? menuRef : undefined}
+              onQuery={setQuery}
+              onToggle={() => toggle(GOAL_SLOT)}
+              onClear={() => clearSlot(GOAL_SLOT)}
+              onPick={(memberId) => assign(GOAL_SLOT, memberId)}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function Rink() {
+function PositionPick({
+  slot,
+  code,
+  match,
+  align,
+  ring,
+  fill,
+  compact = false,
+  member,
+  going,
+  query,
+  open,
+  editable,
+  menuRef,
+  onQuery,
+  onToggle,
+  onClear,
+  onPick,
+}: {
+  slot: number;
+  code: string;
+  match: PositionCode;
+  align: "left" | "center" | "right";
+  ring?: string;
+  fill?: string;
+  compact?: boolean;
+  member: Member | undefined;
+  going: Member[];
+  query: string;
+  open: boolean;
+  editable: boolean;
+  menuRef?: RefObject<HTMLDivElement | null>;
+  onQuery: (value: string) => void;
+  onToggle: () => void;
+  onClear: () => void;
+  onPick: (memberId: string) => void;
+}) {
+  const { t } = useLanguage();
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [menuPlace, setMenuPlace] = useState({ up: false, max: 320 });
+  const name = member ? memberName(member) : "";
+  const jersey = member ? formatJersey(member.number) : null;
+  const [nameTip, setNameTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
+
+  function placeName(target: HTMLElement) {
+    if (!name || open) return;
+    const box = target.getBoundingClientRect();
+    const below = box.top < 40;
+    const x = Math.min(window.innerWidth - 12, Math.max(12, box.left + box.width / 2));
+    setNameTip({ x, y: below ? box.bottom + 6 : box.top - 6, below });
+  }
+
+  const nameTooltip = name && nameTip
+    ? createPortal(
+        <span
+          role="tooltip"
+          style={{ left: nameTip.x, top: nameTip.y, transform: nameTip.below ? "translateX(-50%)" : "translate(-50%, -100%)" }}
+          className="pointer-events-none fixed z-[70] rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white"
+        >
+          {name}
+        </span>,
+        document.body,
+      )
+    : null;
+  const face = member ? (
+    <span className="text-[10px] font-semibold tabular-nums text-white sm:text-xs">{jersey ?? "—"}</span>
+  ) : (
+    <span className={`font-semibold tracking-wide text-navy ${compact ? "text-[10px]" : "text-sm"}`}>{code}</span>
+  );
+  const shape = compact
+    ? `grid h-9 w-9 place-items-center rounded-full sm:h-11 sm:w-11 ${member ? fill ?? "bg-navy" : `bg-paper ring-2 ${ring ?? "ring-line"}`}`
+    : `flex h-16 w-full items-center justify-center rounded-xl bg-paper ring-1 ${open ? "ring-2 ring-navy" : "ring-line"}`;
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const node = anchorRef.current;
+    if (!node) return;
+    const box = node.getBoundingClientRect();
+    let limit = window.innerHeight - 8;
+    const footer = document.querySelector("footer");
+    if (footer) {
+      const top = footer.getBoundingClientRect().top;
+      if (top > box.bottom) limit = Math.min(limit, top - 8);
+    }
+    for (const el of document.querySelectorAll("aside")) {
+      if (getComputedStyle(el).position !== "fixed") continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top > box.bottom && rect.height > 20) limit = Math.min(limit, rect.top - 8);
+    }
+    const below = limit - box.bottom;
+    const above = Math.max(0, box.top - 8);
+    const up = below < 280 && above > below;
+    const room = up ? above : below;
+    setMenuPlace({ up, max: Math.max(160, Math.min(320, room)) });
+  }, [open]);
+  if (!editable) {
+    return (
+      <>
+        <div
+          aria-label={member ? `${code} ${name}` : code}
+          onMouseEnter={(event) => placeName(event.currentTarget)}
+          onMouseLeave={() => setNameTip(null)}
+          className={shape}
+        >
+          {face}
+        </div>
+        {nameTooltip}
+      </>
+    );
+  }
+  const pool = going.filter((item) => item.id !== member?.id && matchesQuery(item, query));
+  const recommended = pool.filter((item) => playsPosition(item, match)).sort(byPlayerName);
+  const others = pool.filter((item) => !playsPosition(item, match)).sort(byPlayerName);
+  const menuAlign = align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0";
+
   return (
-    <svg viewBox="0 0 360 480" className="h-auto w-full" aria-hidden>
-      <path
-        d="M18 14 H342 V368 A162 78 0 0 1 18 368 Z"
-        fill="#fbfcfd"
-        stroke="#12202b"
-        strokeWidth="4"
-      />
-      <line x1="18" y1="70" x2="342" y2="70" stroke="#b4332a" strokeWidth="3" />
-      <path d="M122 108 A58 36 0 0 1 238 108" fill="none" stroke="#2f6fbf" strokeWidth="2.5" />
-      <circle cx="42" cy="178" r="4" fill="#b4332a" />
-      <circle cx="318" cy="178" r="4" fill="#b4332a" />
-      <line x1="18" y1="202" x2="342" y2="202" stroke="#2f6fbf" strokeWidth="4" />
-      <circle cx="108" cy="326" r="52" fill="none" stroke="#b4332a" strokeWidth="2" />
-      <circle cx="252" cy="326" r="52" fill="none" stroke="#b4332a" strokeWidth="2" />
-      <path d="M108 312 V340 M94 326 H122" stroke="#b4332a" strokeWidth="1.5" />
-      <path d="M252 312 V340 M238 326 H266" stroke="#b4332a" strokeWidth="1.5" />
-      <line x1="120" y1="408" x2="240" y2="408" stroke="#b4332a" strokeWidth="3" />
-      <path d="M150 408 A30 26 0 0 1 210 408 Z" fill="#9fd4ea" stroke="#2f6fbf" strokeWidth="2" />
-    </svg>
+    <>
+    <div ref={anchorRef} className={open ? "relative z-20" : "relative"}>
+      <button
+        type="button"
+        data-lineup-slot={slot}
+        aria-expanded={open}
+        aria-label={member ? `${code} ${name}` : code}
+        onClick={() => {
+          setNameTip(null);
+          onToggle();
+        }}
+        onMouseEnter={(event) => placeName(event.currentTarget)}
+        onMouseLeave={() => setNameTip(null)}
+        onFocus={(event) => placeName(event.currentTarget)}
+        onBlur={() => setNameTip(null)}
+        className={`${shape} ${open ? "outline outline-2 outline-offset-2 outline-navy" : ""}`}
+      >
+        {face}
+      </button>
+      {member ? (
+        <button
+          type="button"
+          aria-label={t("lineup.clear")}
+          title={t("lineup.clear")}
+          onClick={onClear}
+          className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-paper text-ink ring-1 ring-line [&_svg]:h-3 [&_svg]:w-3"
+        >
+          <IconX />
+        </button>
+      ) : null}
+      {open ? (
+        <div
+          ref={menuRef}
+          className={`absolute z-30 w-64 rounded-xl bg-paper p-2 shadow-lg ring-1 ring-line ${menuPlace.up ? "bottom-full mb-1" : "top-full mt-1"} ${menuAlign}`}
+        >
+          <input
+            type="search"
+            value={query}
+            autoFocus
+            placeholder={t("lineup.search")}
+            aria-label={t("lineup.search")}
+            onChange={(event) => onQuery(event.target.value)}
+            className="mb-2 w-full rounded-lg bg-ice px-3 py-2 text-sm text-ink ring-1 ring-line outline-none focus:ring-navy"
+          />
+          <div className="overflow-y-auto" style={{ maxHeight: Math.max(96, menuPlace.max - 64) }}>
+            {recommended.length > 0 ? <p className="px-2 py-1 text-xs font-semibold text-muted">{t("lineup.recommended")}</p> : null}
+            {recommended.map((item) => (
+              <PlayerOption key={item.id} member={item} onPick={() => onPick(item.id)} />
+            ))}
+            {others.length > 0 ? <p className="px-2 py-1 text-xs font-semibold text-muted">{t("lineup.others")}</p> : null}
+            {others.map((item) => (
+              <PlayerOption key={item.id} member={item} onPick={() => onPick(item.id)} />
+            ))}
+            {recommended.length === 0 && others.length === 0 ? (
+              <p className="px-2 py-2 text-sm text-muted">{going.length === 0 ? t("lineup.going.empty") : t("lineup.search.empty")}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+    {nameTooltip}
+    </>
   );
 }
+
+function PlayerOption({ member, onPick }: { member: Member; onPick: () => void }) {
+  const name = memberName(member);
+  const jersey = formatJersey(member.number);
+  return (
+    <button type="button" onClick={onPick} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-ice">
+      <PlayerFace member={member} compact />
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate text-sm">{name}</span>
+        {jersey ? <span className="block truncate text-xs text-muted tabular-nums">{jersey}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function byPlayerName(left: Member, right: Member): number {
+  return memberName(left).localeCompare(memberName(right), "lv");
+}
+
+function Rink() {
+  return <img src="/hockey-rink.png" alt="" className="block h-auto w-full" />;
+}
+
+type LineSide = "black" | "white" | "pool";
 
 function TrainingLineup({
   going,
   saved,
   onSave,
   onBack,
+  onUnsaved,
+  editable,
 }: {
   going: Member[];
   saved: SideMap;
-  onSave: (sides: SideMap) => void;
+  onSave: (sides: SideMap) => boolean | Promise<boolean>;
   onBack: () => void;
+  onUnsaved?: (unsaved: boolean) => void;
+  editable: boolean;
 }) {
   const { t } = useLanguage();
   const [sides, setSides] = useState<SideMap>(saved);
-  const [baseline, setBaseline] = useState(sideKey(saved));
-  const dirty = sideKey(sides) !== baseline;
+  const [dragId, setDragId] = useState<string | null>(null);
+  const dragRef = useRef<string | null>(null);
+  const [over, setOver] = useState<LineSide | null>(null);
+  useLiveSave(sides, sideKey(sides), editable, onSave, onUnsaved);
   const black = going.filter((member) => sides[member.id] === "black");
   const white = going.filter((member) => sides[member.id] === "white");
   const pool = going.filter((member) => !sides[member.id]);
 
-  function move(memberId: string, side: "black" | "white" | "pool") {
+  function move(memberId: string, side: LineSide) {
     setSides((current) => {
       const next = { ...current };
       if (side === "pool") delete next[memberId];
       else next[memberId] = side;
       return next;
     });
+  }
+
+  function beginDrag(id: string) {
+    dragRef.current = id;
+    window.requestAnimationFrame(() => {
+      if (dragRef.current === id) setDragId(id);
+    });
+  }
+
+  function endDrag() {
+    dragRef.current = null;
+    setDragId(null);
+    setOver(null);
+  }
+
+  function dropOn(id: string, side: LineSide) {
+    const memberId = id || dragRef.current;
+    if (memberId) move(memberId, side);
+    endDrag();
   }
 
   return (
@@ -318,127 +640,259 @@ function TrainingLineup({
           <IconChevronLeft />
           {t("lineup.back")}
         </button>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={!dirty}
-            onClick={() => {
-              onSave(sides);
-              setBaseline(sideKey(sides));
-            }}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ${
-              dirty ? "bg-navy text-white" : "bg-ice text-muted ring-1 ring-line"
-            }`}
-          >
-            <IconCheck />
-            {t("lineup.save")}
-          </button>
-        </div>
       </div>
       <div className="grid items-stretch gap-3 lg:grid-cols-3">
-        <TeamColumn title={t("lineup.black")} count={black.length} tone="black" members={black} onReturn={(id) => move(id, "pool")} />
-        <PoolColumn
+        <LineupColumn
+          side="black"
+          title={t("lineup.black")}
+          count={black.length}
+          members={black}
+          hot={over === "black"}
+          dragId={dragId}
+          editable={editable}
+          onAssign={move}
+          onHot={setOver}
+          onDragStart={beginDrag}
+          onDragEnd={endDrag}
+          onDropMember={dropOn}
+        />
+        <LineupColumn
+          side="pool"
           title={t("lineup.going")}
           count={pool.length}
           members={pool}
           empty={going.length === 0 ? t("lineup.going.empty") : t("lineup.going.assigned")}
-          onBlack={(id) => move(id, "black")}
-          onWhite={(id) => move(id, "white")}
+          hot={over === "pool"}
+          dragId={dragId}
+          editable={editable}
+          onAssign={move}
+          onHot={setOver}
+          onDragStart={beginDrag}
+          onDragEnd={endDrag}
+          onDropMember={dropOn}
         />
-        <TeamColumn title={t("lineup.white")} count={white.length} tone="white" members={white} onReturn={(id) => move(id, "pool")} />
+        <LineupColumn
+          side="white"
+          title={t("lineup.white")}
+          count={white.length}
+          members={white}
+          hot={over === "white"}
+          dragId={dragId}
+          editable={editable}
+          onAssign={move}
+          onHot={setOver}
+          onDragStart={beginDrag}
+          onDragEnd={endDrag}
+          onDropMember={dropOn}
+        />
       </div>
     </div>
   );
 }
 
-function TeamColumn({
-  title,
-  count,
-  tone,
-  members,
-  onReturn,
-}: {
-  title: string;
-  count: number;
-  tone: "black" | "white";
-  members: Member[];
-  onReturn: (id: string) => void;
-}) {
-  const { t } = useLanguage();
-  const dark = tone === "black";
-  return (
-    <section className={`flex min-h-80 flex-col rounded-2xl p-4 lg:min-h-[32rem] ${dark ? "bg-navy text-white" : "bg-paper text-ink ring-1 ring-line"}`}>
-      <header className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-semibold ${dark ? "bg-white/15" : "bg-ice"}`}>
-          {count}
-        </span>
-      </header>
-      <ul className="mt-4 space-y-2">
-        {members.map((member) => (
-          <li key={member.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${dark ? "bg-white/10" : "bg-ice"}`}>
-            <span className="text-sm">
-              {member.number == null ? member.name : `${member.number} ${member.name}`}
-            </span>
-            <button
-              type="button"
-              onClick={() => onReturn(member.id)}
-              className={`rounded-md px-2 py-1 text-xs ${dark ? "bg-white/15" : "bg-paper ring-1 ring-line"}`}
-            >
-              {t("lineup.return")}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+function columnClass(side: LineSide, hot: boolean): string {
+  const base = "flex min-h-80 min-w-0 flex-col rounded-2xl p-4 lg:min-h-[32rem]";
+  if (side === "black") return `${base} bg-navy text-white ${hot ? "ring-2 ring-white" : ""}`;
+  if (side === "white") return `${base} bg-paper text-ink ${hot ? "ring-2 ring-navy" : "ring-1 ring-line"}`;
+  return `${base} bg-train-soft text-ink ${hot ? "ring-2 ring-navy" : "ring-1 ring-train"}`;
 }
 
-function PoolColumn({
+function LineupColumn({
+  side,
   title,
   count,
   members,
   empty,
-  onBlack,
-  onWhite,
+  hot,
+  dragId,
+  editable,
+  onAssign,
+  onHot,
+  onDragStart,
+  onDragEnd,
+  onDropMember,
 }: {
+  side: LineSide;
   title: string;
   count: number;
   members: Member[];
-  empty: string;
-  onBlack: (id: string) => void;
-  onWhite: (id: string) => void;
+  empty?: string;
+  hot: boolean;
+  dragId: string | null;
+  editable: boolean;
+  onAssign: (id: string, side: LineSide) => void;
+  onHot: (side: LineSide | null) => void;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDropMember: (id: string, side: LineSide) => void;
 }) {
-  const { t } = useLanguage();
+  const countClass =
+    side === "black"
+      ? "bg-white/15"
+      : side === "white"
+        ? "bg-ice text-ink"
+        : "bg-train text-white";
+
   return (
-    <section className="flex min-h-80 flex-col rounded-2xl bg-train-soft p-4 ring-1 ring-train lg:min-h-[32rem]">
+    <section
+      onDragOver={editable ? (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        onHot(side);
+      } : undefined}
+      onDrop={editable ? (event) => {
+        event.preventDefault();
+        onDropMember(event.dataTransfer.getData("text/plain"), side);
+      } : undefined}
+      className={columnClass(side, editable && hot && dragId !== null)}
+    >
       <header className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-train">{title}</h2>
-        <span className="grid h-6 min-w-6 place-items-center rounded-full bg-train px-1.5 text-xs font-semibold text-white">
-          {count}
-        </span>
+        <h2 className={`text-sm font-semibold ${side === "pool" ? "text-train" : ""}`}>{title}</h2>
+        <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-semibold ${countClass}`}>{count}</span>
       </header>
       {members.length === 0 ? (
-        <p className="grid flex-1 place-items-center text-center text-sm text-muted">{empty}</p>
+        empty ? <p className="grid flex-1 place-items-center text-center text-sm text-muted">{empty}</p> : <div className="flex-1" />
       ) : (
         <ul className="mt-4 space-y-2">
           {members.map((member) => (
-            <li key={member.id} className="rounded-lg bg-paper px-3 py-2 ring-1 ring-line">
-              <p className="text-sm font-medium">
-                {member.number == null ? member.name : `${member.number} ${member.name}`}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => onBlack(member.id)} className="rounded-md bg-navy px-2 py-1 text-xs text-white">
-                  {t("lineup.toBlack")}
-                </button>
-                <button type="button" onClick={() => onWhite(member.id)} className="rounded-md bg-paper px-2 py-1 text-xs ring-1 ring-line">
-                  {t("lineup.toWhite")}
-                </button>
-              </div>
-            </li>
+            <PlayerCard
+              key={member.id}
+              member={member}
+              side={side}
+              editable={editable}
+              dragging={dragId === member.id}
+              onAssign={onAssign}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+            />
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+function PlayerCard({
+  member,
+  side,
+  editable,
+  dragging,
+  onAssign,
+  onDragStart,
+  onDragEnd,
+}: {
+  member: Member;
+  side: LineSide;
+  editable: boolean;
+  dragging: boolean;
+  onAssign: (id: string, side: LineSide) => void;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+}) {
+  const { t } = useLanguage();
+  const name = memberName(member);
+  const jersey = formatJersey(member.number);
+  const showLeft = editable && side !== "black";
+  const showRight = editable && side !== "white";
+  const info = (
+    <>
+      <PlayerFace member={member} />
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate text-sm font-medium">{name}</span>
+        {jersey ? <span className="block truncate text-xs text-muted tabular-nums">{jersey}</span> : null}
+      </span>
+    </>
+  );
+
+  return (
+    <li className={`flex min-h-12 overflow-hidden rounded-lg bg-paper text-ink ring-1 ring-line ${dragging ? "opacity-40" : ""}`}>
+      {showLeft ? (
+        <button
+          type="button"
+          aria-label={t("lineup.toBlack")}
+          title={t("lineup.toBlack")}
+          onClick={() => onAssign(member.id, "black")}
+          className="grid w-12 shrink-0 place-items-center bg-navy text-white hover:opacity-90"
+        >
+          <span className="pointer-events-none [&_svg]:size-5">
+            <IconChevronLeft />
+          </span>
+        </button>
+      ) : null}
+      {editable ? (
+        <div
+          draggable
+          title={t("lineup.drag")}
+          aria-label={`${jersey ? `${name}, ${jersey}` : name}. ${t("lineup.drag")}`}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", member.id);
+            onDragStart(member.id);
+          }}
+          onDragEnd={onDragEnd}
+          className="lineup-drag flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2"
+        >
+          {info}
+          <span className="shrink-0 text-navy">
+            <DragGrip />
+          </span>
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2">{info}</div>
+      )}
+      {showRight ? (
+        <button
+          type="button"
+          aria-label={t("lineup.toWhite")}
+          title={t("lineup.toWhite")}
+          onClick={() => onAssign(member.id, "white")}
+          className="grid w-12 shrink-0 place-items-center border-l border-line bg-ice text-ink hover:bg-paper"
+        >
+          <span className="pointer-events-none [&_svg]:size-5">
+            <IconChevronRight />
+          </span>
+        </button>
+      ) : null}
+    </li>
+  );
+}
+
+function memberName(member: Member): string {
+  const parts = [member.firstName?.trim(), member.lastName?.trim()].filter(Boolean);
+  return parts.length ? parts.join(" ") : member.name;
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
+function PlayerFace({ member, compact = false }: { member: Member; compact?: boolean }) {
+  const photo = member.photoUrl || member.ehl?.photoUrl;
+  const box = compact ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-xs";
+  if (photo) {
+    return <ContentImage src={photo} alt="" className={`${box} shrink-0 rounded-lg bg-ice object-contain object-center`} />;
+  }
+  return (
+    <span aria-hidden className={`grid ${box} shrink-0 place-items-center rounded-lg bg-navy font-semibold text-white`}>
+      {initials(memberName(member))}
+    </span>
+  );
+}
+
+function DragGrip() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+      <circle cx="5" cy="3.5" r="1.25" />
+      <circle cx="11" cy="3.5" r="1.25" />
+      <circle cx="5" cy="8" r="1.25" />
+      <circle cx="11" cy="8" r="1.25" />
+      <circle cx="5" cy="12.5" r="1.25" />
+      <circle cx="11" cy="12.5" r="1.25" />
+    </svg>
   );
 }

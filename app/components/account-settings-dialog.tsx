@@ -49,6 +49,7 @@ export function AccountSettingsDialog({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSave) return;
+    const form = event.currentTarget;
     let avatarUrl = account.avatarUrl;
     if (showAvatar) {
       const crop = await avatarRef.current?.result();
@@ -71,7 +72,7 @@ export function AccountSettingsDialog({
       }
     }
     setPending(true);
-    const result = await updateProfile(new FormData(event.currentTarget));
+    const result = await updateProfile(new FormData(form));
     setPending(false);
     if ("error" in result || !("ok" in result)) {
       if ("error" in result) showFeedback({ message: t(result.error), variant: "error" });
