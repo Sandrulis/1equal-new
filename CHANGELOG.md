@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.14
+
+- E-pasta maiņas saite paliek vienreizējs tokens. Drošības pārbaude to vairs neuzskata par maršrutu bez autentifikācijas
+
 ## v0.1.13
 
 - Komandas vadītājs ieceļ administratorus. Spēlētājam ir galvenā un papildu pozīcijas, bez trenera

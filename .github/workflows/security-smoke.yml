@@ -118,6 +118,14 @@ jobs:
                   fi
                   continue
                   ;;
+                # Email change: one-time hashed token from the new address, not a session cookie.
+                app/auth/confirm-email/route.ts)
+                  if ! grep -q "hashEmailToken" "$file"; then
+                    echo "FAIL: No email token check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
                 # Email vote link: hashed token, not a session cookie.
                 app/v/\[token\]/\[choice\]/route.ts)
                   if ! grep -q "voteFromEmailLink" "$file"; then
