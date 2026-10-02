@@ -9,6 +9,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
+import { FRONTEND_MODULE_KEYS, entuziastiForSport } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { useLanguage } from "@/app/lib/language";
@@ -23,10 +24,14 @@ const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
 
 export function NoTeamStart({
   sports = [],
+  enabledModules = null,
+  individualModuleKeys = [],
   onCreate,
   onJoin,
 }: {
   sports?: Sport[];
+  enabledModules?: string[] | null;
+  individualModuleKeys?: string[];
   onCreate: (input: CreateTeamInput) => void;
   onJoin: (code: string) => void;
 }) {
@@ -49,6 +54,8 @@ export function NoTeamStart({
   const trainingValue = votingHours(trainingHours);
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
+  const pickedSport = chosenSportId(sports, sportId);
+  const showLink = !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) && entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
 
   async function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;
@@ -66,7 +73,7 @@ export function NoTeamStart({
 
   async function submitCreate() {
     if (!nameReady || !hoursOk || pending) return;
-    const source = link.trim();
+    const source = showLink ? link.trim() : "";
     if (!source) {
       await emit(null, null);
       return;
@@ -113,6 +120,7 @@ export function NoTeamStart({
                 className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none focus:ring-train disabled:opacity-60"
               />
             </label>
+            {showLink ? (
             <label className="text-left text-sm font-medium">
               {t("team.empty.link")}
               <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
@@ -127,11 +135,12 @@ export function NoTeamStart({
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
             />
           </label>
-          {link.trim() === "" ? (
+            ) : null}
+          {showLink && link.trim() !== "" ? null : (
             <div className="text-left">
               <AvatarCropField ref={avatarRef} disabled={pending} />
             </div>
-          ) : null}
+          )}
             <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
             <div className="text-left">
               <MoneyVotingFields

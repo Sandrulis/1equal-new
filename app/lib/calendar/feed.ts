@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { buildIcs, type CalendarFeedEvent } from "@/app/lib/calendar/ical";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
-import { listEnabledFrontendModuleKeys } from "@/app/lib/site-admin/repository";
+import { listEnabledFrontendModuleKeys, listFrontendModules } from "@/app/lib/site-admin/repository";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const TOKEN_PATTERN = /^[a-f0-9]{48}$/;
@@ -26,7 +26,15 @@ export async function calendarFeedIcs(token: string): Promise<string | null> {
   if (!user.data?.id) return null;
 
   const memberships = await admin.from("team_members").select("team_id").eq("user_id", user.data.id);
-  const teamIds = [...new Set((memberships.data ?? []).map((row) => row.team_id as string))];
+  let teamIds = [...new Set((memberships.data ?? []).map((row) => row.team_id as string))];
+  if (teamIds.length === 0) return buildIcs([], "1Equal");
+  const listed = await listFrontendModules();
+  const calendar = listed?.find((item) => item.moduleKey === FRONTEND_MODULE_KEYS.calendar);
+  if (calendar?.isIndividual) {
+    const links = await admin.from("team_modules").select("team_id").eq("module_key", FRONTEND_MODULE_KEYS.calendar).in("team_id", teamIds);
+    const allowed = new Set((links.data ?? []).map((row) => row.team_id as string));
+    teamIds = links.error ? [] : teamIds.filter((id) => allowed.has(id));
+  }
   if (teamIds.length === 0) return buildIcs([], "1Equal");
 
   const [teams, events] = await Promise.all([

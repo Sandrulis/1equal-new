@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
 import { changePassword } from "@/app/lib/auth/actions";
 import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
@@ -60,8 +61,8 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="mt-6 grid gap-3">
           <PasswordField label={t("user.password.current")} name="currentPassword" autoComplete="current-password" value={currentPassword} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setCurrentPassword} />
-          <PasswordField label={t("auth.forgot.password")} name="password" autoComplete="new-password" value={password} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setPassword} />
-          <PasswordField label={t("user.password.confirm")} name="confirmPassword" autoComplete="new-password" value={confirmPassword} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setConfirmPassword} />
+          <PasswordField label={t("auth.forgot.password")} name="password" autoComplete="new-password" value={password} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setPassword} meter />
+          <PasswordField label={t("user.password.confirm")} name="confirmPassword" autoComplete="new-password" value={confirmPassword} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setConfirmPassword} meter />
           {mismatch ? <p className="text-sm text-game">{t("user.password.mismatch")}</p> : null}
           {password.length > 0 && password === currentPassword ? <p className="text-sm text-game">{t("user.password.same")}</p> : null}
         </div>
@@ -88,6 +89,7 @@ function PasswordField({
   showLabel,
   hideLabel,
   onChange,
+  meter = false,
 }: {
   label: string;
   name: string;
@@ -97,6 +99,7 @@ function PasswordField({
   showLabel: string;
   hideLabel: string;
   onChange: (value: string) => void;
+  meter?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -124,6 +127,7 @@ function PasswordField({
           {visible ? <EyeOffIcon /> : <EyeIcon />}
         </button>
       </span>
+      {meter ? <PasswordStrengthMeter password={value} /> : null}
     </label>
   );
 }

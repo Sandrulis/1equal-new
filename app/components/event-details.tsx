@@ -8,6 +8,8 @@ import { eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { formatWeekday, hoursBetween } from "@/app/lib/format";
+import { memberFaceUrl } from "@/app/lib/entuziasti-view";
+import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
 
 export type Rsvp = "going" | "absent" | "pending";
@@ -317,10 +319,11 @@ function PersonRow({
 function PersonName({ member, reserved = null }: { member: Member; reserved?: string | null }) {
   const { t } = useLanguage();
   const jersey = formatJersey(member.number);
+  const photo = memberFaceUrl(member, useEntuziasti());
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {member.photoUrl ? (
-        <ContentImage src={member.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg bg-ice object-contain object-center" />
+      {photo ? (
+        <ContentImage src={photo} alt="" className="h-9 w-9 shrink-0 rounded-lg bg-ice object-contain object-center" />
       ) : (
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
       )}

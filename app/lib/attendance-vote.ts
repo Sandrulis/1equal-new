@@ -3,8 +3,8 @@ import type { BalanceEntry, TeamEvent } from "@/app/lib/demo-data";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
 import { eventVotingOpen } from "@/app/lib/event-voting";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import type { MessageKey } from "@/app/lib/messages";
-import { listEnabledFrontendModuleKeys } from "@/app/lib/site-admin/repository";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS } from "@/app/lib/team-defaults";
 
 type VoteStatus = "going" | "absent" | "pending";
@@ -73,15 +73,9 @@ export async function castMemberVote(
     const flag = await client.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
     const reserve = flag.data?.enabled === true;
     if (nowGoing) {
-      const modules = await listEnabledFrontendModuleKeys();
       const sportFinance = await client.from("teams").select("sport_id").eq("id", input.teamId).maybeSingle();
       const sportId = typeof sportFinance.data?.sport_id === "string" ? sportFinance.data.sport_id : null;
-      let sportAllowsFinance = true;
-      if (sportId) {
-        const link = await client.from("sport_modules").select("module_key").eq("sport_id", sportId).eq("module_key", FRONTEND_MODULE_KEYS.finance).maybeSingle();
-        if (!link.error) sportAllowsFinance = Boolean(link.data);
-      }
-      const finance = modules.includes(FRONTEND_MODULE_KEYS.finance) && sportAllowsFinance;
+      const finance = await moduleEnabledForSport(client, sportId, FRONTEND_MODULE_KEYS.finance, input.teamId);
       let price = 0;
       if (finance && target.data.fee_exempt !== true) {
         const venue = await client.from("venues").select("price_per_hour").eq("id", event.data.venue_id).maybeSingle();

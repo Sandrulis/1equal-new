@@ -40,6 +40,7 @@ export type SystemUser = {
 export type SystemTeam = {
   id: string;
   name: string;
+  sportId: string | null;
   updatedAt: string;
 };
 
@@ -56,11 +57,14 @@ export type SystemTeamMember = {
   teamId: string;
   userId: string;
   name: string;
+  ehlName: string | null;
   email: string;
   number: number | null;
   position: string;
+  ehlPosition: string;
   phone: string;
   photoUrl: string | null;
+  avatarUrl: string | null;
 };
 
 export const INTEGRATION_KEYS = ["turnstile", "google_oauth", "resend", "umami", "sentry"] as const;
@@ -114,6 +118,7 @@ export type AdminConsole = {
   members: SystemTeamMember[];
   subteams: SystemSubteam[];
   modules: FrontendModule[];
+  teamModules: { teamId: string; moduleKey: string }[];
   integrations: IntegrationStatus[];
   googleRedirectUrl: string;
   emailTemplates: EmailTemplate[];

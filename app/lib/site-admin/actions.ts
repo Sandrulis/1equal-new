@@ -343,10 +343,10 @@ export async function deleteSubteam(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-type ModuleRow = { id: string; module_key: string; is_enabled: boolean; sort_order: number };
+type ModuleRow = { id: string; module_key: string; is_enabled: boolean; is_individual: boolean; sort_order: number };
 
 function mapModule(row: ModuleRow): FrontendModule {
-  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, sortOrder: row.sort_order };
+  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, isIndividual: row.is_individual === true, sortOrder: row.sort_order };
 }
 
 export async function createFrontendModule(rawKey: string): Promise<{ ok: true; module: FrontendModule } | { ok: false; error: MessageKey }> {
@@ -362,7 +362,7 @@ export async function createFrontendModule(rawKey: string): Promise<{ ok: true; 
   const inserted = await gate.client
     .from("site_frontend_modules")
     .insert({ module_key: moduleKey, is_enabled: false, sort_order: sortOrder, updated_at: now })
-    .select("id, module_key, is_enabled, sort_order")
+    .select("id, module_key, is_enabled, is_individual, sort_order")
     .single();
   if (inserted.error || !inserted.data) {
     return { ok: false, error: inserted.error?.code === "23505" ? "frontend_modules.error.exists" : "auth.error.generic" };
@@ -379,6 +379,36 @@ export async function setFrontendModuleEnabled(moduleKey: string, isEnabled: boo
     .update({ is_enabled: isEnabled, updated_at: new Date().toISOString() })
     .eq("module_key", moduleKey);
   if (error) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true };
+}
+
+export async function setFrontendModuleIndividual(moduleKey: string, isIndividual: boolean): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const { error } = await gate.client
+    .from("site_frontend_modules")
+    .update({ is_individual: isIndividual, updated_at: new Date().toISOString() })
+    .eq("module_key", moduleKey);
+  if (error) return { ok: false, error: "auth.error.generic" };
+  if (isIndividual) {
+    const cleared = await gate.client.from("team_modules").delete().eq("module_key", moduleKey);
+    if (cleared.error) return { ok: false, error: "auth.error.generic" };
+  }
+  refresh();
+  return { ok: true };
+}
+
+export async function setTeamModule(teamId: string, moduleKey: string, enabled: boolean): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
+  const found = await gate.client.from("site_frontend_modules").select("is_individual").eq("module_key", moduleKey).maybeSingle();
+  if (found.error || found.data?.is_individual !== true) return { ok: false, error: "auth.error.generic" };
+  const saved = enabled
+    ? await gate.client.from("team_modules").upsert({ team_id: teamId, module_key: moduleKey }, { onConflict: "team_id,module_key" })
+    : await gate.client.from("team_modules").delete().eq("team_id", teamId).eq("module_key", moduleKey);
+  if (saved.error) return { ok: false, error: "auth.error.generic" };
   refresh();
   return { ok: true };
 }

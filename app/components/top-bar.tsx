@@ -49,11 +49,14 @@ export function TopBar({
   balanceMember = null,
   reservedHolds = [],
   calendarIntegration = false,
+  entuziasti = true,
+  enabledModules = null,
+  individualModuleKeys = [],
   sports = [],
 }: {
   onHome: () => void;
   account?: AccountProfile | null;
-  team?: Pick<IssuedTeam, "name" | "code" | "logoUrl"> | null;
+  team?: Pick<IssuedTeam, "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
   teams?: IssuedTeam[];
   onSelectTeam?: (code: string) => void;
   onUnwatchTeam?: (teamId: string) => void | Promise<void>;
@@ -68,6 +71,9 @@ export function TopBar({
   balanceMember?: Member | null;
   reservedHolds?: BalanceHold[];
   calendarIntegration?: boolean;
+  entuziasti?: boolean;
+  enabledModules?: string[] | null;
+  individualModuleKeys?: string[];
   sports?: Sport[];
 }) {
   const { t } = useLanguage();
@@ -76,7 +82,7 @@ export function TopBar({
   const [profile, setProfile] = useState(account);
   const name = profile ? accountName(profile) : demo.name;
 
-  const linkedPhoto = teamPlayer(profile, team?.code)?.photoUrl ?? null;
+  const linkedPhoto = entuziasti ? (teamPlayer(profile, team?.code)?.photoUrl ?? null) : null;
   const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [holdsOpen, setHoldsOpen] = useState(false);
@@ -104,6 +110,8 @@ export function TopBar({
           onUnwatch={onUnwatchTeam}
           onCreate={onCreateTeam ?? (() => undefined)}
           sports={sports}
+          enabledModules={enabledModules}
+          individualModuleKeys={individualModuleKeys}
         />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -140,6 +148,7 @@ export function TopBar({
           onSettingsOpenChange={onSettingsOpenChange}
           onSaved={saveAccount}
           calendarIntegration={calendarIntegration}
+          entuziasti={entuziasti}
           onOpenFeedback={onOpenFeedback}
           onOpenContact={onOpenContact}
         />
@@ -168,6 +177,7 @@ function UserMenu({
   onSettingsOpenChange,
   onSaved,
   calendarIntegration = false,
+  entuziasti = true,
   onOpenFeedback,
   onOpenContact,
 }: {
@@ -180,6 +190,7 @@ function UserMenu({
   onSettingsOpenChange?: (open: boolean) => void;
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) => void;
   calendarIntegration?: boolean;
+  entuziasti?: boolean;
   onOpenFeedback?: (kind: FeedbackKind) => void;
   onOpenContact?: () => void;
 }) {
@@ -312,7 +323,7 @@ function UserMenu({
         </div>
       ) : null}
       {settingsOpen && account ? (
-        <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
+        <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
       ) : null}
       {passwordOpen && account ? <ChangePasswordDialog onClose={() => setPasswordOpen(false)} /> : null}
       {mfaOpen && account ? <MfaSettingsDialog onClose={() => setMfaOpen(false)} /> : null}

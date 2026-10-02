@@ -5,7 +5,7 @@ import { MfaLoginGate } from "@/app/components/mfa-login-gate";
 import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { parseDashboardPath } from "@/app/lib/dashboard-path";
-import { listEnabledFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
+import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
 import { listOwnedTeams } from "@/app/lib/team-membership";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +30,12 @@ export default async function DashboardPage({
   const route = parseDashboardPath(path, { demoEvents: false });
   if (!route || (route.view === "admin" && !account.isAdmin)) redirect("/dashboard");
   await touchUserLastSeen(account.id);
-  const [admin, initialTeams, enabledModules, sports] = await Promise.all([
+  const [admin, initialTeams, enabledModules, individualModuleKeys, sports] = await Promise.all([
     account.isAdmin ? loadAdminConsole(account.id) : Promise.resolve(null),
     listOwnedTeams(account.id),
     listEnabledFrontendModuleKeys(),
+    listIndividualFrontendModuleKeys(),
     listSports(),
   ]);
-  return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={query.team ?? null} enabledModules={enabledModules} sports={sports} />;
+  return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={query.team ?? null} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} />;
 }

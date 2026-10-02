@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/app/components/turnstile-widget";
@@ -109,6 +110,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 showLabel={t("auth.password.show")}
                 hideLabel={t("auth.password.hide")}
+                meter={mode === "signup"}
               />
               )}
               {mode === "login" ? (
@@ -183,14 +185,17 @@ function PasswordField({
   autoComplete,
   showLabel,
   hideLabel,
+  meter = false,
 }: {
   label: string;
   name: string;
   autoComplete: string;
   showLabel: string;
   hideLabel: string;
+  meter?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
+  const [value, setValue] = useState("");
 
   return (
     <label className="grid gap-1.5 text-sm font-medium">
@@ -199,9 +204,11 @@ function PasswordField({
         <input
           required
           name={name}
+          value={meter ? value : undefined}
           type={visible ? "text" : "password"}
           autoComplete={autoComplete}
           minLength={8}
+          onChange={meter ? (event) => setValue(event.target.value) : undefined}
           className="h-11 w-full rounded-lg bg-ice px-3 pr-11 text-sm font-normal ring-1 ring-line"
         />
         <button
@@ -214,6 +221,7 @@ function PasswordField({
           {visible ? <EyeOffIcon /> : <EyeIcon />}
         </button>
       </span>
+      {meter ? <PasswordStrengthMeter password={value} /> : null}
     </label>
   );
 }

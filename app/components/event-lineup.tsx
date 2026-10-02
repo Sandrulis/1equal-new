@@ -8,6 +8,8 @@ import { IconChevronLeft, IconChevronRight, IconX } from "@/app/components/icon-
 import { formatJersey, type Member, type TeamEvent } from "@/app/lib/demo-data";
 import { normalizePositionCode, type PositionCode } from "@/app/lib/positions";
 import { useDisplayFormat } from "@/app/components/display-preferences";
+import { memberFaceUrl } from "@/app/lib/entuziasti-view";
+import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
 
 export type SlotMap = Record<number, string>;
@@ -72,6 +74,14 @@ function sideKey(map: SideMap): string {
     .sort()
     .map((id) => `${id}:${map[id]}`)
     .join("|");
+}
+
+function keepSaved<T>(saved: T, value: T, keyOf: (item: T) => string, baseline: string, setBaseline: (key: string) => void, setValue: (item: T) => void) {
+  const incoming = keyOf(saved);
+  const local = keyOf(value);
+  if (incoming === baseline || (local !== baseline && local !== incoming)) return;
+  setBaseline(incoming);
+  if (local !== incoming) setValue(saved);
 }
 
 function pruneSlots(map: SlotMap, going: Member[]): SlotMap {
@@ -155,11 +165,35 @@ function useLiveSave<T>(value: T, key: string, enabled: boolean, save: (value: T
   const valueRef = useRef(value);
   const reportRef = useRef(onUnsaved);
   const keyRef = useRef(key);
+  const running = useRef(false);
+  const again = useRef(false);
+  const pumpRef = useRef<() => void>(() => {});
   useEffect(() => {
     saveRef.current = save;
     valueRef.current = value;
     reportRef.current = onUnsaved;
     keyRef.current = key;
+    pumpRef.current = () => {
+      if (running.current) {
+        again.current = true;
+        return;
+      }
+      running.current = true;
+      again.current = false;
+      const snapshot = keyRef.current;
+      void Promise.resolve(saveRef.current(valueRef.current)).then(
+        (ok) => {
+          running.current = false;
+          const moved = keyRef.current !== snapshot;
+          if (ok !== false && !moved) setAcked(snapshot);
+          if (moved || again.current) pumpRef.current();
+        },
+        () => {
+          running.current = false;
+          if (keyRef.current !== snapshot || again.current) pumpRef.current();
+        },
+      );
+    };
   });
   const unsaved = enabled && key !== acked;
 
@@ -171,15 +205,7 @@ function useLiveSave<T>(value: T, key: string, enabled: boolean, save: (value: T
 
   useEffect(() => {
     if (!unsaved) return;
-    const snapshot = key;
-    const timer = window.setTimeout(() => {
-      void Promise.resolve(saveRef.current(valueRef.current)).then(
-        (ok) => {
-          if (ok !== false && keyRef.current === snapshot) setAcked(snapshot);
-        },
-        () => undefined,
-      );
-    }, 400);
+    const timer = window.setTimeout(() => pumpRef.current(), 400);
     return () => window.clearTimeout(timer);
   }, [key, unsaved]);
 
@@ -230,6 +256,8 @@ function GameLineup({
   const { t } = useLanguage();
   const { formatDate, formatTime } = useDisplayFormat();
   const [slots, setSlots] = useState<SlotMap>(saved);
+  const [slotBaseline, setSlotBaseline] = useState(() => slotKey(saved));
+  keepSaved(saved, slots, slotKey, slotBaseline, setSlotBaseline, setSlots);
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -597,6 +625,8 @@ function TrainingLineup({
 }) {
   const { t } = useLanguage();
   const [sides, setSides] = useState<SideMap>(saved);
+  const [sideBaseline, setSideBaseline] = useState(() => sideKey(saved));
+  keepSaved(saved, sides, sideKey, sideBaseline, setSideBaseline, setSides);
   const [dragId, setDragId] = useState<string | null>(null);
   const dragRef = useRef<string | null>(null);
   const [over, setOver] = useState<LineSide | null>(null);
@@ -872,7 +902,7 @@ function initials(name: string): string {
 }
 
 function PlayerFace({ member, compact = false }: { member: Member; compact?: boolean }) {
-  const photo = member.photoUrl || member.ehl?.photoUrl;
+  const photo = memberFaceUrl(member, useEntuziasti());
   const box = compact ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-xs";
   if (photo) {
     return <ContentImage src={photo} alt="" className={`${box} shrink-0 rounded-lg bg-ice object-contain object-center`} />;

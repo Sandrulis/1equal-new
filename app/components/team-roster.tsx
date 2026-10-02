@@ -7,6 +7,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
+import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { TeamMark } from "@/app/components/team-mark";
 import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo-data";
 import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
@@ -20,10 +21,13 @@ import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { votingHours } from "@/app/lib/team-defaults";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
+import { entuziastiForSport } from "@/app/lib/frontend-modules";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDismissed, clearInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
+import { memberFaceUrl } from "@/app/lib/entuziasti-view";
+import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
 import { positionLabel } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
@@ -71,6 +75,7 @@ export function TeamRoster({
   currency = null,
   sportId = null,
   sports = [],
+  enabledModules = null,
   onTeamSaved,
   subteams,
   memberId,
@@ -97,6 +102,7 @@ export function TeamRoster({
   currency?: string | null;
   sportId?: string | null;
   sports?: Sport[];
+  enabledModules?: string[] | null;
   onTeamSaved?: (team: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string }) => void;
   subteams?: Subteam[];
   memberId: string | null;
@@ -135,6 +141,8 @@ export function TeamRoster({
   const [appointing, setAppointing] = useState(false);
   const isLeader = Boolean(teamId && leaderId && accountId && leaderId === accountId);
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
+  const sportKeys = sportId ? (sports.find((item) => item.id === sportId)?.moduleKeys ?? null) : null;
+  const entuziasti = entuziastiForSport(enabledModules, sportKeys);
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
   const teamReserved = Math.round(teamHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
@@ -147,16 +155,18 @@ export function TeamRoster({
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return members;
-    return members.filter((member) => {
-      const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
-      const subteam = ids.map((id) => (groupList.find((item) => item.id === id) ?? subteamById(id))?.name ?? "").join(" ");
-      const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => `${code} ${positionLabel(code, t)}`);
-      return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", ...positions, subteam]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
+    const matched = needle
+      ? members.filter((member) => {
+          const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
+          const subteam = ids.map((id) => (groupList.find((item) => item.id === id) ?? subteamById(id))?.name ?? "").join(" ");
+          const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => `${code} ${positionLabel(code, t)}`);
+          return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", ...positions, subteam]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle);
+        })
+      : members;
+    return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
   }, [groupList, members, query, subteamById, t]);
 
   async function removeMember(id: string) {
@@ -210,7 +220,7 @@ export function TeamRoster({
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
-          <TeamMark name={teamName} logoUrl={logoUrl} textClassName="text-lg" className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl" />
+          <TeamMark name={teamName} logoUrl={teamLogoUrl(logoUrl, entuziasti)} textClassName="text-lg" className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl" />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-1">
               <h1 className="truncate text-2xl font-semibold tracking-tight">{teamName}</h1>
@@ -220,7 +230,7 @@ export function TeamRoster({
                 </IconTipButton>
               ) : null}
             </div>
-            {sourceUrl ? (
+            {entuziasti && sourceUrl ? (
               <a href={sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block max-w-full truncate text-sm text-train">
                 {sourceUrl}
               </a>
@@ -389,6 +399,7 @@ export function TeamRoster({
           canManage={!teamId || canAdjust || accountId === editing.id}
           canRoster={!teamId || canAdjust}
           canAppoint={isLeader && editing.id !== leaderId}
+          entuziasti={entuziasti}
           subteams={groupList}
           onClose={() => setEditing(null)}
           onSaved={(member, teamCode) => {
@@ -427,6 +438,7 @@ export function TeamRoster({
           currency={currency}
           sportId={sportId}
           sports={sports}
+          enabledModules={enabledModules}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
           onClose={() => setSettingsOpen(false)}
@@ -571,6 +583,7 @@ function TeamSettingsDialog({
   gameHours,
   sportId,
   sports,
+  enabledModules = null,
   onClose,
   onSave,
 }: {
@@ -584,6 +597,7 @@ function TeamSettingsDialog({
   gameHours: number;
   sportId: string | null;
   sports: Sport[];
+  enabledModules?: string[] | null;
   onClose: () => void;
   onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId: string | null }) => Promise<boolean>;
 }) {
@@ -620,10 +634,11 @@ function TeamSettingsDialog({
   const trainingValue = votingHours(training);
   const gameValue = votingHours(game);
   const hoursOk = trainingValue != null && gameValue != null;
-  const linkValue = draftLink.trim();
-  const showAvatar = linkValue === "";
   const pickedSport = chosenSportId(sports, draftSport);
-  const dirty = draftName.trim() !== name || linkValue !== (sourceUrl ?? "") || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours || pickedSport !== (sportId ?? null) || (showAvatar && avatarDirty);
+  const showLink = entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
+  const linkValue = showLink ? draftLink.trim() : (sourceUrl ?? "");
+  const showAvatar = linkValue === "";
+  const dirty = draftName.trim() !== name || (showLink && draftLink.trim() !== (sourceUrl ?? "")) || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours || pickedSport !== (sportId ?? null) || (showAvatar && avatarDirty);
 
   async function resolveLogo(nextSource: string | null, ehlLogo: string | null): Promise<string | null | undefined> {
     if (nextSource) return ehlLogo;
@@ -696,6 +711,7 @@ function TeamSettingsDialog({
             <span className="text-muted">{t("team.settings.name")}</span>
             <input required value={draftName} maxLength={80} disabled={busy !== null} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
           </label>
+          {showLink ? (
           <label className="block text-sm">
             <span className="text-muted">{t("team.empty.link")}</span>
             <span className="ml-2 text-muted">{t("team.empty.link_optional")}</span>
@@ -713,6 +729,7 @@ function TeamSettingsDialog({
               className={fieldClass}
             />
           </label>
+          ) : null}
           {showAvatar ? (
             <AvatarCropField
               ref={avatarRef}
@@ -861,10 +878,11 @@ function BalanceDialog({
 
 function MemberIdentity({ member, leader = false }: { member: Member; leader?: boolean }) {
   const { t } = useLanguage();
+  const photo = memberFaceUrl(member, useEntuziasti());
   return (
     <div className="flex min-w-0 items-center gap-3">
-      {member.photoUrl ? (
-        <ContentImage src={member.photoUrl} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
+      {photo ? (
+        <ContentImage src={photo} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
       ) : (
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
       )}

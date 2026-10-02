@@ -34,6 +34,7 @@ export function MemberEditDialog({
   canManage = false,
   canRoster = false,
   canAppoint = false,
+  entuziasti = true,
   subteams,
   onClose,
   onSaved,
@@ -45,6 +46,7 @@ export function MemberEditDialog({
   canManage?: boolean;
   canRoster?: boolean;
   canAppoint?: boolean;
+  entuziasti?: boolean;
   subteams: Subteam[];
   onClose: () => void;
   onSaved: (member: Member, teamCode: string) => void;
@@ -292,6 +294,7 @@ export function MemberEditDialog({
             })}
           </div>
         </fieldset>
+        {entuziasti ? (
         <label className="block text-sm">
           <span className="text-muted">{t("user.settings.player")}</span>
           <input
@@ -305,6 +308,7 @@ export function MemberEditDialog({
             className={fieldClass}
           />
         </label>
+        ) : null}
         {showAvatar ? <AvatarCropField ref={avatarRef} existingUrl={member.ehl?.photoUrl ? null : member.photoUrl} disabled={pending} onDirty={setAvatarDirty} /> : null}
         </>
         ) : null}

@@ -7,6 +7,8 @@ import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { castMemberVote } from "@/app/lib/attendance-vote";
 import { isEmailAddress } from "@/app/lib/email/email-address";
 import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
@@ -42,6 +44,31 @@ async function attachSport(
 }
 
 type GateClient = NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"];
+
+async function rememberActiveTeam(client: GateClient, userId: string, teamId: string) {
+  await client.from("users").update({ active_team_id: teamId }).eq("id", userId);
+}
+
+export async function setActiveTeam(teamId: string | null): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (!teamId) {
+    const cleared = await gate.client.from("users").update({ active_team_id: null }).eq("id", gate.account.id);
+    if (cleared.error) return { ok: false, error: "auth.error.generic" };
+    return { ok: true };
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
+  const member = await gate.client.from("team_members").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
+  let allowed = Boolean(member.data);
+  if (!allowed && gate.account.isAdmin) {
+    const watch = await gate.client.from("admin_team_watches").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
+    allowed = Boolean(watch.data);
+  }
+  if (!allowed) return { ok: false, error: "auth.error.generic" };
+  const saved = await gate.client.from("users").update({ active_team_id: teamId }).eq("id", gate.account.id);
+  if (saved.error) return { ok: false, error: "auth.error.generic" };
+  return { ok: true };
+}
 
 async function managesTeam(client: GateClient, teamId: string, userId: string): Promise<boolean> {
   const team = await client.from("teams").select("leader_id").eq("id", teamId).maybeSingle();
@@ -129,10 +156,13 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   const game = votingHours(input.gameVotingHours);
   if (training == null || game == null) return { ok: false, error: "site_settings.error.team_defaults" };
   const currency = input.currency && isCurrency(input.currency) ? input.currency : null;
-  const source = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl)?.toString() ?? null : null;
-  const logo = source ? cleanLogo(input.logoUrl) : null;
   const sport = await attachSport(gate.client, input.sportId);
   if (!sport.ok) return sport;
+  const entuziasti = await moduleEnabledForSport(gate.client, sport.sportId, FRONTEND_MODULE_KEYS.entuziasti);
+  const parsed = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl) : null;
+  if (entuziasti && input.sourceUrl && !parsed) return { ok: false, error: "team.link.invalid" };
+  const source = entuziasti && parsed ? parsed.toString() : null;
+  const logo = source ? cleanLogo(input.logoUrl) : null;
   const now = new Date().toISOString();
 
   let teamId = "";
@@ -160,6 +190,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   if (!member.name) member.name = [gate.account.firstName, gate.account.lastName].filter(Boolean).join(" ");
   member.role = "captain";
 
+  await rememberActiveTeam(gate.client, gate.account.id, teamId);
   refreshTeamData();
   return {
     ok: true,
@@ -187,7 +218,6 @@ export async function updateOwnedTeam(input: {
   if (!name) return { ok: false, error: "site_settings.error.name" };
   if (training == null || game == null) return { ok: false, error: "site_settings.error.team_defaults" };
   const source = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl)?.toString() ?? null : null;
-  if (input.sourceUrl && !source) return { ok: false, error: "team.link.invalid" };
   const ownLogo = ownAvatarUrl(input.logoUrl, `teams/${input.teamId}.jpg`);
   const logo = source ? cleanLogo(input.logoUrl) : ownLogo;
   let sportId: string | undefined;
@@ -197,14 +227,20 @@ export async function updateOwnedTeam(input: {
     sportId = sport.sportId;
   }
   if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
+  const current = await gate.client.from("teams").select("source_url, logo_url, sport_id").eq("id", input.teamId).maybeSingle();
+  if (current.error || !current.data) return { ok: false, error: "auth.error.generic" };
+  const entuziasti = await moduleEnabledForSport(gate.client, sportId ?? current.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, input.teamId);
+  if (entuziasti && input.sourceUrl && !source) return { ok: false, error: "team.link.invalid" };
+  const keptSource = entuziasti ? source : current.data.source_url;
+  const keptLogo = entuziasti ? logo : current.data.logo_url;
   const saved = await gate.client
     .from("teams")
-    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: source, logo_url: logo, ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
+    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: keptSource, logo_url: keptLogo, ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
     .eq("id", input.teamId);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
-  if (!ownLogo) await removeAvatar(`teams/${input.teamId}.jpg`);
+  if (entuziasti && !ownLogo) await removeAvatar(`teams/${input.teamId}.jpg`);
   refreshTeamData();
-  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: source, logoUrl: logo, sportId };
+  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: keptSource, logoUrl: keptLogo, sportId };
 }
 
 export async function saveTeamAvatar(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: MessageKey }> {
@@ -249,6 +285,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   }
 
   refreshTeamData();
+  await rememberActiveTeam(gate.client, gate.account.id, found.data.id);
   return {
     ok: true,
     team: {
@@ -292,7 +329,7 @@ export async function saveMemberProfile(input: {
   const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
   const target = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", input.userId).maybeSingle();
   if (actor.error || !actor.data || target.error || !target.data) return { ok: false, error: "auth.error.generic" };
-  const team = await gate.client.from("teams").select("invite_code, leader_id").eq("id", input.teamId).maybeSingle();
+  const team = await gate.client.from("teams").select("invite_code, leader_id, sport_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data?.invite_code) return { ok: false, error: "auth.error.generic" };
 
   if ((input.teamAdmin === true || input.teamAdmin === false) && (team.data.leader_id !== gate.account.id || input.userId === team.data.leader_id)) {
@@ -331,7 +368,8 @@ export async function saveMemberProfile(input: {
   }
 
   let player: EhlPlayerProfile | null = null;
-  const rawUrl = input.playerUrl.trim();
+  const entuziasti = await moduleEnabledForSport(gate.client, team.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, input.teamId);
+  const rawUrl = entuziasti ? input.playerUrl.trim() : "";
   if (rawUrl) {
     const loaded = await fetchPlayer(rawUrl);
     if ("error" in loaded) return { ok: false, error: loaded.error };
@@ -353,11 +391,12 @@ export async function saveMemberProfile(input: {
     position: string;
     extra_positions: string;
     phone: string;
-    ehl_player: EhlPlayerProfile | null;
+    ehl_player?: EhlPlayerProfile | null;
     fee_exempt?: boolean;
     updated_at: string;
     is_team_admin?: boolean;
-  } = { jersey_number: number, position, extra_positions: extraPositions, phone, ehl_player: player, updated_at: new Date().toISOString() };
+  } = { jersey_number: number, position, extra_positions: extraPositions, phone, updated_at: new Date().toISOString() };
+  if (entuziasti) memberPatch.ehl_player = player;
   if (manager) memberPatch.fee_exempt = input.feeExempt;
   if (manager && (input.teamAdmin === true || input.teamAdmin === false)) memberPatch.is_team_admin = input.teamAdmin;
   const updated = await gate.client
@@ -377,7 +416,7 @@ export async function saveMemberProfile(input: {
     }
   }
 
-  if (input.userId === gate.account.id && /^[A-Z0-9]{4,16}$/.test(team.data.invite_code)) {
+  if (entuziasti && input.userId === gate.account.id && /^[A-Z0-9]{4,16}$/.test(team.data.invite_code)) {
     const current = await gate.client.from("users").select("ehl_player").eq("id", gate.account.id).maybeSingle();
     if (current.error) return { ok: false, error: "auth.error.generic" };
     const saved = await gate.client.from("users").update({ ehl_player: mergeStoredEhlPlayer(current.data?.ehl_player, team.data.invite_code, player) }).eq("id", gate.account.id);
@@ -694,7 +733,7 @@ export async function updateOwnedEvent(input: {
     })
     .eq("id", input.eventId)
     .eq("team_id", input.teamId)
-    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach")
+    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, lineup")
     .single();
   if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(updated.data);

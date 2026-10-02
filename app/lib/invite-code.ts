@@ -39,6 +39,7 @@ export type IssuedTeam = {
   financeReserve?: boolean;
   reservations?: FinanceHold[];
   sportId?: string | null;
+  moduleKeys?: string[];
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

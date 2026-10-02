@@ -11,6 +11,8 @@ import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { positionLabel } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
+import { memberFaceUrl } from "@/app/lib/entuziasti-view";
+import { useEntuziasti } from "@/app/components/entuziasti-context";
 
 function initials(name: string): string {
   return name
@@ -30,6 +32,8 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const groups = ids.map((id) => subteams?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
+  const entuziasti = useEntuziasti();
+  const photo = memberFaceUrl(member, entuziasti);
   const jersey = formatJersey(member.number);
   const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
 
@@ -37,8 +41,8 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
     <div className="space-y-4">
       <section className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
         <div className="flex items-start gap-4">
-          {member.photoUrl ? (
-            <ContentImage src={member.photoUrl} className="h-16 w-16 shrink-0 rounded-lg bg-ice object-contain object-center" />
+          {photo ? (
+            <ContentImage src={photo} className="h-16 w-16 shrink-0 rounded-lg bg-ice object-contain object-center" />
           ) : (
             <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-navy text-xl font-semibold text-white">{initials(member.name)}</span>
           )}
@@ -55,22 +59,21 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
         </div>
         {jersey || positions.length || groups.length ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {positions.length ? (
-              <div className="rounded-xl bg-ice px-4 py-3">
-                <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("roster.fields.position")}</p>
-                <ul className="mt-1 space-y-1">
-                  {positions.map((code, index) => (
-                    <li key={code} className={`text-sm font-semibold ${index === 0 ? "text-train" : ""}`}>
-                      {positionLabel(code, t)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {jersey ? (
-              <div className="rounded-xl bg-ice px-4 py-3">
-                <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("player.number")}</p>
-                <p className="mt-1 text-lg font-semibold text-train tabular-nums">{jersey}</p>
+            {positions.length || jersey ? (
+              <div className={`rounded-xl bg-ice px-4 py-3 ${groups.length ? "" : "sm:col-span-2"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("roster.fields.position")}</p>
+                  {jersey ? <p className="text-lg leading-none font-semibold text-train tabular-nums">{jersey}</p> : null}
+                </div>
+                {positions.length ? (
+                  <ul className="mt-1 space-y-1">
+                    {positions.map((code, index) => (
+                      <li key={code} className={`text-sm font-semibold ${index === 0 ? "text-train" : ""}`}>
+                        {positionLabel(code, t)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             ) : null}
             {groups.length ? (
@@ -90,7 +93,7 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
         ) : null}
       </section>
 
-      {member.ehl ? <PlayerEhl profile={member.ehl} /> : null}
+      {entuziasti && member.ehl ? <PlayerEhl profile={member.ehl} /> : null}
 
       {finance ? (
         <section className="rounded-2xl bg-paper ring-1 ring-line">

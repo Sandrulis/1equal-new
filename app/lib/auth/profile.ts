@@ -11,6 +11,7 @@ export type AccountProfile = {
   avatarUrl: string | null;
   eventEmails: boolean;
   display: UserDisplayPreferences;
+  activeTeamId: string | null;
 };
 
 export function teamPlayer(account: AccountProfile | null | undefined, teamCode: string | null | undefined): EhlPlayerProfile | null {

@@ -47,7 +47,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 
 Komandas izveide ieraksta `teams` ar uzaicinājuma kodu, logotipu, `leader_id` un aktīvo sporta veidu. Ja aktīvs ir tikai viens, slēdzis nerādās un tas tiek piesaistīts. Izveidotājs ir pirmais dalībnieks. Pievienošanās notiek ar kodu. Dalībniekam var būt numurs 0-99, galvenā pozīcija no saraksta un papildu pozīcijas. Pozīcija rādās kā kods un nosaukums, piemēram `C Centrs`, valodā lv, en vai ru. Vecie `LD` un `RD` ir `D`. Treneris nav spēlētāja pozīcija. Tālrunis, vairākas apakškomandas un samaksas atbrīvojums paliek. Bez Entuziastu saites lietotājs un komanda var augšupielādēt un izgriezt kvadrāta JPEG avataru. Lietotāja izvēlnē Paziņojumi izslēdz e-pastus par jauniem notikumiem (`users.event_emails`, noklusējums ieslēgts). Balsošana ir atvērta `training_voting_hours` (24) un `game_voting_hours` (72) stundas pirms sākuma. Ja cron rezervācijas ir izslēgtas, Būs uzreiz noņem laukuma cenu no `balance_entries` un pieskaita `teams.balance` ar `adjust_team_balance`, un `settle_finished_events` iet, kad ielādējas komandas. Ja slēdzis ir ieslēgts, Būs rezervē summu, Nebūšu rezervāciju atceļ, un `GET /api/cron/finance` pēc notikuma sākuma (`Europe/Riga`) noņem spēlētāja maksu un spēles izdevumus. Treniņa izdevumi nav obligāti. Ja tie ir norādīti, tie glabājas un noslēdzas tāpat kā spēlei. Spēles sastāvs stāv uz ledus attēla un saglabājas uzreiz `team_events.lineup`. To labo tikai vadītājs un administrators. Parasts spēlētājs redz saglabāto sadalījumu. Bilances vēsture un rezervācijas ir viens saraksts komandai, spēlētājam un augšējai joslai. Dzēšana atdod pieteikušos naudu un atgriež jau norautos izdevumus. Joslas Pievienot bilanci glabājas `balance_entries` ar `kind = manual`, un to redz, ja finanses ir ieslēgtas un sporta veidam tās ir piesaistītas. To drīkst komandas vadītājs un administrators. Vadītājs spēlētāja logā un dalībnieka labošanā ieslēdz `team_members.is_team_admin`. Administrators nevar iecelt citus administratorus un nevar kļūt par vadītāju. Parasts spēlētājs labo tikai savu vārdu, uzvārdu, e-pastu, tālruni, numuru, pozīcijas un Entuziastu saiti. Vadītājs un administrators to dara arī citiem un redz samaksas atbrīvojumu un apakškomandas. Jaunais e-pasts stājas spēkā tikai pēc apstiprinājuma saites, kas aiziet uz jauno adresi. Noņemšana prasa apstiprinājumu. Labošanas logam ir aizvēršanas X. Panelis ielādē pasākumus un virsgrāmatu par pēdējām 400 dienām.
 
-Zem 600px komandas saites ir apakšējā izvēlne. Adminam turpat augšā ir izvēlne tikai ar admin saitēm. No 600 līdz 1023px josla ir ikonas, tooltip ir blakus ikonai un josla neritinās no tooltip. Komandas poga augšā virs 600px atver sarakstu, zem 600px ved uz kalendāru. Apskatē (`watching`) saraksta rindā ir X, kas atvieno komandu. Sānjoslā zem palīdzības ir atsauksmes un kontakti. No 1024px izvērsta josla maina režģi. Kalendāra saitei skaita nav. Pārējām komandas un admin saitēm labajā pusē ir skaits.
+Zem 600px komandas saites ir apakšējā izvēlne. Adminam turpat augšā ir izvēlne tikai ar admin saitēm. No 600 līdz 1023px josla ir ikonas, tooltip ir blakus ikonai un josla neritinās no tooltip. Komandas poga augšā virs 600px atver sarakstu, zem 600px ved uz kalendāru. Izvēlētā komanda glabājas `users.active_team_id` un paliek pēc atsvaidzināšanas. Apskatē (`watching`) saraksta rindā ir X, kas atvieno komandu. Sānjoslā zem palīdzības ir atsauksmes un kontakti. No 1024px izvērsta josla maina režģi. Kalendāra saitei skaita nav. Pārējām komandas un admin saitēm labajā pusē ir skaits.
 
 Ja ielogotajam lietotājam nav komandas, augšējā josla kreisajā pusē nerāda komandas vārdu. Demo rāda HK Rīga Amateiri.
 
@@ -60,7 +60,7 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 | `/dashboard/admin/users` | Visi `public.users`. Meklēšana. Vārds, e-pasts, loma, komanda, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē) |
 | `/dashboard/admin/teams` | `public.teams`. Meklēšana, labošana, noņemšana. Kolonnas: apakškomandas un spēlētāji. Komandas vārds atver logu ar sarakstu. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`. Admins sastāvā neparādās un komandu tikai skatās |
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
-| `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, pievienot pēc atslēgas, dzēst. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
+| `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, individuāls slēdzis, pievienot pēc atslēgas, dzēst. Individuāls modulis sākas izslēgts katrā komandā. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
 | `/dashboard/admin/sports` | Sporta veidi visās valodās, ikona un piesaistītie moduļi. Vismaz vienam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām |
 | `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Tokens ir tikai admina lapā |
 | `/dashboard/admin/settings` | Nosaukums, logotips, favicon. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding` |
@@ -142,6 +142,9 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `041_remove_coach_position.sql` | Noņem saglabāto pozīciju `TR` |
 | `042_training_event_expense.sql` | Treniņa `expense` drīkst būt tukšs |
 | `043_event_lineup.sql` | `team_events.lineup` jsonb |
+| `044_entuziasti_module.sql` | `module_entuziasti`. Komandas un spēlētāja saite, arī pa sporta veidiem |
+| `045_team_modules.sql` | Moduļa slēdzis `is_individual` un `team_modules` katrai komandai |
+| `046_user_active_team.sql` | `users.active_team_id`. Izvēlētā komanda paliek pēc atsvaidzināšanas |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 
@@ -180,7 +183,7 @@ app/
     positions.ts             # LW, C, RW, D, G
     email/email-change.ts    # Jaunā e-pasta saite, SHA-256, 24 h
     auth/actions.ts          # signIn, signUp, resetPassword, changePassword, signOut
-    frontend-modules.ts      # module_subteams, module_game_layout, module_finance
+    frontend-modules.ts      # module_subteams, module_game_layout, module_finance, module_entuziasti
     event-voting.ts          # Balsošanas termiņš un vai notikums ir beidzies
     team-actions.ts          # Komandas, dalībnieki, laukumi, bilance, notikumi, dalība
     balance-entry.ts         # Spēlētāja bilances rinda ar notikumu un vietu

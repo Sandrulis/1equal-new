@@ -28,12 +28,14 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((user) => {
-      const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
-      const teams = user.teams.map((team) => team.name).join(" ");
-      return [user.name, user.email, role, teams].join(" ").toLowerCase().includes(needle);
-    });
+    const matched = needle
+      ? users.filter((user) => {
+          const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
+          const teams = user.teams.map((team) => team.name).join(" ");
+          return [user.name, user.email, role, teams].join(" ").toLowerCase().includes(needle);
+        })
+      : users;
+    return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
   }, [query, t, users]);
 
   return (

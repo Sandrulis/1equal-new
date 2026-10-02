@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.17
+
+- Entuziastu saites un profils rādās tikai, ja modulis ir ieslēgts. Individuālu moduli admins ieslēdz katrai komandai atsevišķi
+- Izvēlētā komanda paliek pēc atsvaidzināšanas. Jaunai un atkārtotai parolei rādās stiprums
+- Spēlētāji ir alfabētā. Numurs ir pozīcijas bloka labajā augšā, un bez apakškomandas bloks ir pilnā platumā
+
 ## v0.1.16
 
 - Spēļu izklājums ir uz ledus un saglabājas uzreiz. To labo tikai komandas vadītājs un administrators

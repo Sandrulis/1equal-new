@@ -143,6 +143,7 @@ export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member
     joined: row.joined_on,
     updatedAt: toLocalDateTimeStamp(row.updated_at),
     photoUrl: ehl?.photoUrl ?? user?.avatar_url ?? null,
+    avatarUrl: user?.avatar_url ?? null,
     ehl,
   };
 }
@@ -180,7 +181,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
   const cron = await admin.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
   const financeReserve = cron.data?.enabled === true;
   if (memberIds.length && !financeReserve) await settleFinishedEvents(memberIds);
-  const [teams, members, groups, links, entries, places, events, rsvps, ledgerRows, holds] = await Promise.all([
+  const [teams, members, groups, links, entries, places, events, rsvps, ledgerRows, holds, moduleLinks] = await Promise.all([
     admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     admin
       .from("team_members")
@@ -194,6 +195,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     admin.from("team_event_rsvps").select("team_id, event_id, user_id, status").in("team_id", teamIds),
     admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").in("team_id", teamIds).gte("event_date", historySince()).order("created_at", { ascending: false }),
     admin.from("finance_reservations").select("team_id, event_id, user_id, amount").in("team_id", teamIds),
+    admin.from("team_modules").select("team_id, module_key").in("team_id", teamIds),
   ]);
   if (teams.error || !teams.data || members.error || !members.data) return [];
   const idsByMember = new Map<string, string[]>();
@@ -246,6 +248,14 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     list.push(eventFromRow(row));
     eventsByTeam.set(row.team_id, list);
   }
+  const moduleKeysByTeam = new Map<string, string[]>();
+  if (!moduleLinks.error) {
+    for (const row of (moduleLinks.data ?? []) as { team_id: string; module_key: string }[]) {
+      const list = moduleKeysByTeam.get(row.team_id) ?? [];
+      list.push(row.module_key);
+      moduleKeysByTeam.set(row.team_id, list);
+    }
+  }
   return (teams.data as TeamRow[])
     .filter((team) => team.invite_code)
     .map((team) => ({
@@ -260,6 +270,7 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
       gameVotingHours: team.game_voting_hours ?? 72,
       currency: team.currency,
       sportId: team.sport_id,
+      moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
       balance: Number(team.balance ?? 0),
       ledger: ((ledgerRows.data ?? []) as { id: string; team_id: string; event_id: string | null; amount: number | string; event_date: string; event_type: string; created_at: string }[])
         .filter((row) => row.team_id === team.id)

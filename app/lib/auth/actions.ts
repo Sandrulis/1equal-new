@@ -8,6 +8,8 @@ import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-prefe
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
 import { asLang, translate, type MessageKey } from "@/app/lib/messages";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
@@ -254,18 +256,25 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { error: "auth.error.generic" };
+  const admin = createAdminClient();
+  if (!admin) return { error: "auth.error.config" };
 
   const includePlayer = formData.has("playerUrl");
   const teamCode = readField(formData, "teamCode").toUpperCase();
   const teamOk = /^[A-Z0-9]{4,16}$/.test(teamCode);
   let player: EhlPlayerProfile | null = null;
-  if (includePlayer) {
-    if (!teamOk) return { error: "auth.error.generic" };
-    const raw = readField(formData, "playerUrl");
-    if (raw) {
-      const loaded = await loadEhlPlayer(raw);
-      if ("error" in loaded) return loaded;
-      player = loaded.profile;
+  let savePlayer = false;
+  if (includePlayer && teamOk) {
+    const team = await admin.from("teams").select("id, sport_id").eq("invite_code", teamCode).maybeSingle();
+    if (team.error) return { error: "auth.error.generic" };
+    savePlayer = await moduleEnabledForSport(admin, team.data?.sport_id, FRONTEND_MODULE_KEYS.entuziasti, team.data?.id);
+    if (savePlayer) {
+      const raw = readField(formData, "playerUrl");
+      if (raw) {
+        const loaded = await loadEhlPlayer(raw);
+        if ("error" in loaded) return loaded;
+        player = loaded.profile;
+      }
     }
   }
 
@@ -273,8 +282,6 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const display = hasDisplay ? readDisplayForm(formData) : null;
   if (hasDisplay && !display) return { error: "site_settings.error.display" };
 
-  const admin = createAdminClient();
-  if (!admin) return { error: "auth.error.config" };
   const profile: {
     first_name: string;
     last_name: string;
@@ -290,7 +297,7 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     last_name: lastName,
     name: `${firstName} ${lastName}`.trim(),
   };
-  if (includePlayer && teamOk) {
+  if (savePlayer) {
     const current = await admin.from("users").select("ehl_player").eq("id", data.user.id).maybeSingle();
     if (current.error) return { error: "auth.error.generic" };
     profile.ehl_player = mergeStoredEhlPlayer(current.data?.ehl_player, teamCode, player);

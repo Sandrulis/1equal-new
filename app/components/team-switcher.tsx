@@ -11,6 +11,8 @@ import { SportField } from "@/app/components/sport-switch";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
+import { teamLogoUrl } from "@/app/lib/entuziasti-view";
+import { FRONTEND_MODULE_KEYS, entuziastiForSport } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
@@ -33,8 +35,10 @@ export function TeamSwitcher({
   onCreate,
   onUnwatch,
   sports = [],
+  enabledModules = null,
+  individualModuleKeys = [],
 }: {
-  team: Pick<IssuedTeam, "name" | "code" | "logoUrl"> | null;
+  team: Pick<IssuedTeam, "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
   teams: IssuedTeam[];
   canSwitch: boolean;
   onHome: () => void;
@@ -42,6 +46,8 @@ export function TeamSwitcher({
   onCreate: (input: CreateTeamInput) => void;
   onUnwatch?: (teamId: string) => void | Promise<void>;
   sports?: Sport[];
+  enabledModules?: string[] | null;
+  individualModuleKeys?: string[];
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -49,6 +55,13 @@ export function TeamSwitcher({
   const [unwatchingId, setUnwatchingId] = useState<string | null>(null);
   const [wide, setWide] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  function logoOf(item: Pick<IssuedTeam, "logoUrl" | "sportId" | "moduleKeys" | "demo">): string | null {
+    const sportKeys = item.sportId ? (sports.find((sport) => sport.id === item.sportId)?.moduleKeys ?? null) : null;
+    const granted = item.demo || !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) || (item.moduleKeys ?? []).includes(FRONTEND_MODULE_KEYS.entuziasti);
+    const modules = granted ? enabledModules : (enabledModules ?? []).filter((key) => key !== FRONTEND_MODULE_KEYS.entuziasti);
+    return teamLogoUrl(item.logoUrl, entuziastiForSport(modules, sportKeys));
+  }
 
   useEffect(() => {
     const query = window.matchMedia("(min-width: 600px)");
@@ -97,7 +110,7 @@ export function TeamSwitcher({
         onClick={activate}
         className="flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"
       >
-        <TeamMark name={team.name} logoUrl={team.logoUrl} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
+        <TeamMark name={team.name} logoUrl={logoOf(team)} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
         <span className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{team.name}</span>
       </button>
       {open && canSwitch && wide ? (
@@ -113,7 +126,7 @@ export function TeamSwitcher({
                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-ice"
               >
-                <TeamMark name={item.name} logoUrl={item.logoUrl} className="h-8 w-8 shrink-0 overflow-hidden rounded-lg" />
+                <TeamMark name={item.name} logoUrl={logoOf(item)} className="h-8 w-8 shrink-0 overflow-hidden rounded-lg" />
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{item.name}</span>
                   {item.watching ? <span className="block text-xs text-muted">{t("team.watching")}</span> : null}
@@ -154,6 +167,8 @@ export function TeamSwitcher({
       <CreateTeamDialog
         open={creating}
         sports={sports}
+        enabledModules={enabledModules}
+        individualModuleKeys={individualModuleKeys}
         onClose={() => setCreating(false)}
         onCreate={(input) => {
           setCreating(false);
@@ -197,11 +212,15 @@ export function PlayerLinkHint({ teamCode, onOpen }: { teamCode: string; onOpen:
 function CreateTeamDialog({
   open,
   sports,
+  enabledModules = null,
+  individualModuleKeys = [],
   onClose,
   onCreate,
 }: {
   open: boolean;
   sports: Sport[];
+  enabledModules?: string[] | null;
+  individualModuleKeys?: string[];
   onClose: () => void;
   onCreate: (input: CreateTeamInput) => void;
 }) {
@@ -221,6 +240,8 @@ function CreateTeamDialog({
   const trainingValue = votingHours(trainingHours);
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
+  const pickedSport = chosenSportId(sports, sportId);
+  const showLink = !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) && entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
   const closedKey = `${open ? 1 : 0}|${brand.trainingVotingHours}|${brand.gameVotingHours}`;
   const [seenClosed, setSeenClosed] = useState(closedKey);
   if (closedKey !== seenClosed) {
@@ -251,7 +272,7 @@ function CreateTeamDialog({
 
   async function submit() {
     if (!nameReady || !hoursOk || pending) return;
-    const source = link.trim();
+    const source = showLink ? link.trim() : "";
     if (!source) {
       await emit(null, null);
       return;
@@ -291,6 +312,7 @@ function CreateTeamDialog({
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none focus:ring-train disabled:opacity-60"
             />
           </label>
+          {showLink ? (
           <label className="text-sm font-medium">
             {t("team.empty.link")}
             <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
@@ -305,7 +327,8 @@ function CreateTeamDialog({
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
             />
           </label>
-          {link.trim() === "" ? <AvatarCropField ref={avatarRef} disabled={pending} /> : null}
+          ) : null}
+          {showLink && link.trim() !== "" ? null : <AvatarCropField ref={avatarRef} disabled={pending} />}
           <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
           <MoneyVotingFields
             idPrefix="create-team"

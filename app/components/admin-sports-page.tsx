@@ -18,6 +18,7 @@ const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.gameLayout]: "frontend_modules.game_layout",
   [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
   [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
+  [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
 };
 
 const ICON_LABEL: Record<SportIconName, MessageKey> = {

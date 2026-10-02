@@ -179,12 +179,15 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
       {
         teamId: link.team_id,
         userId: link.user_id,
-        name: ehl?.name || displayName(user),
+        name: displayName(user),
+        ehlName: ehl?.name ?? null,
         email: user.email,
         number: link.jersey_number,
-        position: displayPosition(link.position) || displayPosition(ehl?.position),
+        position: displayPosition(link.position),
+        ehlPosition: displayPosition(ehl?.position),
         phone: link.phone ?? "",
         photoUrl: ehl?.photoUrl ?? user.avatar_url ?? null,
+        avatarUrl: user.avatar_url ?? null,
       },
     ];
   });
@@ -193,9 +196,9 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
 export async function listSystemTeams(): Promise<SystemTeam[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const { data, error } = await admin.from("teams").select("id, name, updated_at").order("name");
+  const { data, error } = await admin.from("teams").select("id, name, sport_id, updated_at").order("name");
   if (error || !data) return [];
-  return data.map((row) => ({ id: row.id, name: row.name, updatedAt: row.updated_at }));
+  return data.map((row) => ({ id: row.id, name: row.name, sportId: row.sport_id, updatedAt: row.updated_at }));
 }
 
 export async function listSystemSubteams(): Promise<SystemSubteam[]> {
@@ -282,16 +285,16 @@ export const getPublicSentry = cachedPublic("public-sentry", async (): Promise<P
   return { dsn, environment: data.client_id?.trim() || "production" };
 });
 
-type ModuleRow = { id: string; module_key: string; is_enabled: boolean; sort_order: number };
+type ModuleRow = { id: string; module_key: string; is_enabled: boolean; is_individual: boolean; sort_order: number };
 
 function mapModule(row: ModuleRow): FrontendModule {
-  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, sortOrder: row.sort_order };
+  return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, isIndividual: row.is_individual === true, sortOrder: row.sort_order };
 }
 
 export async function listFrontendModules(): Promise<FrontendModule[] | null> {
   const admin = createAdminClient();
   if (!admin) return null;
-  const { data, error } = await admin.from("site_frontend_modules").select("id, module_key, is_enabled, sort_order").order("sort_order").order("module_key");
+  const { data, error } = await admin.from("site_frontend_modules").select("id, module_key, is_enabled, is_individual, sort_order").order("sort_order").order("module_key");
   if (error || !data) return null;
   return (data as ModuleRow[]).map(mapModule).filter((module) => !(BUILTIN_NAV_KEYS as readonly string[]).includes(module.moduleKey));
 }
@@ -300,6 +303,20 @@ export async function listEnabledFrontendModuleKeys(): Promise<string[]> {
   const modules = await listFrontendModules();
   if (!modules) return [...KNOWN_FRONTEND_MODULE_KEYS];
   return modules.filter((module) => module.isEnabled).map((module) => module.moduleKey);
+}
+
+export async function listIndividualFrontendModuleKeys(): Promise<string[]> {
+  const modules = await listFrontendModules();
+  if (!modules) return [];
+  return modules.filter((module) => module.isIndividual).map((module) => module.moduleKey);
+}
+
+export async function listTeamModuleLinks(): Promise<{ teamId: string; moduleKey: string }[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data, error } = await admin.from("team_modules").select("team_id, module_key");
+  if (error || !data) return [];
+  return (data as { team_id: string; module_key: string }[]).map((row) => ({ teamId: row.team_id, moduleKey: row.module_key }));
 }
 
 export async function listEmailTemplates(): Promise<EmailTemplate[]> {
@@ -362,12 +379,13 @@ export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
     return { key, bundled, values };
   });
 
-  const [users, teams, members, subteams, modules, integrations, emailTemplates, todos, watched] = await Promise.all([
+  const [users, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, watched] = await Promise.all([
     listSystemUsers(),
     listSystemTeams(),
     listSystemTeamMembers(),
     listSystemSubteams(),
     listFrontendModules().then((modules) => modules ?? []),
+    listTeamModuleLinks(),
     listIntegrations(),
     listEmailTemplates(),
     listAdminTodos(userId),
@@ -376,7 +394,7 @@ export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
       : Promise.resolve({ data: [] as { team_id: string }[] }),
   ]);
   const watchedTeamIds = (watched.data ?? []).map((row) => row.team_id);
-  return { brand, languages, translations, users, teams, members, subteams, modules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
+  return { brand, languages, translations, users, teams, members, subteams, modules, teamModules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
 }
 
 export async function listSports(): Promise<Sport[]> {

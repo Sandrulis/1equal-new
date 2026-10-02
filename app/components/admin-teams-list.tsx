@@ -9,13 +9,27 @@ import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash,
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import { positionLabel } from "@/app/lib/positions";
-import { deleteTeam, saveTeam, setAdminTeamWatch } from "@/app/lib/site-admin/actions";
+import { deleteTeam, saveTeam, setAdminTeamWatch, setTeamModule } from "@/app/lib/site-admin/actions";
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
+import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
+import type { MessageKey } from "@/app/lib/messages";
+import type { Sport } from "@/app/lib/sports";
+
+const MODULE_LABEL: Record<string, MessageKey> = {
+  [FRONTEND_MODULE_KEYS.subteams]: "nav.subteams",
+  [FRONTEND_MODULE_KEYS.gameLayout]: "frontend_modules.game_layout",
+  [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
+  [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
+  [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
+};
 
 export function AdminTeamsList({
   teams,
   subteams,
   members,
+  modules = [],
+  teamModules = [],
+  sports = [],
   openTeamId = null,
   accountId,
   watchedTeamIds,
@@ -23,6 +37,9 @@ export function AdminTeamsList({
   teams: SystemTeam[];
   subteams: SystemSubteam[];
   members: SystemTeamMember[];
+  modules?: FrontendModule[];
+  teamModules?: { teamId: string; moduleKey: string }[];
+  sports?: Sport[];
   openTeamId?: string | null;
   accountId: string;
   watchedTeamIds: string[];
@@ -36,6 +53,12 @@ export function AdminTeamsList({
   const [name, setName] = useState("");
   const [savedName, setSavedName] = useState("");
   const [pending, setPending] = useState(false);
+  const [links, setLinks] = useState(teamModules);
+  const [seenLinks, setSeenLinks] = useState(teamModules);
+  if (teamModules !== seenLinks) {
+    setSeenLinks(teamModules);
+    setLinks(teamModules);
+  }
 
   function openEdit(team: SystemTeam) {
     setEditingId(team.id);
@@ -92,8 +115,41 @@ export function AdminTeamsList({
   }
 
   const openTeam = teams.find((team) => team.id === openTeamId) ?? null;
-  const players = openTeam ? members.filter((member) => member.teamId === openTeam.id) : [];
   const openSubteams = openTeam ? subteams.filter((item) => item.teamId === openTeam.id) : [];
+  const individualModules = modules.filter((module) => module.isIndividual);
+  const entuziastiModule = modules.find((module) => module.moduleKey === FRONTEND_MODULE_KEYS.entuziasti);
+  const openSportKeys = openTeam?.sportId ? (sports.find((sport) => sport.id === openTeam.sportId)?.moduleKeys ?? null) : null;
+  const entuziastiOn = Boolean(
+    entuziastiModule?.isEnabled
+    && (!entuziastiModule.isIndividual || links.some((link) => link.teamId === openTeam?.id && link.moduleKey === FRONTEND_MODULE_KEYS.entuziasti))
+    && (!openSportKeys || openSportKeys.includes(FRONTEND_MODULE_KEYS.entuziasti)),
+  );
+  const players = useMemo(() => {
+    if (!openTeam) return [];
+    return members
+      .filter((member) => member.teamId === openTeam.id)
+      .sort((left, right) => {
+        const leftName = (entuziastiOn ? left.ehlName : null) || left.name;
+        const rightName = (entuziastiOn ? right.ehlName : null) || right.name;
+        return leftName.localeCompare(rightName, "lv", { sensitivity: "base" });
+      });
+  }, [entuziastiOn, members, openTeam]);
+
+  async function toggleModule(moduleKey: string, enabled: boolean) {
+    if (!openTeam || pending) return;
+    const previous = links;
+    setLinks((current) => (enabled ? [...current, { teamId: openTeam.id, moduleKey }] : current.filter((link) => !(link.teamId === openTeam.id && link.moduleKey === moduleKey))));
+    setPending(true);
+    const result = await setTeamModule(openTeam.id, moduleKey, enabled);
+    setPending(false);
+    if (!result.ok) {
+      setLinks(previous);
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    showFeedback({ message: t("admin.teams.modules.saved"), variant: "success" });
+    router.refresh();
+  }
 
   function openRoster(id: string) {
     router.push(`/dashboard/admin/teams?team=${id}`);
@@ -214,7 +270,37 @@ export function AdminTeamsList({
       </div>
       {openTeam ? (
         <AdminDialog open wide closeButton title={openTeam.name} onClose={() => router.replace("/dashboard/admin/teams")}>
-          <h3 className="text-sm font-semibold">{t("nav.subteams")}</h3>
+          <h3 className="text-sm font-semibold">{t("admin.teams.modules")}</h3>
+          {individualModules.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">{t("admin.teams.modules.empty")}</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-line">
+              {individualModules.map((module) => {
+                const labelKey = MODULE_LABEL[module.moduleKey];
+                const enabled = links.some((link) => link.teamId === openTeam.id && link.moduleKey === module.moduleKey);
+                return (
+                  <li key={module.moduleKey} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{labelKey ? t(labelKey) : module.moduleKey}</span>
+                      {labelKey ? <span className="block truncate font-mono text-xs text-muted">{module.moduleKey}</span> : null}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      aria-label={t("frontend_modules.aria.enabled", { key: module.moduleKey })}
+                      disabled={pending}
+                      onClick={() => void toggleModule(module.moduleKey, !enabled)}
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${enabled ? "bg-navy" : "bg-grid"}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper transition ${enabled ? "translate-x-5" : ""}`} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <h3 className="mt-6 text-sm font-semibold">{t("nav.subteams")}</h3>
           {openSubteams.length === 0 ? (
             <p className="mt-2 text-sm text-muted">{t("admin.teams.subteams.empty")}</p>
           ) : (
@@ -232,28 +318,33 @@ export function AdminTeamsList({
             <p className="mt-2 text-sm text-muted">{t("admin.teams.players.empty")}</p>
           ) : (
             <ul className="divide-y divide-line">
-              {players.map((player) => (
+              {players.map((player) => {
+                const photo = entuziastiOn ? player.photoUrl : player.avatarUrl;
+                const name = (entuziastiOn ? player.ehlName : null) || player.name;
+                const position = entuziastiOn ? player.position || player.ehlPosition : player.position;
+                return (
                 <li key={player.userId} className="flex items-center gap-3 py-3">
-                  {player.photoUrl ? (
-                    <ContentImage src={player.photoUrl} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
+                  {photo ? (
+                    <ContentImage src={photo} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
                   ) : (
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">
-                      {player.name.slice(0, 1).toUpperCase()}
+                      {name.slice(0, 1).toUpperCase()}
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{player.name}</span>
-                    {player.number != null || player.position ? (
+                    <span className="block truncate font-medium">{name}</span>
+                    {player.number != null || position ? (
                       <span className="block truncate text-sm text-muted">
                         {player.number != null ? `#${player.number}` : ""}
-                        {player.number != null && player.position ? " " : ""}
-                        {player.position ? positionLabel(player.position, t) : ""}
+                        {player.number != null && position ? " " : ""}
+                        {position ? positionLabel(position, t) : ""}
                       </span>
                     ) : null}
                     {player.phone ? <span className="block truncate text-sm text-muted">{player.phone}</span> : null}
                   </span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </AdminDialog>

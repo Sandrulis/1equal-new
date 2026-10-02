@@ -18,12 +18,14 @@ export function AccountSettingsDialog({
   account,
   teamCode = null,
   teamName = null,
+  entuziasti = true,
   onClose,
   onSaved,
 }: {
   account: AccountProfile;
   teamCode?: string | null;
   teamName?: string | null;
+  entuziasti?: boolean;
   onClose: () => void;
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display">) => void;
 }) {
@@ -42,8 +44,9 @@ export function AccountSettingsDialog({
   const avatarRef = useRef<AvatarCropHandle>(null);
   const savedUrl = savedPlayer?.sourceUrl ?? "";
   const hasTeam = Boolean(teamCode);
-  const showAvatar = playerUrl.trim() === "";
-  const dirty = firstName !== account.firstName || lastName !== account.lastName || (hasTeam && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display) || (showAvatar && avatarDirty);
+  const showPlayerLink = entuziasti && hasTeam;
+  const showAvatar = showPlayerLink ? playerUrl.trim() === "" : savedUrl === "";
+  const dirty = firstName !== account.firstName || lastName !== account.lastName || (showPlayerLink && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display) || (showAvatar && avatarDirty);
   const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && !pending;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -115,7 +118,7 @@ export function AccountSettingsDialog({
           <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" onChange={setFirstName} />
           <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" onChange={setLastName} />
         </div>
-        {hasTeam && teamCode ? (
+        {showPlayerLink && teamCode ? (
           <label className="mt-3 grid gap-1.5 text-sm font-medium">
             <span>
               {t("user.settings.player")}

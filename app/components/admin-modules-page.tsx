@@ -8,13 +8,14 @@ import { IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
-import { createFrontendModule, deleteFrontendModule, setFrontendModuleEnabled } from "@/app/lib/site-admin/actions";
+import { createFrontendModule, deleteFrontendModule, setFrontendModuleEnabled, setFrontendModuleIndividual } from "@/app/lib/site-admin/actions";
 
 const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.subteams]: "nav.subteams",
   [FRONTEND_MODULE_KEYS.gameLayout]: "frontend_modules.game_layout",
   [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
   [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
+  [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
 };
 
 function sortModules(modules: FrontendModule[]): FrontendModule[] {
@@ -48,6 +49,22 @@ export function AdminModulesPage({ initialModules }: { initialModules: FrontendM
     setModules((current) => sortModules([...current, result.module]));
     setModuleKey("");
     showFeedback({ message: t("frontend_modules.feedback.created"), variant: "success" });
+    router.refresh();
+  }
+
+  async function toggleIndividual(module: FrontendModule, isIndividual: boolean) {
+    if (pendingKey) return;
+    const previous = modules;
+    setModules((current) => current.map((item) => (item.id === module.id ? { ...item, isIndividual } : item)));
+    setPendingKey(module.moduleKey);
+    const result = await setFrontendModuleIndividual(module.moduleKey, isIndividual);
+    setPendingKey(null);
+    if (!result.ok) {
+      setModules(previous);
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    showFeedback({ message: t("frontend_modules.feedback.status_saved"), variant: "success" });
     router.refresh();
   }
 
@@ -113,12 +130,26 @@ export function AdminModulesPage({ initialModules }: { initialModules: FrontendM
             const labelKey = MODULE_LABEL[module.moduleKey];
             const busy = pendingKey === module.moduleKey;
             return (
-              <li key={module.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <li key={module.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{labelKey ? t(labelKey) : module.moduleKey}</span>
                   {labelKey ? <span className="block truncate font-mono text-xs text-muted">{module.moduleKey}</span> : null}
                 </span>
-                <span className="flex shrink-0 items-center gap-2">
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="flex items-center gap-2 text-sm text-muted">
+                    {t("frontend_modules.individual")}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={module.isIndividual}
+                      aria-label={t("frontend_modules.aria.individual", { key: module.moduleKey })}
+                      disabled={pendingKey !== null}
+                      onClick={() => void toggleIndividual(module, !module.isIndividual)}
+                      className={`relative h-6 w-11 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${module.isIndividual ? "bg-navy" : "bg-grid"}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper transition ${module.isIndividual ? "translate-x-5" : ""}`} />
+                    </button>
+                  </span>
                   <button
                     type="button"
                     role="switch"

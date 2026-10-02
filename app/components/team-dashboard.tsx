@@ -17,7 +17,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
-import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveOwnedLineup, saveTeamAvatar, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
+import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveOwnedLineup, saveTeamAvatar, setActiveTeam, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
 import { setAdminTeamWatch } from "@/app/lib/site-admin/actions";
 import { mergeDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -53,6 +53,7 @@ import { AdminTranslationsManager } from "@/app/components/admin-translations-ma
 import { AdminEmailDesign } from "@/app/components/admin-email-design";
 import { AdminTodoPage } from "@/app/components/admin-todo-page";
 import { AdminUsersList } from "@/app/components/admin-users-list";
+import { EntuziastiProvider } from "@/app/components/entuziasti-context";
 import { CurrencyProvider, useFormatMoney } from "@/app/components/currency-provider";
 import { DisplayPreferencesProvider, useDisplayFormat } from "@/app/components/display-preferences";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
@@ -67,6 +68,11 @@ import { eventHref, routeFromPathname, teamHref, type AdminSection, type Dashboa
 import { eventAudienceIncludes, eventVotingDeadline } from "@/app/lib/event-voting";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
+function preferredTeam(teams: IssuedTeam[], activeTeamId: string | null | undefined): IssuedTeam | null {
+  if (!teams.length) return null;
+  return teams.find((team) => team.id === activeTeamId) ?? teams[0];
+}
+
 type TypeFilter = "all" | EventType;
 
 type DashboardView = "home" | "team" | "subteams" | "venues";
@@ -75,6 +81,14 @@ function eventCost(event: TeamEvent, pricePerHour: number): number | null {
   if (event.expense != null) return event.expense;
   if (!event.end) return null;
   return hoursBetween(event.start, event.end) * pricePerHour;
+}
+
+function withLineup(previous: TeamEvent, next: TeamEvent): TeamEvent {
+  return {
+    ...next,
+    lineupSlots: next.lineupSlots ?? previous.lineupSlots,
+    lineupSides: next.lineupSides ?? previous.lineupSides,
+  };
 }
 
 
@@ -136,6 +150,7 @@ export function TeamDashboard({
   initialTeams = [],
   openTeamId = null,
   enabledModules = null,
+  individualModuleKeys = [],
   sports = [],
 }: {
   basePath: DashboardBase;
@@ -144,15 +159,16 @@ export function TeamDashboard({
   initialTeams?: IssuedTeam[];
   openTeamId?: string | null;
   enabledModules?: string[] | null;
+  individualModuleKeys?: string[];
   sports?: Sport[];
 }) {
   const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
   const creating = useRef(false);
-  const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? (initialTeams[0] ?? null) : null));
+  const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? preferredTeam(initialTeams, account.activeTeamId) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
@@ -220,6 +236,10 @@ export function TeamDashboard({
       const team = selectMyTeam(code);
       if (!team) return;
       setOwnedTeam(team);
+      if (!team.id) return;
+      void setActiveTeam(team.id).then((saved) => {
+        if (!saved.ok) showFeedback({ message: t(saved.error), variant: "error" });
+      });
     });
   }
 
@@ -235,6 +255,7 @@ export function TeamDashboard({
     const next = getCurrentTeam();
     setTeams(listMyTeams());
     setOwnedTeam(next);
+    if (ownedTeam?.id === teamId) void setActiveTeam(next?.id ?? null);
     showFeedback({ message: t("admin.teams.unwatched"), variant: "success" });
     router.refresh();
   }
@@ -275,6 +296,7 @@ export function TeamDashboard({
       const next = getCurrentTeam();
       setOwnedTeam(next);
       setTeams(listMyTeams());
+      void setActiveTeam(next?.id ?? null);
       router.push(basePath === "/demo" ? "/demo" : "/dashboard");
       router.refresh();
       return;
@@ -414,7 +436,7 @@ export function TeamDashboard({
       setTeams([]);
       setRsvp({});
     } else {
-      const remembered = ownedTeam?.code ?? preferredCode;
+      const remembered = ownedTeam?.code ?? preferredCode ?? (account?.activeTeamId ? initialTeams.find((team) => team.id === account.activeTeamId)?.code : null);
       const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0].code;
       const next = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
       setOwnedTeam(next);
@@ -427,7 +449,7 @@ export function TeamDashboard({
   useEffect(() => {
     if (!account) return;
     replaceMyTeams(initialTeams);
-    const remembered = ownedTeam?.code ?? preferredCode;
+    const remembered = ownedTeam?.code ?? preferredCode ?? (account?.activeTeamId ? initialTeams.find((team) => team.id === account.activeTeamId)?.code : null);
     const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0]?.code;
     if (preferred) selectMyTeam(preferred);
   }, [account, initialTeams, ownedTeam?.code, preferredCode, serverTeams]);
@@ -576,6 +598,8 @@ export function TeamDashboard({
       venueId: input.venueId,
       expense: input.expense,
       withCoach: input.withCoach,
+      lineupSlots: previous?.lineupSlots,
+      lineupSides: previous?.lineupSides,
     };
   }
 
@@ -615,7 +639,7 @@ export function TeamDashboard({
       }
       savedTeam = {
         ...ownedTeam,
-        events: (ownedTeam.events ?? []).map((item) => (item.id === updated.event.id ? updated.event : item)),
+        events: (ownedTeam.events ?? []).map((item) => (item.id === updated.event.id ? withLineup(item, updated.event) : item)),
         balance: updated.teamBalance,
         ledger: updated.ledger,
       };
@@ -780,6 +804,7 @@ export function TeamDashboard({
   function moduleOn(key: string) {
     if (!enabledModules) return true;
     if (!enabledModules.includes(key)) return false;
+    if (individualModuleKeys.includes(key) && !(activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key))) return false;
     const sportId = activeTeam && !activeTeam.demo ? activeTeam.sportId : null;
     if (!sportId) return true;
     const sport = sports.find((item) => item.id === sportId);
@@ -796,6 +821,8 @@ export function TeamDashboard({
   const roster = activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : MEMBERS;
   const knownRsvp = Boolean(activeTeam && !activeTeam.demo && activeTeam.id);
   const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
+  const entuziastiOn = moduleOn(FRONTEND_MODULE_KEYS.entuziasti);
+  const teamModules = enabledModules?.filter((key) => !individualModuleKeys.includes(key) || (activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key))) ?? null;
   const lineupBlocked = lineup && !lineupAllowed;
   const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? MEMBERS.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
   const subteamCount = showStart ? 0 : filterSubteams.length;
@@ -921,6 +948,7 @@ export function TeamDashboard({
   }, [basePath, canManageTeam, router, view]);
 
   return (
+    <EntuziastiProvider enabled={entuziastiOn}>
     <CurrencyProvider currency={currencyCode}>
     <DisplayPreferencesProvider value={display}>
     <div
@@ -995,7 +1023,7 @@ export function TeamDashboard({
       <TopBar
         key={ownedTeam ? teamPlayer(profile, ownedTeam.code)?.sourceUrl ?? ownedTeam.code : "account"}
         account={profile}
-        team={activeTeam ? { name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl } : null}
+        team={activeTeam ? { name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl, sportId: activeTeam.sportId, moduleKeys: activeTeam.moduleKeys, demo: activeTeam.demo } : null}
         teams={account ? teams : []}
         onHome={() => showHome()}
         onSelectTeam={selectTeam}
@@ -1011,10 +1039,13 @@ export function TeamDashboard({
         balanceMember={financeAllowed ? selfMember : null}
         reservedHolds={selfMember ? (memberHolds[selfMember.id] ?? []) : []}
         calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
+        entuziasti={entuziastiOn}
+        enabledModules={enabledModules}
+        individualModuleKeys={individualModuleKeys}
         sports={sports}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
-        {account && ownedTeam && !ownedTeam.watching && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
+        {account && ownedTeam && !ownedTeam.watching && entuziastiOn && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
           <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
         ) : null}
         {!showStart && pendingVoteEvents.length && !(view === "home" && showPoll && !lineupEvent) ? (
@@ -1035,7 +1066,7 @@ export function TeamDashboard({
             </ul>
           </div>
         ) : null}
-        {showStart ? <NoTeamStart sports={sports} onCreate={createTeam} onJoin={joinTeam} /> : null}
+        {showStart ? <NoTeamStart sports={sports} enabledModules={teamModules} individualModuleKeys={individualModuleKeys} onCreate={createTeam} onJoin={joinTeam} /> : null}
         {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart ? (
           <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("frontend_modules.disabled")}</p>
         ) : null}
@@ -1090,6 +1121,7 @@ export function TeamDashboard({
             currency={activeTeam.currency ?? null}
             sportId={activeTeam.demo ? null : (activeTeam.sportId ?? null)}
             sports={activeTeam.demo ? [] : sports}
+            enabledModules={teamModules}
             onTeamSaved={rememberTeam}
             initialMembers={(activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
@@ -1157,7 +1189,7 @@ export function TeamDashboard({
             )}
             {route.section === "users" && admin ? <AdminUsersList users={admin.users} /> : null}
             {route.section === "teams" && admin ? (
-              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} openTeamId={openTeamId} accountId={account?.id ?? ""} watchedTeamIds={admin.watchedTeamIds} />
+              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} modules={admin.modules} teamModules={admin.teamModules} sports={sports} openTeamId={openTeamId} accountId={account?.id ?? ""} watchedTeamIds={admin.watchedTeamIds} />
             ) : null}
             {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
             {route.section === "modules" && admin ? <AdminModulesPage initialModules={admin.modules} /> : null}
@@ -1573,6 +1605,7 @@ export function TeamDashboard({
     </div>
     </DisplayPreferencesProvider>
     </CurrencyProvider>
+    </EntuziastiProvider>
   );
 }
 

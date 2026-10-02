@@ -40,6 +40,7 @@ export type Member = {
   joined: string;
   updatedAt: string;
   photoUrl?: string | null;
+  avatarUrl?: string | null;
   ehl?: EhlPlayerProfile | null;
 };
 

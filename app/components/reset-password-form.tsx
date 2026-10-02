@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
 import { setNewPassword } from "@/app/lib/auth/actions";
 import { useLanguage } from "@/app/lib/language";
 
@@ -10,6 +11,7 @@ export function ResetPasswordForm() {
   const { showFeedback } = useFeedbackToast();
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
+  const [password, setPassword] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,7 +32,8 @@ export function ResetPasswordForm() {
       <p className="text-sm leading-6 text-muted">{t("auth.reset.lead")}</p>
       <label className="grid gap-1.5 text-sm font-medium">
         {t("auth.forgot.password")}
-        <input name="password" type="password" autoComplete="new-password" minLength={8} required className="rounded-lg bg-ice px-3 py-2 font-normal ring-1 ring-line" />
+        <input name="password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg bg-ice px-3 py-2 font-normal ring-1 ring-line" />
+        <PasswordStrengthMeter password={password} />
       </label>
       <button type="submit" disabled={pending || done} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-60">
         {t("auth.reset.submit")}
