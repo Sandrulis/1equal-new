@@ -71,6 +71,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const isHome = pathname === "/";
   const isAuthForm = pathname === "/login" || pathname === "/signup";
 
   if (!user && isDashboard) {
@@ -82,7 +83,7 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
-  if (user && isAuthForm) {
+  if (user && (isAuthForm || isHome)) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/dashboard";
     homeUrl.search = "";

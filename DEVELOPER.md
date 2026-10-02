@@ -15,7 +15,7 @@
 
 | Ceļš | Saturs |
 |---|---|
-| `/` | Landing. Ielogotam joprojām redzama, panelis ir `/dashboard`. Izvēlnes saites ritina līdz sadaļai. Enkurs seko valodai, piemēram `#kontakti` un `#contact` |
+| `/` | Landing. Ielogotu aizved uz `/dashboard`. Izvēlnes saites ritina līdz sadaļai. Enkurs seko valodai, piemēram `#kontakti` un `#contact` |
 | `/login` | Ienākt |
 | `/signup` | Reģistrēties. Service role `admin.createUser` ar `email_confirm: false`, tad apstiprinājuma vēstule caur Resend. Ja vēstuli nevar nosūtīt, lietotājs tiek dzēsts |
 | `/forgot-password` | Tikai e-pasts. Ja Turnstile ir ieslēgts, prasa Cloudflare pārbaudi. Nosūta recovery saiti. Neatklāj, vai e-pasts eksistē |
@@ -38,7 +38,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard` | Kalendārs bez parauga notikumiem. Ja ir notikumi, par kuriem vēl jābalso, atveras balsojuma skats. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst notikumu var tikai vadītājs un komandas administrators. Laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
+| `/dashboard` | Kalendārs bez parauga notikumiem. Apakškomandas notikums ir tās krāsā, zem kalendāra ir leģenda, aplis ir spēle un kvadrāts ir treniņš. Ja ir notikumi, par kuriem vēl jābalso, atveras balsojuma skats. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst notikumu var tikai vadītājs un komandas administrators. Laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
 | `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāja logu. Labot, citu spēlētāju noņemšana, uzaicinājuma kods un Uzaicināt ir vadītājam un komandas administratoram. Parasts spēlētājs labo savu vārdu, uzvārdu, e-pastu, tālruni, numuru, pozīcijas un Entuziastu saiti un var noņemt tikai sevi. Pirms noņemšanas ir apstiprinājums. Neprasīt samaksu un Apakškomandas redz tikai vadītājs un administrators. Komandas iestatījumos vadītājs un administrators labo nosaukumu, valūtu, balsošanas stundas, sporta veidu un Entuziastu saiti. Sporta slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens veids. Tukša saite noņem `source_url` un no tās ielādēto logo, un tad var izgriezt kvadrāta attēlu. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
 | `/dashboard/team/:id` | Spēlētāja logs. Bilances vēsture ir redzama tikai ar `module_finance`. Tikai vadītājs redz slēdzi Administrators, arī dalībnieka labošanā. Administrators dara to pašu, ko vadītājs, bet nevar iecelt administratorus |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Redz tikai vadītājs un komandas administrators. Slēpts, ja `module_subteams` ir izslēgts. Tiešā saite ved uz kalendāru |

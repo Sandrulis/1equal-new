@@ -83,6 +83,33 @@ function eventCost(event: TeamEvent, pricePerHour: number): number | null {
   return hoursBetween(event.start, event.end) * pricePerHour;
 }
 
+function subteamChipStyle(color: string): CSSProperties | null {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return null;
+  const raw = match[1];
+  const full = raw.length === 3 ? raw.split("").map((part) => part + part).join("") : raw;
+  const value = Number.parseInt(full, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return {
+    backgroundColor: `#${full}`,
+    borderColor: `#${full}`,
+    color: luminance > 0.62 ? "#12202b" : "#ffffff",
+  };
+}
+
+function EventTypeMark({ type }: { type: EventType }) {
+  const game = type === "game";
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block size-2 shrink-0 ${game ? "rounded-full bg-current" : "rounded-[2px] border-[1.5px] border-current"}`}
+    />
+  );
+}
+
 function withLineup(previous: TeamEvent, next: TeamEvent): TeamEvent {
   return {
     ...next,
@@ -935,6 +962,18 @@ export function TeamDashboard({
   }
   const dayHeaders = weekdayHeaders(formatLang, display.weekStartDay);
   const cells = monthGrid(year, month, display.weekStartDay);
+  const subteamsOn = moduleOn(FRONTEND_MODULE_KEYS.subteams);
+  const subteamByEvent = new Map(filterSubteams.map((item) => [item.id, item]));
+  const legendSubteamIds = new Set<string>();
+  if (subteamsOn) {
+    for (const date of cells) {
+      for (const event of eventsByDate.get(isoDate(date)) ?? []) {
+        const group = event.subteamId ? subteamByEvent.get(event.subteamId) : undefined;
+        if (group && subteamChipStyle(group.color)) legendSubteamIds.add(group.id);
+      }
+    }
+  }
+  const legendSubteams = filterSubteams.filter((item) => legendSubteamIds.has(item.id));
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const managesTeam = Boolean(
@@ -1379,6 +1418,8 @@ export function TeamDashboard({
                           const venue = venueSource.find((item) => item.id === event.venueId);
                           const place = venue?.area.split(",")[0] || venue?.name || "";
                           const label = `${formatTime(event.start)} ${place}`.trim();
+                          const group = subteamsOn && event.subteamId ? subteamByEvent.get(event.subteamId) : undefined;
+                          const tint = group ? subteamChipStyle(group.color) : null;
                           return (
                             <button
                               key={event.id}
@@ -1388,14 +1429,19 @@ export function TeamDashboard({
                                 setHomePick("calendar");
                                 showEvent(event, date);
                               }}
-                              className={`truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 max-[499px]:text-clip ${
-                                event.type === "game"
-                                  ? "border-game bg-game-soft text-game"
-                                  : "border-train bg-train-soft text-train"
+                              style={tint ?? undefined}
+                              className={`flex min-w-0 items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] leading-4 max-[499px]:gap-0.5 max-[499px]:px-0.5 max-[499px]:text-[9px] max-[499px]:leading-3 ${
+                                tint
+                                  ? "border"
+                                  : event.type === "game"
+                                    ? "border-l-2 border-game bg-game-soft text-game"
+                                    : "border-l-2 border-train bg-train-soft text-train"
                               } ${openEventId === event.id ? "ring-1 ring-navy" : ""} ${pendingVoteIds.has(event.id) ? "vote-pulse" : ""}`}
                             >
-                              <span className="max-[499px]:hidden">{label}</span>
-                              <span className="hidden tabular-nums max-[499px]:inline">{formatTime(event.start)}</span>
+                              <EventTypeMark type={event.type} />
+                              <span className="sr-only">{t(event.type === "game" ? "legend.game" : "legend.training")}</span>
+                              <span className="truncate max-[499px]:hidden">{label}</span>
+                              <span className="hidden truncate tabular-nums max-[499px]:inline">{formatTime(event.start)}</span>
                             </button>
                           );
                         })}
@@ -1406,13 +1452,19 @@ export function TeamDashboard({
                 })}
               </div>
             </div>
-            <div className="mt-3 flex gap-4 text-xs text-muted">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-game" /> {t("legend.game")}
+                <EventTypeMark type="game" /> {t("legend.game")}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-train" /> {t("legend.training")}
+                <EventTypeMark type="training" /> {t("legend.training")}
               </span>
+              {legendSubteams.map((subteam) => (
+                <span key={subteam.id} className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: subteam.color }} />
+                  {subteam.name}
+                </span>
+              ))}
             </div>
           </div>
 

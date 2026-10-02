@@ -946,7 +946,7 @@ export const messages = {
   "legal.privacy": { lv: "Privātuma politika", en: "Privacy policy", ru: "Политика конфиденциальности" },
   "legal.terms": { lv: "Lietošanas noteikumi", en: "Terms of use", ru: "Условия использования" },
   "legal.cookies": { lv: "Sīkdatņu politika", en: "Cookie policy", ru: "Политика cookie" },
-  "legal.updated": { lv: "Spēkā no 26.09.2026.", en: "In force from 26.09.2026.", ru: "Действует с 26.09.2026." },
+  "legal.updated": { lv: "Spēkā no 02.10.2026.", en: "In force from 02.10.2026.", ru: "Действует с 02.10.2026." },
   "cookie.banner.title": { lv: "Mēs izmantojam sīkdatnes", en: "We use cookies", ru: "Мы используем cookie" },
   "cookie.banner.text": {
     lv: "Obligātās sīkdatnes ir vajadzīgas, lai sistēma darbotos. Preferenču, statistikas un mārketinga sīkdatnes izmantojam tikai ar tavu piekrišanu.",

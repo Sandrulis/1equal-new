@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.18
+
+- Ielogotu no sākumlapas aizved uz paneli
+- Apakškomandas notikums kalendārā ir tās krāsā. Aplis ir spēle, kvadrāts ir treniņš
+- Privātums, noteikumi un sīkdatnes apraksta saglabātos datus. Spēkā no 02.10.2026
+
 ## v0.1.17
 
 - Entuziastu saites un profils rādās tikai, ja modulis ir ieslēgts. Individuālu moduli admins ieslēdz katrai komandai atsevišķi
