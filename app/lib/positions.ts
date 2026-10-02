@@ -67,6 +67,16 @@ export function positionLabel(code: string, t: (key: MessageKey) => string): str
   return `${known.code} ${t(known.label)}`;
 }
 
+export function positionCode(code: string): string {
+  return normalizePositionCode(code) || displayPosition(code);
+}
+
+export function positionName(code: string, t: (key: MessageKey) => string): string {
+  const known = PLAYING_POSITIONS.find((item) => item.code === normalizePositionCode(code));
+  if (!known) return displayPosition(code);
+  return t(known.label);
+}
+
 export function parseExtraPositions(value: string | string[] | null | undefined, primary: string): PositionCode[] {
   const primaryCode = normalizePositionCode(primary);
   const raw = Array.isArray(value) ? value.join(",") : (value ?? "");

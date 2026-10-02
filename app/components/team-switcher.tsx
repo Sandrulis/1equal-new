@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
@@ -7,7 +8,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import { TeamMark } from "@/app/components/team-mark";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
-import { SportField } from "@/app/components/sport-switch";
+const SportField = dynamic(() => import("@/app/components/sport-switch").then((mod) => mod.SportField));
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -329,7 +330,7 @@ function CreateTeamDialog({
           </label>
           ) : null}
           {showLink && link.trim() !== "" ? null : <AvatarCropField ref={avatarRef} disabled={pending} />}
-          <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
+          {open ? <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} /> : null}
           <MoneyVotingFields
             idPrefix="create-team"
             currency={currency}

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import type { MessageKey } from "@/app/lib/messages";
+import { trustedClientIp } from "@/app/lib/security/client-ip";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
@@ -27,9 +28,7 @@ export async function getPublicTurnstileSiteKey(): Promise<string | null> {
 }
 
 async function clientIp(): Promise<string | undefined> {
-  const headerStore = await headers();
-  const forwarded = headerStore.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || headerStore.get("x-real-ip")?.trim() || undefined;
+  return trustedClientIp(await headers()) || undefined;
 }
 
 async function verifyToken(token: string, secret: string, remoteIp?: string): Promise<boolean> {

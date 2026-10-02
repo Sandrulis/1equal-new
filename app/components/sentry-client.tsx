@@ -10,8 +10,7 @@ export function SentryClient({ dsn, environment }: { dsn: string | null; environ
     Sentry.init({
       ...sentryBaseOptions(dsn, environment),
       replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 1.0,
-      integrations: [Sentry.replayIntegration({ maskAllText: true, maskAllInputs: true, blockAllMedia: true })],
+      replaysOnErrorSampleRate: 0,
     });
   }, [dsn, environment]);
 

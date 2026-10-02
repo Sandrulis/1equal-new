@@ -1,6 +1,11 @@
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { CURRENT_USER_ID, TEAM_NAME } from "@/app/lib/demo-constants";
 import { DEMO_EHL } from "@/app/lib/demo-ehl";
+import { formatJersey } from "@/app/lib/format-jersey";
 import { isoDate } from "@/app/lib/format";
+
+export { CURRENT_USER_ID, TEAM_NAME };
+export { formatJersey };
 
 export type EventType = "game" | "training";
 
@@ -37,6 +42,7 @@ export type Member = {
   teamAdmin?: boolean;
   balance: number;
   ledger?: BalanceEntry[];
+  ledgerLoaded?: boolean;
   joined: string;
   updatedAt: string;
   photoUrl?: string | null;
@@ -59,15 +65,8 @@ export type TeamEvent = {
   withCoach?: boolean;
   lineupSlots?: Record<number, string>;
   lineupSides?: Record<string, "black" | "white">;
+  lineupLoaded?: boolean;
 };
-
-export function formatJersey(number: number | null | undefined): string | null {
-  if (number == null || !Number.isInteger(number) || number < 0 || number > 99) return null;
-  return `#${number}`;
-}
-
-export const TEAM_NAME = "HK Rīga Amateiri";
-export const CURRENT_USER_ID = "m1";
 
 export const VENUES: Venue[] = [
   { id: "volvo", name: "Volvo ledus halle", area: "Rīga, Skanste", pricePerHour: 85, updatedAt: "2026-09-17T12:25" },

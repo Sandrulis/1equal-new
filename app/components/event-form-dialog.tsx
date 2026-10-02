@@ -82,7 +82,7 @@ export function EventFormDialog({
   }
 
   return (
-    <AdminDialog open title={event ? t("event.edit") : t("event.add")} onClose={onClose}>
+    <AdminDialog open closeButton title={event ? t("event.edit") : t("event.add")} onClose={onClose}>
       <form noValidate onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 items-end gap-3">
           <div className="block text-sm">

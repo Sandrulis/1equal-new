@@ -1,6 +1,7 @@
 import { EMPTY_USER_DISPLAY_PREFERENCES, readUserDisplayPreferences } from "@/app/lib/display-preferences";
 import { readStoredEhlPlayers } from "@/app/lib/ehl-player";
 import type { AccountProfile } from "@/app/lib/auth/profile";
+import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
 import { createClient } from "@/app/lib/supabase/server";
 
@@ -15,6 +16,7 @@ export async function getCurrentUser() {
 
 export async function getAccountProfile(): Promise<AccountProfile | null> {
   if (!isSupabaseConfigured()) return null;
+  if (await sessionNeedsMfaVerify()) return null;
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const user = data.user;

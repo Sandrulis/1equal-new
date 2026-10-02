@@ -31,6 +31,7 @@ export function VenueAdmin({
   const venues = source.filter((venue) => !venue.hidden);
   const [pending, setPending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Venue | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
 
@@ -86,9 +87,11 @@ export function VenueAdmin({
       }
       onChange?.(source.map((item) => (item.id === id ? { ...item, hidden: true } : item)));
       if (editingId === id) setEditingId(null);
+      setRemoving(null);
       return;
     }
     catalog.removeVenue(id);
+    setRemoving(null);
   }
 
   return (
@@ -103,7 +106,7 @@ export function VenueAdmin({
         )}
       </div>
 
-      <AdminDialog open={editingId !== null} title={editingId === "new" ? t("catalog.venues.add") : t("catalog.venues.edit")} onClose={pending ? () => undefined : close}>
+      <AdminDialog open={editingId !== null} closeButton title={editingId === "new" ? t("catalog.venues.add") : t("catalog.venues.edit")} onClose={pending ? () => undefined : close}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -147,6 +150,23 @@ export function VenueAdmin({
         </form>
       </AdminDialog>
 
+      <AdminDialog
+        open={removing !== null}
+        closeButton
+        title={t("catalog.venues.delete.title")}
+        onClose={() => { if (!pending) setRemoving(null); }}
+      >
+        <p className="text-sm text-muted">{t("catalog.venues.delete.confirm", { name: removing?.name ?? "" })}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={pending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="button" disabled={pending || !removing} onClick={() => { if (removing) void hide(removing.id); }} className="rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {t("actions.delete")}
+          </button>
+        </div>
+      </AdminDialog>
+
       {venues.length === 0 ? (
         <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("catalog.venues.empty")}</p>
       ) : (
@@ -164,7 +184,7 @@ export function VenueAdmin({
                   <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(venue)}>
                     <IconPencil />
                   </IconTipButton>
-                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void hide(venue.id)}>
+                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => setRemoving(venue)}>
                     <IconTrash />
                   </IconTipButton>
                 </span>

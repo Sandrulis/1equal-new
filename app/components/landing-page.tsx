@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Reac
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { catalogEvents, VENUES, type EventType } from "@/app/lib/demo-data";
+import { previewEvents, type PreviewEvent } from "@/app/lib/landing-preview";
 import { sendContactMessage } from "@/app/lib/contact/actions";
 import { formatMonthTitle, isoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
@@ -335,8 +335,8 @@ function ProductPreview() {
   const month = now.getMonth();
   const today = isoDate(now);
   const cells = previewMonth(year, month);
-  const nextGame = catalogEvents().find((event) => event.type === "game" && event.date >= today);
-  const nextPlace = VENUES.find((venue) => venue.id === nextGame?.venueId)?.area.split(",")[0] ?? "";
+  const nextGame = previewEvents().find((event) => event.type === "game" && event.date >= today);
+  const nextPlace = nextGame?.area ?? "";
 
   return (
     <div aria-hidden="true" className="rounded-3xl bg-paper p-4 shadow-[0_24px_60px_-28px_rgba(16,36,51,0.55)] ring-1 ring-line sm:p-5">
@@ -390,7 +390,7 @@ function ProductPreview() {
   );
 }
 
-function previewMonth(year: number, month: number): { iso: string; day: number; muted: boolean; events: { id: string; start: string; type: EventType }[] }[] {
+function previewMonth(year: number, month: number): { iso: string; day: number; muted: boolean; events: Pick<PreviewEvent, "id" | "start" | "type">[] }[] {
   const first = new Date(year, month, 1);
   const start = new Date(year, month, 1 - ((first.getDay() + 6) % 7));
   const last = new Date(year, month + 1, 0);
@@ -402,7 +402,7 @@ function previewMonth(year: number, month: number): { iso: string; day: number; 
       iso,
       day: cursor.getDate(),
       muted: cursor.getMonth() !== month,
-      events: catalogEvents().filter((event) => event.date === iso).map((event) => ({
+      events: previewEvents().filter((event) => event.date === iso).map((event) => ({
         id: event.id,
         start: event.start,
         type: event.type,

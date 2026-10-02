@@ -14,6 +14,7 @@ export function AdminDialog({
   children,
   wide = false,
   closeButton = false,
+  blur = false,
   size,
 }: {
   open: boolean;
@@ -23,6 +24,7 @@ export function AdminDialog({
   children: ReactNode;
   wide?: boolean;
   closeButton?: boolean;
+  blur?: boolean;
   size?: "edit" | "player";
 }) {
   const { t } = useLanguage();
@@ -42,7 +44,7 @@ export function AdminDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <button type="button" aria-label={t("event.close")} className={`absolute inset-0 bg-ink/40 ${blur ? "backdrop-blur-sm" : ""}`} onClick={onClose} />
       <div className={`relative w-full rounded-2xl bg-paper ring-1 ring-line ${size === "player" ? "max-w-[57.6rem]" : size === "edit" ? "max-w-[38.4rem]" : wide ? "max-w-3xl" : "max-w-lg"} ${closeButton ? "flex max-h-[90vh] flex-col overflow-hidden" : "max-h-[90vh] overflow-y-auto p-6"}`}>
         {closeButton ? (
           <div className="flex items-start gap-3 px-6 pt-6">

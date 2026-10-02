@@ -1,14 +1,20 @@
 import { headers } from "next/headers";
+import { cache } from "react";
+import { isIP } from "node:net";
+import { trustedClientAddress } from "@/app/lib/security/client-ip";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 type OriginSnapshot = { ip: string; countryCode: string };
 
 function isPublicIp(ip: string): boolean {
-  const value = ip.toLowerCase();
-  if (value === "::1" || value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:")) return false;
-  if (value.includes(":")) return true;
-  const parts = value.split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return false;
+  const kind = isIP(ip);
+  if (kind === 6) {
+    const value = ip.toLowerCase();
+    if (value === "::1" || value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:")) return false;
+    return true;
+  }
+  if (kind !== 4) return false;
+  const parts = ip.split(".").map((part) => Number(part));
   const [first, second] = parts;
   if (first === 10 || first === 127 || first === 0) return false;
   if (first === 192 && second === 168) return false;
@@ -18,13 +24,8 @@ function isPublicIp(ip: string): boolean {
 }
 
 async function requestAddress(): Promise<{ ip: string; countryCode: string; publicIp: boolean }> {
-  const headerStore = await headers();
-  const forwarded = headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
-  const connecting = headerStore.get("cf-connecting-ip")?.trim() ?? "";
-  const ip = (connecting || forwarded || headerStore.get("x-real-ip")?.trim() || "").replace(/^::ffff:/, "").slice(0, 64);
-  const headerCountry = (headerStore.get("cf-ipcountry") || headerStore.get("x-vercel-ip-country") || "").trim().toUpperCase();
-  const countryCode = /^[A-Z]{2}$/.test(headerCountry) && headerCountry !== "XX" && headerCountry !== "T1" ? headerCountry : "";
-  return { ip, countryCode, publicIp: Boolean(ip) && isPublicIp(ip) };
+  const address = trustedClientAddress(await headers());
+  return { ip: address.ip, countryCode: address.countryCode, publicIp: Boolean(address.ip) && isPublicIp(address.ip) };
 }
 
 export async function readRequestOrigin(): Promise<OriginSnapshot> {
@@ -54,14 +55,25 @@ async function resolvedOrigin(snapshot: OriginSnapshot): Promise<OriginSnapshot>
   return { ip: snapshot.ip, countryCode: await lookupCountry(snapshot.ip) };
 }
 
-export async function listUserOrigins(userIds: string[]): Promise<Map<string, { ip: string; countryCode: string }>> {
+const loadOriginTable = cache(async (): Promise<Map<string, { ip: string; countryCode: string }>> => {
   const map = new Map<string, { ip: string; countryCode: string }>();
   const admin = createAdminClient();
-  const ids = [...new Set(userIds.filter(Boolean))];
-  if (!admin || ids.length === 0) return map;
-  const { data, error } = await admin.from("user_origins").select("user_id, ip, country_code").in("user_id", ids);
+  if (!admin) return map;
+  const { data, error } = await admin.from("user_origins").select("user_id, ip, country_code");
   if (error || !data) return map;
   for (const row of data) map.set(row.user_id, { ip: row.ip ?? "", countryCode: row.country_code ?? "" });
+  return map;
+});
+
+export async function listUserOrigins(userIds: string[]): Promise<Map<string, { ip: string; countryCode: string }>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  const map = new Map<string, { ip: string; countryCode: string }>();
+  if (ids.length === 0) return map;
+  const all = await loadOriginTable();
+  for (const id of ids) {
+    const row = all.get(id);
+    if (row) map.set(id, row);
+  }
   return map;
 }
 

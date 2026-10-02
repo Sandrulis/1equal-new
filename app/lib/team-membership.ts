@@ -1,6 +1,7 @@
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
+import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
@@ -60,7 +61,10 @@ type EventRow = {
   lineup?: unknown;
 };
 
+export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach";
+
 export function eventFromRow(row: EventRow): TeamEvent {
+  const includesLineup = Object.prototype.hasOwnProperty.call(row, "lineup");
   return {
     id: row.id,
     date: row.event_date.slice(0, 10),
@@ -72,7 +76,7 @@ export function eventFromRow(row: EventRow): TeamEvent {
     venueId: row.venue_id,
     expense: row.expense == null ? null : Number(row.expense),
     withCoach: row.with_coach === true,
-    ...lineupFromJson(row.lineup),
+    ...(includesLineup ? { ...lineupFromJson(row.lineup), lineupLoaded: true } : { lineupLoaded: false }),
   };
 }
 
@@ -141,6 +145,7 @@ export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member
     teamAdmin: row.is_team_admin === true,
     balance: 0,
     ledger: [],
+    ledgerLoaded: false,
     joined: row.joined_on,
     updatedAt: toLocalDateTimeStamp(row.updated_at),
     photoUrl: ehl?.photoUrl ?? user?.avatar_url ?? null,
@@ -149,19 +154,32 @@ export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member
   };
 }
 
-function historySince(): string {
-  const since = new Date();
-  since.setDate(since.getDate() - 400);
-  return since.toISOString().slice(0, 10);
-}
-
 export async function settleFinishedEvents(teamIds: string[]): Promise<void> {
   const admin = createAdminClient();
   if (!admin || teamIds.length === 0) return;
   await admin.rpc("settle_finished_events", { team_ids: teamIds });
 }
 
-export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
+function rigaNowStamp(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Riga",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
+  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`;
+}
+
+function pickDetailTeamId(rows: { id: string }[], activeTeamId: string | null | undefined, watchOnly: Set<string>): string | null {
+  if (activeTeamId && rows.some((row) => row.id === activeTeamId)) return activeTeamId;
+  return rows.find((row) => !watchOnly.has(row.id))?.id ?? rows[0]?.id ?? null;
+}
+
+export async function listOwnedTeams(userId: string, activeTeamId?: string | null): Promise<IssuedTeam[]> {
   const admin = createAdminClient();
   if (!admin) return [];
   const [mine, userRow] = await Promise.all([
@@ -179,26 +197,40 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
   if (teamIds.length === 0) return [];
   const memberIdSet = new Set(memberIds);
   const watchOnly = new Set(watchIds.filter((id) => !memberIdSet.has(id)));
-  const cron = await admin.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
-  const financeReserve = cron.data?.enabled === true;
-  if (memberIds.length && !financeReserve) await settleFinishedEvents(memberIds);
-  const [teams, members, groups, links, entries, places, events, rsvps, ledgerRows, holds, moduleLinks] = await Promise.all([
-    admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
-    admin
-      .from("team_members")
-      .select(TEAM_MEMBER_USER_COLUMNS)
-      .in("team_id", teamIds),
-    admin.from("subteams").select("id, team_id, name, color, updated_at").in("team_id", teamIds),
-    admin.from("team_member_subteams").select("team_id, user_id, subteam_id").in("team_id", teamIds),
-    admin.from("balance_entries").select(BALANCE_ENTRY_SELECT).in("team_id", teamIds).order("created_at", { ascending: false }),
-    admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").in("team_id", teamIds),
-    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, lineup").in("team_id", teamIds).gte("event_date", historySince()).order("event_date").order("start_time"),
-    admin.from("team_event_rsvps").select("team_id, event_id, user_id, status").in("team_id", teamIds),
-    admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").in("team_id", teamIds).gte("event_date", historySince()).order("created_at", { ascending: false }),
-    admin.from("finance_reservations").select("team_id, event_id, user_id, amount").in("team_id", teamIds),
-    admin.from("team_modules").select("team_id, module_key").in("team_id", teamIds),
+  const today = rigaNowStamp().slice(0, 10);
+  const since = historySince();
+  const hinted = activeTeamId && teamIds.includes(activeTeamId) ? activeTeamId : null;
+  const loadDetail = (id: string) => Promise.all([
+    admin.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle(),
+    admin.from("team_members").select(TEAM_MEMBER_USER_COLUMNS).eq("team_id", id),
+    admin.from("subteams").select("id, team_id, name, color, updated_at").eq("team_id", id),
+    admin.from("team_member_subteams").select("team_id, user_id, subteam_id").eq("team_id", id),
+    admin.rpc("member_balance_totals", { team_ids: [id] }),
+    admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").eq("team_id", id),
+    admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", id).gte("event_date", since).order("event_date").order("start_time"),
+    admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").eq("team_id", id).gte("event_date", since).order("created_at", { ascending: false }),
+    admin.from("finance_reservations").select("team_id, event_id, user_id, amount, team_events!inner(event_date, start_time)").eq("team_id", id).gte("team_events.event_date", today),
+    admin.from("team_modules").select("team_id, module_key").eq("team_id", id),
   ]);
-  if (teams.error || !teams.data || members.error || !members.data) return [];
+  const [teamRows, prefetched] = await Promise.all([
+    admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
+    hinted ? loadDetail(hinted) : Promise.resolve(null),
+  ]);
+  if (teamRows.error || !teamRows.data?.length) return [];
+  const detailId = hinted && teamRows.data.some((row) => row.id === hinted) ? hinted : pickDetailTeamId(teamRows.data, null, watchOnly);
+  if (!detailId) return [];
+  const [cron, members, groups, links, totals, places, events, ledgerRows, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
+  const financeReserve = cron.data?.enabled === true;
+  const nowStamp = rigaNowStamp();
+  const activeHolds = ((holds.data ?? []) as { team_id: string; event_id: string; user_id: string; amount: number | string; team_events: { event_date: string; start_time: string } | { event_date: string; start_time: string }[] | null }[]).filter((row) => {
+    const event = one(row.team_events);
+    if (!event) return false;
+    return `${String(event.event_date).slice(0, 10)} ${String(event.start_time).slice(0, 5)}` > nowStamp;
+  });
+  if (members.error || !members.data) return [];
+  const splitRsvps = members.data.length * (events.data ?? []).length > RSVP_SPLIT_CELLS;
+  const rsvpSince = splitRsvps ? rsvpHotSince() : since;
+  const rsvps = await admin.from("team_event_rsvps").select("team_id, event_id, user_id, status, team_events!inner(event_date)").eq("team_id", detailId).gte("team_events.event_date", rsvpSince);
   const idsByMember = new Map<string, string[]>();
   for (const link of (links.data ?? []) as { team_id: string; user_id: string; subteam_id: string }[]) {
     const key = `${link.team_id}:${link.user_id}`;
@@ -206,21 +238,24 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     list.push(link.subteam_id);
     idsByMember.set(key, list);
   }
-  const entriesByMember = new Map<string, BalanceEntry[]>();
-  for (const row of (entries.data ?? []) as EntryRow[]) {
-    const key = `${row.team_id}:${row.user_id}`;
-    const list = entriesByMember.get(key) ?? [];
-    list.push(mapBalanceEntry(row));
-    entriesByMember.set(key, list);
+  const balanceByMember = new Map<string, number>();
+  if (totals.error) {
+    const amounts = await admin.from("balance_entries").select("team_id, user_id, amount").eq("team_id", detailId);
+    for (const row of (amounts.data ?? []) as { team_id: string; user_id: string; amount: number | string }[]) {
+      const key = `${row.team_id}:${row.user_id}`;
+      balanceByMember.set(key, Math.round(((balanceByMember.get(key) ?? 0) + Number(row.amount)) * 100) / 100);
+    }
+  } else {
+    for (const row of (totals.data ?? []) as { team_id: string; user_id: string; total: number | string }[]) {
+      balanceByMember.set(`${row.team_id}:${row.user_id}`, Number(row.total));
+    }
   }
   const byTeam = new Map<string, Member[]>();
   for (const row of members.data as MemberRow[]) {
     const list = byTeam.get(row.team_id) ?? [];
     const key = `${row.team_id}:${row.user_id}`;
-    const ledger = entriesByMember.get(key) ?? [];
     const member = memberFromRow(row, idsByMember.get(key) ?? []);
-    member.ledger = ledger;
-    member.balance = Math.round(ledger.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+    member.balance = balanceByMember.get(key) ?? 0;
     list.push(member);
     byTeam.set(row.team_id, list);
   }
@@ -267,46 +302,91 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
       moduleKeysByTeam.set(row.team_id, list);
     }
   }
-  return (teams.data as TeamRow[])
+  return (teamRows.data as TeamRow[])
     .filter((team) => team.invite_code)
-    .map((team) => ({
-      id: team.id,
-      name: team.name,
-      code: team.invite_code as string,
-      demo: false,
-      sourceUrl: team.source_url,
-      logoUrl: team.logo_url,
-      leaderId: team.leader_id,
-      trainingVotingHours: team.training_voting_hours ?? 24,
-      gameVotingHours: team.game_voting_hours ?? 72,
-      currency: team.currency,
-      sportId: team.sport_id,
-      moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
-      balance: Number(team.balance ?? 0),
-      ledger: ((ledgerRows.data ?? []) as { id: string; team_id: string; event_id: string | null; amount: number | string; event_date: string; event_type: string; created_at: string }[])
-        .filter((row) => row.team_id === team.id)
-        .map((row): TeamLedgerLine => ({
-          id: row.id,
-          amount: Number(row.amount),
-          at: toLocalDateTimeStamp(row.created_at),
-          eventId: row.event_id,
-          eventDate: String(row.event_date).slice(0, 10),
-          eventType: row.event_type === "game" ? "game" : "training",
-        })),
-      rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string }[])
-        .filter((row) => row.team_id === team.id && (row.status === "going" || row.status === "absent"))
-        .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
-      members: byTeam.get(team.id) ?? [],
-      subteams: subteamsByTeam.get(team.id) ?? [],
-      venues: venuesByTeam.get(team.id) ?? [],
-      events: eventsByTeam.get(team.id) ?? [],
-      watching: watchOnly.has(team.id),
-      financeReserve,
-      reservations: ((holds.data ?? []) as { team_id: string; event_id: string; user_id: string; amount: number | string }[])
-        .filter((row) => row.team_id === team.id)
-        .map((row) => ({ eventId: row.event_id, userId: row.user_id, amount: Number(row.amount) })),
-    }))
+    .map((team) => {
+      const detail = team.id === detailId;
+      return {
+        id: team.id,
+        name: team.name,
+        code: team.invite_code as string,
+        demo: false,
+        sourceUrl: team.source_url,
+        logoUrl: team.logo_url,
+        leaderId: team.leader_id,
+        trainingVotingHours: team.training_voting_hours ?? 24,
+        gameVotingHours: team.game_voting_hours ?? 72,
+        currency: team.currency,
+        sportId: team.sport_id,
+        balance: Number(team.balance ?? 0),
+        watching: watchOnly.has(team.id),
+        financeReserve,
+        loaded: detail,
+        ...(detail && splitRsvps ? { rsvpSince } : {}),
+        ...(detail
+          ? {
+              moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
+              ledger: ((ledgerRows.data ?? []) as { id: string; team_id: string; event_id: string | null; amount: number | string; event_date: string; event_type: string; created_at: string }[]).map((row): TeamLedgerLine => ({
+                id: row.id,
+                amount: Number(row.amount),
+                at: toLocalDateTimeStamp(row.created_at),
+                eventId: row.event_id,
+                eventDate: String(row.event_date).slice(0, 10),
+                eventType: row.event_type === "game" ? "game" : "training",
+              })),
+              rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string }[])
+                .filter((row) => row.status === "going" || row.status === "absent")
+                .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
+              members: byTeam.get(team.id) ?? [],
+              subteams: subteamsByTeam.get(team.id) ?? [],
+              venues: venuesByTeam.get(team.id) ?? [],
+              events: eventsByTeam.get(team.id) ?? [],
+              reservations: activeHolds.map((row) => ({ eventId: row.event_id, userId: row.user_id, amount: Number(row.amount) })),
+            }
+          : {}),
+      };
+    })
     .sort((left, right) => Number(Boolean(left.watching)) - Number(Boolean(right.watching)));
+}
+
+export async function listEventLineup(teamId: string, eventId: string): Promise<Pick<TeamEvent, "lineupSlots" | "lineupSides"> | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const row = await admin.from("team_events").select("lineup").eq("team_id", teamId).eq("id", eventId).maybeSingle();
+  if (row.error || !row.data) return null;
+  return lineupFromJson(row.data.lineup);
+}
+
+export async function canReadTeam(userId: string, teamId: string, isAdmin: boolean): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const member = await admin.from("team_members").select("user_id").eq("team_id", teamId).eq("user_id", userId).maybeSingle();
+  if (member.data) return true;
+  if (!isAdmin) return false;
+  const watch = await admin.from("admin_team_watches").select("team_id").eq("team_id", teamId).eq("user_id", userId).maybeSingle();
+  return Boolean(watch.data);
+}
+
+export async function listMemberLedger(teamId: string, userId: string): Promise<BalanceEntry[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const rows = await admin.from("balance_entries").select(BALANCE_ENTRY_SELECT).eq("team_id", teamId).eq("user_id", userId).order("created_at", { ascending: false });
+  return ((rows.data ?? []) as EntryRow[]).map((row) => mapBalanceEntry(row));
+}
+
+export async function listTeamHistory(teamId: string, from: string, to: string): Promise<{ events: TeamEvent[]; rsvps: { eventId: string; userId: string; status: "going" | "absent" }[] }> {
+  const admin = createAdminClient();
+  if (!admin) return { events: [], rsvps: [] };
+  const [events, rsvps] = await Promise.all([
+    admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", teamId).gte("event_date", from).lte("event_date", to).order("event_date").order("start_time"),
+    admin.from("team_event_rsvps").select("event_id, user_id, status, team_events!inner(event_date)").eq("team_id", teamId).gte("team_events.event_date", from).lte("team_events.event_date", to),
+  ]);
+  return {
+    events: ((events.data ?? []) as EventRow[]).map((row) => eventFromRow(row)),
+    rsvps: ((rsvps.data ?? []) as { event_id: string; user_id: string; status: string }[])
+      .filter((row) => row.status === "going" || row.status === "absent")
+      .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
+  };
 }
 
 export async function requireUserAdmin() {

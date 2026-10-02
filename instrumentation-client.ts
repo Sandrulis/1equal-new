@@ -7,8 +7,7 @@ if (dsn) {
   Sentry.init({
     ...sentryBaseOptions(dsn),
     replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1.0,
-    integrations: [Sentry.replayIntegration({ maskAllText: true, maskAllInputs: true, blockAllMedia: true })],
+    replaysOnErrorSampleRate: 0,
   });
 }
 

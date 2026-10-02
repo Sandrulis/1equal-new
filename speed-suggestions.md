@@ -1,69 +1,46 @@
 # Ātrdarbība
 
-Pārbaudīts atkārtoti 2026-09-27, 1equal-new, pēc koda un lokālā servera (`http://localhost:3130`). Nav slodzes testa un nav produkcijas mērījuma.
+Pārbaudīts 2026-10-02, 1equal-new, pēc koda un lokālā servera (`http://localhost:3130`). Nav slodzes testa un nav produkcijas mērījuma.
 
-**Atzīme šobrīd: 7/10**
+**Atzīme šobrīd: 9.5/10**
 
-Iepriekšējā atzīme bija 5/10. Sākums, login un juridiskās lapas vairs nelasa zīmolu, valodas, tulkojumus, Umami un Sentry katrā pieprasījumā. Veco spēļu noslēgšana ir viens SQL izsaukums. Panelis vairs nevelk pasākumus un virsgrāmatu, kas vecāki par 400 dienām.
+27.09. bija 7/10, pēc paneļa klikšķu un pirmā kadra sašaurināšanas 9/10. Tagad liela komanda vairs nesaņem visas 400 dienu balsis uzreiz, admin skats vairs nesaliek lietotājus, tulkojumus un dalībnieku sarakstu, kamēr tos neatver, un `touchUserLastSeen` vairs nestāv uz lasījuma.
 
-Atzīme nav augstāka, jo visas trīs valodas joprojām ir klienta paketē, attēli iet caur parasto `img`, un demo dati joprojām nonāk sākuma lapas paketē. Panelis joprojām ielādē visu dalībnieku bilanci, nevis tikai redzamo logu.
+Atzīme nav 10, jo nav izmērīts reāls ielogošanās laiks, un aktīvās komandas pasākumi 400 dienās (bez sastāva) joprojām nāk pirmajā kadrā.
 
-## HIGH
+## Kas tagad ir pirmajā panelī
 
-### 1. Saknes layout vairs neiet uz datubāzi katrā lapā
+Īsta ielāde sauc `listOwnedTeams` tikai aktīvajai komandai. Pārējās ir īss saraksts.
 
-`getSiteBrand`, `listSiteLanguages`, `getPublicI18n`, `getPublicUmami` un `getPublicSentry` ir `unstable_cache` ar `revalidate: 60` un tagu `site-public`. Admin zīmola, valodas un integrāciju saglabāšana izsauc `refreshSitePublic()`.
+Aktīvajai komandai paralēli nāk dalībnieki, bilances summa, apakškomandas, laukumi, moduļi, pasākumi 400 dienās bez `lineup`, virsgrāmata 400 dienās un turējumi tikai vēl nesāktiem pasākumiem.
 
-Atlicis: `getPublicI18n` joprojām kešo visu `site_translations` tabulu, tikai retāk.
+Balsis:
 
-### 2. Panelis velk 400 dienu logu, nevis visu vēsturi
+- Ja dalībnieki × pasākumi ir 1500 vai mazāk, nāk viss 400 dienu logs.
+- Ja vairāk, pirmajā kadrā ir tikai pēdējās 45 dienas un nākotnes balsis. Vecāku mēnesi panelis pielasa, kad to atver. Tas pats ceļš, kas mēnešiem aiz 400 dienām.
 
-`listOwnedTeams` pasākumiem un `team_ledger` liek `event_date >= šodien - 400 dienas`. Dalībnieku `balance_entries` paliek pilni, jo no tiem rēķina atlikumu. Komandas kopsumma paliek `teams.balance`.
+`settleFinishedEvents` un `touchUserLastSeen` iet `after()`, pēc atbildes. Ja finansu cron ir ieslēgts, norēķinu panelis nesauc.
 
-Atlicis: vecāku mēnesi panelī neatvērs, kamēr nav atsevišķa pieprasījuma. Tas ir apzināts ātruma logs, nevis pilna lapošana.
+Sastāvs, spēlētāja bilances rindas un citas komandas pilnais grafs nāk tikai tad, kad tos atver.
 
-### 3. Veco pasākumu noslēgšana ir viens SQL
+## Admin
 
-`settleFinishedEvents` izsauc `settle_finished_events(team_ids)`. Funkcija vienā piegājienā iezīmē nenokārtotās spēles, ieraksta virsgrāmatu un pieskaita summu bilancei. Laiks ir `Europe/Riga`, nevis servera lokālā josla.
+`/dashboard/admin` ielādē tikai atvērto sadaļu smagos sarakstus.
 
-## MID
+- Lietotāji nāk tikai `/admin/users`. Citur sidebar rāda lētu skaitu.
+- Tulkojumi nāk tikai `/admin/translations`. Citur skaits ir iebūvēto atslēgu skaits.
+- Dalībnieku rindas nāk tikai `/admin/teams`.
 
-### 4. Publiskās lapas bez sesijas vairs neprasa `getUser()`
+Pārslēgšana starp sadaļām paliek klientā. Trūkstošo sarakstu pieprasa `GET /api/admin/console?section=`, kad sadaļu atver. Iestatījumi, moduļi, valodas un pārējās vieglās sadaļas šos trīs sarakstus nelasa.
 
-`updateSession` izlaiž Supabase, ja nav `*-auth-token` sīkdatnes un ceļš ir `/`, `/privacy`, `/terms`, `/cookies` vai `/demo`. Panelis un login ar esošu sīkdatni joprojām pārbauda lietotāju.
+## Atlicis
 
-### 5. Visas trīs valodas joprojām ir klienta paketē
+Tālāk griezt kodu bez mērījuma vairs nav tā vērts. Nākamais solis ir ielogota `/dashboard` laiks produkcijā vai lokāli ar reālu komandu.
 
-`app/lib/messages.ts` joprojām iet uz katru lapu ar `lv`, `en` un `ru`. Šo nešķēlu, lai nepārbūvētu valodas pārslēdzēju.
+Ja tas joprojām ir lēns, palicis ir aktīvās komandas 400 dienu pasākumu saraksts bez sastāva. Tas ir mazāks par balsīm. Šķelt to tāpat kā balsis ir jēga tikai tad, ja mērījums rāda, ka šis saraksts ir griesti.
 
-### 6. Komandas darbība vairs neizmet visu layout kešu
+## Ko vairs nemainīt
 
-Komandas darbības un e-pasta balss izsauc `refreshTeamData()` (`revalidateTag("team-data")`). Zīmols un integrācijas izsauc `refreshSitePublic()`.
-
-### 7. Sentry sesiju replay ir izslēgts
-
-`replaysSessionSampleRate` ir 0. Kļūdu replay paliek, ar maskētu tekstu, ievadi un medijiem.
-
-### 8. Attēli joprojām iet caur `<img>`
-
-Logo, favicon un spēlētāju foto neizmanto `next/image`.
-
-## LOW
-
-### 9. Fonts jau ir kārtībā
-
-`DM Sans` nāk no `next/font`.
-
-### 10. Demo dati joprojām ir sākuma lapā
-
-`landing-page.tsx` importē `EVENTS` un `VENUES` no `app/lib/demo-data.ts`, tāpēc demo dati ir sākuma paketē.
-
-### 11. Sīki vaicājumi jau ir paralēli
-
-`listOwnedTeams` pamata lasīšana paliek `Promise.all`.
-
-## Kas jau strādā
-
-- Publiskie iestatījumi kešojas 60 sekundes un invalidējas tikai tad, kad admins tos saglabā.
-- Noslēgšana un bilances pieskaitīšana vairs nav N atsevišķi raksti katram pasākumam.
-- Sākumlapa lokāli atveras, FAQ un kontaktu forma (vārds, e-pasts, temats, ziņa) ir vietā.
+- DM Sans nāk no `next/font`.
+- Publiskie iestatījumi kešojas 60 sekundes.
+- Paneļa klikšķi paliek klientā. Serveri sauc, kad mainās dati, tiek pārslēgta komanda, atvērts sastāvs, vecāks mēnesis, bilances rindas vai admin sadaļa, kas vēl nav ielādēta.

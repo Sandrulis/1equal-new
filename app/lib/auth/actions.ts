@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { redirect } from "next/navigation";
+import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
@@ -158,6 +159,7 @@ async function signInAfterSignup(email: string, password: string): Promise<AuthR
 
 export async function changePassword(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
+  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
 
   const current = typeof formData.get("currentPassword") === "string" ? String(formData.get("currentPassword")) : "";
   const next = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
@@ -248,6 +250,7 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
 
 export async function updateProfile(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
+  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
 
   const firstName = readField(formData, "firstName");
   const lastName = readField(formData, "lastName");
@@ -358,6 +361,7 @@ async function loadEhlPlayer(raw: string): Promise<{ profile: EhlPlayerProfile }
 }
 
 export async function saveUserAvatar(formData: FormData): Promise<{ ok: true; url: string | null } | { ok: false; error: MessageKey }> {
+  if (await sessionNeedsMfaVerify()) return { ok: false, error: "auth.error.generic" };
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { ok: false, error: "auth.error.generic" };
@@ -381,6 +385,7 @@ export async function saveUserAvatar(formData: FormData): Promise<{ ok: true; ur
 
 export async function saveEventEmails(enabled: boolean): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
   if (typeof enabled !== "boolean") return { ok: false, error: "auth.error.generic" };
+  if (await sessionNeedsMfaVerify()) return { ok: false, error: "auth.error.generic" };
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { ok: false, error: "auth.error.generic" };

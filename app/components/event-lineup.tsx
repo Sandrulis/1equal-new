@@ -1,11 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ContentImage } from "@/app/components/content-image";
 import { memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { IconChevronLeft, IconChevronRight, IconX } from "@/app/components/icon-tip-button";
-import { formatJersey, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import type { Member, TeamEvent } from "@/app/lib/demo-data";
+import { formatJersey } from "@/app/lib/format-jersey";
 import { normalizePositionCode, type PositionCode } from "@/app/lib/positions";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
@@ -603,7 +605,7 @@ function byPlayerName(left: Member, right: Member): number {
 }
 
 function Rink() {
-  return <img src="/hockey-rink.png" alt="" className="block h-auto w-full" />;
+  return <Image src="/hockey-rink.png" alt="" width={480} height={500} sizes="(max-width: 768px) 100vw, 480px" className="block h-auto w-full" />;
 }
 
 type LineSide = "black" | "white" | "pool";

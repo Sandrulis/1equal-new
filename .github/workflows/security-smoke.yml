@@ -142,6 +142,22 @@ jobs:
                   fi
                   continue
                   ;;
+                # Public translation overrides. No account data.
+                app/api/i18n/overrides/route.ts)
+                  if ! grep -q "loadTranslationOverrides" "$file"; then
+                    echo "FAIL: No translation loader in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
+                # Public message pack for one language. No account data.
+                app/api/i18n/\[lang\]/route.ts)
+                  if ! grep -q "messagePack" "$file"; then
+                    echo "FAIL: No message pack in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
               esac
               if ! grep -qE "getAccountProfile|requireUserAdmin" "$file"; then
                 echo "FAIL: No auth check in $file"

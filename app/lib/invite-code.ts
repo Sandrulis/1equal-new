@@ -1,4 +1,5 @@
-import { TEAM_NAME, type Member, type Subteam, type TeamEvent, type Venue } from "@/app/lib/demo-data";
+import { TEAM_NAME } from "@/app/lib/demo-constants";
+import type { Member, Subteam, TeamEvent, Venue } from "@/app/lib/demo-data";
 
 export const DEMO_INVITE_CODE = "RIGA4K";
 
@@ -40,6 +41,8 @@ export type IssuedTeam = {
   reservations?: FinanceHold[];
   sportId?: string | null;
   moduleKeys?: string[];
+  loaded?: boolean;
+  rsvpSince?: string;
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

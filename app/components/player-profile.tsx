@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { BalanceHistory, type BalanceHistoryItem } from "@/app/components/balance-history";
-import { chargesForMember, formatJersey, venueById, type Member, type PlayerCharge, type Subteam } from "@/app/lib/demo-data";
+import type { Member, PlayerCharge, Subteam } from "@/app/lib/demo-data";
+import { formatJersey } from "@/app/lib/format-jersey";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
@@ -98,7 +100,7 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
       {finance ? (
         <section className="rounded-2xl bg-paper ring-1 ring-line">
           <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
-          <PlayerBalanceLog member={member} inset />
+          <PlayerBalanceLog member={member} inset pending={member.ledgerLoaded === false} />
         </section>
       ) : null}
     </div>
@@ -111,16 +113,41 @@ export function PlayerBalanceDialog({ member, reserved = 0, onClose }: { member:
   return (
     <AdminDialog open title={t("player.log")} onClose={onClose} closeButton>
       {reserved > 0 ? <p className="px-4 text-sm font-medium text-train sm:px-5">{t("finance.reserved", { amount: formatMoney(reserved) })}</p> : null}
-      <PlayerBalanceLog member={member} />
+      <PlayerBalanceLog member={member} pending={member.ledgerLoaded === false} />
     </AdminDialog>
   );
 }
 
-export function PlayerBalanceLog({ member, inset = false }: { member: Member; inset?: boolean }) {
+export function PlayerBalanceLog({ member, inset = false, pending = false }: { member: Member; inset?: boolean; pending?: boolean }) {
   const { t } = useLanguage();
   const { formatDate, formatTime, formatDateTime } = useDisplayFormat();
   const usingLedger = member.ledger != null;
-  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : chargesForMember(member.id);
+  const [demoCharges, setDemoCharges] = useState<PlayerCharge[]>([]);
+  useEffect(() => {
+    if (pending || usingLedger || member.feeExempt) return;
+    let active = true;
+    void import("@/app/lib/demo-data").then((mod) => {
+      if (!active) return;
+      setDemoCharges(
+        mod.chargesForMember(member.id).map((charge) => ({
+          ...charge,
+          venueName: charge.venueName ?? (charge.venueId ? mod.venueById(charge.venueId).name : undefined),
+        })),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [member.feeExempt, member.id, pending, usingLedger]);
+  if (pending) {
+    return (
+      <div className={`flex items-center justify-center gap-2 py-8 text-sm text-muted ${inset ? "px-4 sm:px-5" : ""}`} role="status">
+        <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+        {t("player.ledger.loading")}
+      </div>
+    );
+  }
+  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : demoCharges;
   const items = charges.map((charge) => historyItem(charge, t, formatDate, formatTime, formatDateTime));
   return <BalanceHistory items={items} empty={t(usingLedger ? "player.ledger.empty" : "player.empty")} inset={inset} />;
 }
@@ -207,7 +234,7 @@ function chargeFacts(
   t: (key: MessageKey, params?: Record<string, string | number>) => string,
 ): { type: string; place: string; action: string } {
   const type = charge.type ? t(charge.type === "game" ? "legend.game" : "legend.training") : "—";
-  const named = charge.venueName?.trim() || (charge.venueId ? venueById(charge.venueId).name : "");
+  const named = charge.venueName?.trim() || "";
   const action = charge.kind === "manual" ? t("player.manual") : charge.kind === "payment" ? t("player.deposit") : t("player.source.system");
   return { type, place: named || "—", action };
 }

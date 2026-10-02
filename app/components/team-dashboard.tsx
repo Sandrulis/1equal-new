@@ -1,18 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { ContentImage } from "@/app/components/content-image";
-import { CURRENT_USER_ID, catalogEvents, MEMBERS, TEAM_NAME, type EventType, type Member, type TeamEvent } from "@/app/lib/demo-data";
+import { CURRENT_USER_ID, TEAM_NAME } from "@/app/lib/demo-constants";
+import type { EventType, Member, TeamEvent } from "@/app/lib/demo-data";
 import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
 import { PlayerLinkHint } from "@/app/components/team-switcher";
 import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
 import { getDemoSession, settleDemoCharges, subscribeDemoSession, updateDemoSession } from "@/app/lib/demo-session";
-import { AdminCronPage } from "@/app/components/admin-cron-page";
-import { AdminSportsPage } from "@/app/components/admin-sports-page";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
@@ -40,19 +40,9 @@ import type { Sport } from "@/app/lib/sports";
 import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
-import { EventLineup, type SideMap, type SlotMap } from "@/app/components/event-lineup";
-import { TeamRoster, type BalanceHold } from "@/app/components/team-roster";
+import type { SideMap, SlotMap } from "@/app/components/event-lineup";
+import type { BalanceHold } from "@/app/components/team-roster";
 import { SiteFooter } from "@/app/components/site-footer";
-import { AdminIntegrationsPage } from "@/app/components/admin-integrations-page";
-import { AdminModulesPage } from "@/app/components/admin-modules-page";
-import { AdminLanguagesForm } from "@/app/components/admin-languages-form";
-import { AdminSettingsForm } from "@/app/components/admin-settings-form";
-import { AdminSubteamsList } from "@/app/components/admin-subteams-list";
-import { AdminTeamsList } from "@/app/components/admin-teams-list";
-import { AdminTranslationsManager } from "@/app/components/admin-translations-manager";
-import { AdminEmailDesign } from "@/app/components/admin-email-design";
-import { AdminTodoPage } from "@/app/components/admin-todo-page";
-import { AdminUsersList } from "@/app/components/admin-users-list";
 import { EntuziastiProvider } from "@/app/components/entuziasti-context";
 import { CurrencyProvider, useFormatMoney } from "@/app/components/currency-provider";
 import { DisplayPreferencesProvider, useDisplayFormat } from "@/app/components/display-preferences";
@@ -61,12 +51,34 @@ import { TopBar } from "@/app/components/top-bar";
 import type { AccountProfile } from "@/app/lib/auth/profile";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
-import { NoTeamStart } from "@/app/components/no-team-start";
-import { SubteamAdmin } from "@/app/components/subteam-admin";
-import { VenueAdmin } from "@/app/components/venue-admin";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
-import { eventAudienceIncludes, eventVotingDeadline } from "@/app/lib/event-voting";
+import { historySince } from "@/app/lib/history-window";
+import { softPush, softReplace } from "@/app/lib/soft-nav";
+import { eventAudienceIncludes, eventHasEnded, eventVotingDeadline } from "@/app/lib/event-voting";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
+
+const AdminCronPage = dynamic(() => import("@/app/components/admin-cron-page").then((mod) => mod.AdminCronPage));
+const AdminSportsPage = dynamic(() => import("@/app/components/admin-sports-page").then((mod) => mod.AdminSportsPage));
+const AdminIntegrationsPage = dynamic(() => import("@/app/components/admin-integrations-page").then((mod) => mod.AdminIntegrationsPage));
+const AdminModulesPage = dynamic(() => import("@/app/components/admin-modules-page").then((mod) => mod.AdminModulesPage));
+const AdminLanguagesForm = dynamic(() => import("@/app/components/admin-languages-form").then((mod) => mod.AdminLanguagesForm));
+const AdminSettingsForm = dynamic(() => import("@/app/components/admin-settings-form").then((mod) => mod.AdminSettingsForm));
+const AdminSubteamsList = dynamic(() => import("@/app/components/admin-subteams-list").then((mod) => mod.AdminSubteamsList));
+const AdminTeamsList = dynamic(() => import("@/app/components/admin-teams-list").then((mod) => mod.AdminTeamsList));
+const AdminTranslationsManager = dynamic(() => import("@/app/components/admin-translations-manager").then((mod) => mod.AdminTranslationsManager));
+const AdminEmailDesign = dynamic(() => import("@/app/components/admin-email-design").then((mod) => mod.AdminEmailDesign));
+const AdminTodoPage = dynamic(() => import("@/app/components/admin-todo-page").then((mod) => mod.AdminTodoPage));
+const AdminUsersList = dynamic(() => import("@/app/components/admin-users-list").then((mod) => mod.AdminUsersList));
+const EventLineup = dynamic(() => import("@/app/components/event-lineup").then((mod) => mod.EventLineup));
+const TeamRoster = dynamic(() => import("@/app/components/team-roster").then((mod) => mod.TeamRoster));
+const NoTeamStart = dynamic(() => import("@/app/components/no-team-start").then((mod) => mod.NoTeamStart));
+const SubteamAdmin = dynamic(() => import("@/app/components/subteam-admin").then((mod) => mod.SubteamAdmin));
+const VenueAdmin = dynamic(() => import("@/app/components/venue-admin").then((mod) => mod.VenueAdmin));
+
+type DemoBundle = {
+  members: Member[];
+  catalogEvents: (now?: Date) => TeamEvent[];
+};
 
 function preferredTeam(teams: IssuedTeam[], activeTeamId: string | null | undefined): IssuedTeam | null {
   if (!teams.length) return null;
@@ -110,11 +122,21 @@ function EventTypeMark({ type }: { type: EventType }) {
   );
 }
 
+function AdminSectionPending({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted" role="status">
+      <span className="size-5 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+      {label}
+    </div>
+  );
+}
+
 function withLineup(previous: TeamEvent, next: TeamEvent): TeamEvent {
   return {
     ...next,
     lineupSlots: next.lineupSlots ?? previous.lineupSlots,
     lineupSides: next.lineupSides ?? previous.lineupSides,
+    lineupLoaded: next.lineupLoaded === true ? true : previous.lineupLoaded,
   };
 }
 
@@ -173,7 +195,7 @@ type HomeView = "calendar" | "poll";
 export function TeamDashboard({
   basePath,
   account = null,
-  admin = null,
+  admin: initialAdmin = null,
   initialTeams = [],
   openTeamId = null,
   enabledModules = null,
@@ -189,20 +211,87 @@ export function TeamDashboard({
   individualModuleKeys?: string[];
   sports?: Sport[];
 }) {
+  const [admin, setAdmin] = useState(initialAdmin);
+  const [seenAdmin, setSeenAdmin] = useState(initialAdmin);
+  if (initialAdmin !== seenAdmin) {
+    setSeenAdmin(initialAdmin);
+    setAdmin(initialAdmin);
+  }
   const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? preferredTeam(initialTeams, account.activeTeamId) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
+  const [demoBundle, setDemoBundle] = useState<DemoBundle | null>(null);
+  useEffect(() => {
+    if (basePath !== "/demo") return;
+    let active = true;
+    void import("@/app/lib/demo-data").then((mod) => {
+      if (!active) return;
+      setDemoBundle({ members: mod.MEMBERS, catalogEvents: mod.catalogEvents });
+    });
+    return () => {
+      active = false;
+    };
+  }, [basePath]);
+  const demoMembers = demoBundle?.members ?? [];
   const activeTeam = account ? ownedTeam : { name: TEAM_NAME, code: DEMO_INVITE_CODE, demo: true };
   const pathname = usePathname();
   const router = useRouter();
-  const route = routeFromPathname(pathname, basePath);
+  const [clientPath, setClientPath] = useState<string | null>(null);
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (pathname !== seenPath) {
+    setSeenPath(pathname);
+    if (!clientPath || pathname === clientPath.split("?")[0]) setClientPath(null);
+  }
+  const routePath = (clientPath ?? pathname).split("?")[0];
+  const route = routeFromPathname(routePath, basePath);
+
+  function softGo(href: string) {
+    setClientPath(href.split("?")[0]);
+    softPush(href);
+  }
+
+  useEffect(() => {
+    function onPop(event: PopStateEvent) {
+      const path = window.location.pathname;
+      if (path !== basePath && !path.startsWith(`${basePath}/`)) return;
+      event.stopImmediatePropagation();
+      setClientPath(path);
+    }
+    window.addEventListener("popstate", onPop, true);
+    return () => window.removeEventListener("popstate", onPop, true);
+  }, [basePath]);
+  const adminSection = route.view === "admin" ? route.section : null;
+  useEffect(() => {
+    if (!admin || !adminSection) return;
+    const missing = adminSection === "users" ? !admin.usersLoaded : adminSection === "translations" ? !admin.translationsLoaded : adminSection === "teams" ? !admin.membersLoaded : false;
+    if (!missing) return;
+    let active = true;
+    void fetch(`/api/admin/console?section=${adminSection}`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; users?: AdminConsole["users"]; translations?: AdminConsole["translations"]; members?: AdminConsole["members"]; usersLoaded?: boolean; translationsLoaded?: boolean; membersLoaded?: boolean; userCount?: number; translationCount?: number }) : null))
+      .then((body) => {
+        if (!active || !body?.ok) return;
+        setAdmin((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            ...(body.usersLoaded ? { users: body.users ?? [], usersLoaded: true, userCount: body.userCount ?? body.users?.length ?? 0 } : {}),
+            ...(body.translationsLoaded ? { translations: body.translations ?? [], translationsLoaded: true, translationCount: body.translationCount ?? body.translations?.length ?? 0 } : {}),
+            ...(body.membersLoaded ? { members: body.members ?? [], membersLoaded: true } : {}),
+          };
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [admin, adminSection]);
   const view = route.view;
   const showStart = needsTeam && (view === "home" || view === "team" || view === "subteams" || view === "venues");
 
@@ -254,7 +343,7 @@ export function TeamDashboard({
     setTeams(listMyTeams());
     creating.current = false;
     showFeedback(avatarError ? { message: avatarError, variant: "error" } : { message: t("team.created"), variant: "success" });
-    router.push(teamHref(basePath));
+    softGo(teamHref(basePath));
     router.refresh();
   }
 
@@ -284,7 +373,6 @@ export function TeamDashboard({
     setOwnedTeam(next);
     if (ownedTeam?.id === teamId) void setActiveTeam(next?.id ?? null);
     showFeedback({ message: t("admin.teams.unwatched"), variant: "success" });
-    router.refresh();
   }
 
   function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string }) {
@@ -324,7 +412,7 @@ export function TeamDashboard({
       setOwnedTeam(next);
       setTeams(listMyTeams());
       void setActiveTeam(next?.id ?? null);
-      router.push(basePath === "/demo" ? "/demo" : "/dashboard");
+      softGo(basePath === "/demo" ? "/demo" : "/dashboard");
       router.refresh();
       return;
     }
@@ -332,7 +420,6 @@ export function TeamDashboard({
     setCurrentTeam(next);
     setOwnedTeam(next);
     setTeams(listMyTeams());
-    router.refresh();
   }
 
   async function joinTeam(raw: string) {
@@ -347,7 +434,7 @@ export function TeamDashboard({
       setOwnedTeam(team);
       setTeams(listMyTeams());
       showFeedback({ message: t("team.joined"), variant: "success" });
-      router.push(teamHref(basePath));
+      softGo(teamHref(basePath));
       return;
     }
     const result = await joinOwnedTeam(code);
@@ -359,7 +446,7 @@ export function TeamDashboard({
     setOwnedTeam(result.team);
     setTeams(listMyTeams());
     showFeedback({ message: t("team.joined"), variant: "success" });
-    router.push(teamHref(basePath));
+    softGo(teamHref(basePath));
     router.refresh();
   }
   const openEventId = route.view === "home" ? route.eventId : null;
@@ -377,6 +464,17 @@ export function TeamDashboard({
   const today = parseIsoDate(todayIso);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [pastEvents, setPastEvents] = useState<TeamEvent[]>([]);
+  const [loadedHistory, setLoadedHistory] = useState<string[]>([]);
+  const [historyMiss, setHistoryMiss] = useState("");
+  const historyTeamId = ownedTeam?.id ?? "";
+  const [historyTeam, setHistoryTeam] = useState(historyTeamId);
+  if (historyTeam !== historyTeamId) {
+    setHistoryTeam(historyTeamId);
+    setPastEvents([]);
+    setLoadedHistory([]);
+    setHistoryMiss("");
+  }
   const [selectedIso, setSelectedIso] = useState(todayIso);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [subteamId, setSubteamId] = useState<string | null>(null);
@@ -387,6 +485,12 @@ export function TeamDashboard({
   const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
   const [lineupPendingId, setLineupPendingId] = useState<string | null>(null);
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
+  const [pendingPath, setPendingPath] = useState(pathname);
+  if (pathname !== pendingPath) {
+    setPendingPath(pathname);
+    setPendingNav(null);
+  }
   const demo = useSyncExternalStore(subscribeDemoSession, getDemoSession, getDemoSession);
   const demoEvents = demo.events;
   const eventEdits = demo.edits;
@@ -465,7 +569,8 @@ export function TeamDashboard({
     } else {
       const remembered = ownedTeam?.code ?? preferredCode ?? (account?.activeTeamId ? initialTeams.find((team) => team.id === account.activeTeamId)?.code : null);
       const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0].code;
-      const next = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
+      const incoming = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
+      const next = incoming.loaded === false && ownedTeam && ownedTeam.id === incoming.id && ownedTeam.loaded !== false ? ownedTeam : incoming;
       setOwnedTeam(next);
       setTeams(initialTeams);
       const seeded: Record<string, Record<string, Rsvp>> = {};
@@ -480,15 +585,38 @@ export function TeamDashboard({
     const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0]?.code;
     if (preferred) selectMyTeam(preferred);
   }, [account, initialTeams, ownedTeam?.code, preferredCode, serverTeams]);
+  useEffect(() => {
+    if (basePath === "/demo" || !ownedTeam?.id || ownedTeam.loaded !== false) return;
+    const teamId = ownedTeam.id;
+    let active = true;
+    void fetch(`/api/teams/${teamId}`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; team?: IssuedTeam }) : null))
+      .then((body) => {
+        if (!active || !body?.ok || !body.team || body.team.loaded === false) return;
+        const team = body.team;
+        setCurrentTeam(team);
+        setOwnedTeam((current) => (current?.id === teamId ? team : current));
+        setTeams(listMyTeams());
+        const seeded: Record<string, Record<string, Rsvp>> = {};
+        for (const row of team.rsvps ?? []) seeded[row.eventId] = { ...(seeded[row.eventId] ?? {}), [row.userId]: row.status };
+        setRsvp(seeded);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [basePath, ownedTeam?.id, ownedTeam?.loaded]);
   const pendingAnchor = useRef<string | null>(null);
 
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
   const calendarEvents = useMemo(() => {
-    const source = basePath === "/demo" ? [...catalogEvents(parseIsoDate(`${todayIso.slice(0, 7)}-01`)), ...demoEvents] : (ownedTeam?.events ?? []);
-    return source.filter((event) => !hiddenEventIds.includes(event.id)).map((event) => eventEdits[event.id] ?? event);
-  }, [basePath, demoEvents, eventEdits, hiddenEventIds, ownedTeam, todayIso]);
+    const source = basePath === "/demo" ? [...(demoBundle?.catalogEvents(parseIsoDate(`${todayIso.slice(0, 7)}-01`)) ?? []), ...demoEvents] : [...(ownedTeam?.events ?? []), ...pastEvents];
+    const byId = new Map<string, TeamEvent>();
+    for (const event of source) byId.set(event.id, event);
+    return [...byId.values()].filter((event) => !hiddenEventIds.includes(event.id)).map((event) => eventEdits[event.id] ?? event);
+  }, [basePath, demoBundle, demoEvents, eventEdits, hiddenEventIds, ownedTeam, pastEvents, todayIso]);
 
   const filtered = useMemo(() => {
     return calendarEvents.filter((event) => {
@@ -535,12 +663,12 @@ export function TeamDashboard({
     setYear(date.getFullYear());
     setMonth(date.getMonth());
     setSelectedIso(isoDate(date));
-    if (!keepEvent && openEventId) router.push(basePath);
+    if (!keepEvent && openEventId) softGo(basePath);
   }
 
   function showEvent(event: TeamEvent, date: Date) {
     selectDay(date, true);
-    router.push(eventHref(basePath, event.id));
+    softGo(eventHref(basePath, event.id));
     window.setTimeout(() => {
       document.getElementById("event-details")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 0);
@@ -549,6 +677,8 @@ export function TeamDashboard({
   async function setMemberRsvp(memberId: string, status: Rsvp, targetEventId?: string) {
     const eventId = targetEventId ?? openEventId;
     if (!eventId) return;
+    const voted = calendarEvents.find((item) => item.id === eventId);
+    if (voted && eventHasEnded(voted)) return;
     const previous = rsvp[eventId]?.[memberId] ?? getDemoSession().rsvp[eventId]?.[memberId] ?? "pending";
     updateDemoSession((current) => ({
       ...current,
@@ -561,7 +691,7 @@ export function TeamDashboard({
     if (basePath === "/demo" || !ownedTeam?.id) {
       const event = calendarEvents.find((item) => item.id === eventId);
       const price = event ? Math.round((venues.find((item) => item.id === event.venueId)?.pricePerHour ?? 0) * 100) / 100 : 0;
-      const member = MEMBERS.find((item) => item.id === memberId);
+      const member = demoMembers.find((item) => item.id === memberId);
       const wasGoing = previous === "going";
       const nowGoing = status === "going";
       if (moduleOn(FRONTEND_MODULE_KEYS.finance) && event && member && !member.feeExempt && price > 0 && wasGoing !== nowGoing) {
@@ -590,7 +720,7 @@ export function TeamDashboard({
       return;
     }
     const members = (ownedTeam.members ?? []).map((member) =>
-      member.id === memberId ? { ...member, balance: result.memberBalance, ledger: result.ledger } : member,
+      member.id === memberId ? { ...member, balance: result.memberBalance, ledger: result.ledger, ledgerLoaded: true } : member,
     );
     const rsvps = (ownedTeam.rsvps ?? []).filter((row) => !(row.eventId === eventId && row.userId === memberId));
     if (status === "going" || status === "absent") rsvps.push({ eventId, userId: memberId, status });
@@ -600,7 +730,6 @@ export function TeamDashboard({
     setCurrentTeam(next);
     setOwnedTeam(next);
     setTeams(listMyTeams());
-    router.refresh();
   }
 
   function toggleVenue(id: string) {
@@ -627,6 +756,7 @@ export function TeamDashboard({
       withCoach: input.withCoach,
       lineupSlots: previous?.lineupSlots,
       lineupSides: previous?.lineupSides,
+      lineupLoaded: previous?.lineupLoaded,
     };
   }
 
@@ -689,7 +819,6 @@ export function TeamDashboard({
     setAddingEvent(false);
     setEditingEvent(null);
     showFeedback({ message: t(editing ? "event.edit.saved" : "event.add.saved"), variant: "success" });
-    router.refresh();
   }
 
   function refundDemoEvent(event: TeamEvent) {
@@ -700,7 +829,7 @@ export function TeamDashboard({
       let team = current.team;
       for (const [userId, status] of Object.entries(rows)) {
         if (status !== "going" || price <= 0) continue;
-        const member = MEMBERS.find((item) => item.id === userId);
+        const member = demoMembers.find((item) => item.id === userId);
         if (!member || member.feeExempt) continue;
         player[userId] = Math.round(((player[userId] ?? 0) + price) * 100) / 100;
         team = Math.round((team - price) * 100) / 100;
@@ -735,7 +864,7 @@ export function TeamDashboard({
       });
       setDeleteTarget(null);
       showFeedback({ message: t("event.delete.saved"), variant: "success" });
-      router.push(basePath);
+      softGo(basePath);
       return;
     }
     setSavingEvent(true);
@@ -748,7 +877,7 @@ export function TeamDashboard({
     const refunded = new Map(result.refunds.map((row) => [row.userId, row]));
     const members = (ownedTeam.members ?? []).map((member) => {
       const refund = refunded.get(member.id);
-      return refund ? { ...member, balance: refund.balance, ledger: refund.ledger } : member;
+      return refund ? { ...member, balance: refund.balance, ledger: refund.ledger, ledgerLoaded: true } : member;
     });
     const next = {
       ...ownedTeam,
@@ -768,22 +897,20 @@ export function TeamDashboard({
     });
     setDeleteTarget(null);
     showFeedback({ message: t("event.delete.saved"), variant: "success" });
-    router.push(basePath);
-    router.refresh();
+    softGo(basePath);
   }
 
   function openLineup(event: TeamEvent) {
     if (lineupPendingId) return;
-    guardLeave(() => setLineupPendingId(event.id));
+    guardLeave(() => {
+      setLineupPendingId(event.id);
+      softGo(eventHref(basePath, event.id, true));
+      window.scrollTo({ top: 0 });
+    });
   }
 
   if (lineupPendingId && lineup && openEventId === lineupPendingId) setLineupPendingId(null);
 
-  useEffect(() => {
-    if (!lineupPendingId) return;
-    window.history.pushState(null, "", eventHref(basePath, lineupPendingId, true));
-    window.scrollTo({ top: 0 });
-  }, [basePath, lineupPendingId]);
 
   function collapseIfNarrow() {
     if (window.matchMedia("(max-width: 1023px)").matches) setSidebarCollapsed(true);
@@ -798,7 +925,15 @@ export function TeamDashboard({
       return;
     }
     pendingAnchor.current = anchor ?? "";
-    guardLeave(() => router.push(basePath));
+    navigate("home", () => softGo(basePath));
+  }
+
+  function navigate(key: string, run: () => void) {
+    setPendingNav(key);
+    guardLeave(() => {
+      run();
+      setPendingNav(null);
+    });
   }
 
   useEffect(() => {
@@ -822,8 +957,9 @@ export function TeamDashboard({
 
   function showView(next: Exclude<DashboardView, "home">) {
     collapseIfNarrow();
-    guardLeave(() => {
-      router.push(`${basePath}/${next}`);
+    if (view === next) return;
+    navigate(next, () => {
+      softGo(`${basePath}/${next}`);
       window.scrollTo({ top: 0 });
     });
   }
@@ -845,25 +981,26 @@ export function TeamDashboard({
   const activeModule = view === "admin" ? undefined : viewModule[view];
   const moduleVisible = !activeModule || moduleOn(activeModule);
   const lineupAllowed = moduleOn(FRONTEND_MODULE_KEYS.gameLayout);
-  const roster = activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : MEMBERS;
+  const teamPending = Boolean(account && ownedTeam?.loaded === false);
+  const roster = activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : demoMembers;
   const knownRsvp = Boolean(activeTeam && !activeTeam.demo && activeTeam.id);
   const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
   const entuziastiOn = moduleOn(FRONTEND_MODULE_KEYS.entuziasti);
   const teamModules = enabledModules?.filter((key) => !individualModuleKeys.includes(key) || (activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key))) ?? null;
   const lineupBlocked = lineup && !lineupAllowed;
-  const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? MEMBERS.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
+  const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? demoMembers.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
   const subteamCount = showStart ? 0 : filterSubteams.length;
   const venueSource = showStart ? [] : activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.venues ?? []) : venues;
   const venueCount = venueSource.filter((item) => !item.hidden).length;
   const adminCounts: Partial<Record<AdminSection, number>> = admin
     ? {
-        users: admin.users.length,
+        users: admin.usersLoaded ? admin.users.length : admin.userCount,
         teams: admin.teams.length,
         subteams: admin.subteams.length,
         modules: admin.modules.length,
         integrations: admin.integrations.length,
         languages: admin.languages.length,
-        translations: admin.translations.length,
+        translations: admin.translationsLoaded ? admin.translations.length : admin.translationCount,
         email: admin.emailTemplates.length,
         todo: admin.todos.filter((item) => !item.isDone).length,
       }
@@ -871,8 +1008,9 @@ export function TeamDashboard({
 
   function showAdmin(section: AdminSection) {
     collapseIfNarrow();
-    guardLeave(() => {
-      router.push(`${basePath}/admin/${section}`);
+    if (route.view === "admin" && route.section === section && !route.teamId) return;
+    navigate(`admin:${section}`, () => {
+      softGo(`${basePath}/admin/${section}`);
       window.scrollTo({ top: 0 });
     });
   }
@@ -897,7 +1035,7 @@ export function TeamDashboard({
     ? null
     : !account || activeTeam.demo
       ? (() => {
-          const base = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? null;
+          const base = demoMembers.find((member) => member.id === CURRENT_USER_ID) ?? null;
           if (!base) return null;
           const delta = demoPlayerDelta[base.id] ?? 0;
           return delta ? { ...base, balance: Math.round((base.balance + delta) * 100) / 100 } : base;
@@ -962,6 +1100,65 @@ export function TeamDashboard({
   }
   const dayHeaders = weekdayHeaders(formatLang, display.weekStartDay);
   const cells = monthGrid(year, month, display.weekStartDay);
+  const historyFrom = isoDate(cells[0]);
+  const historyTo = isoDate(cells[cells.length - 1]);
+  const historyKey = historyTeamId ? `${historyTeamId}:${historyFrom}:${historyTo}` : "";
+  const rsvpFloor = ownedTeam?.rsvpSince && ownedTeam.rsvpSince > historySince() ? ownedTeam.rsvpSince : historySince();
+  const historyNeeded = Boolean(historyKey && basePath !== "/demo" && historyFrom < rsvpFloor && !loadedHistory.includes(historyKey));
+  const historyLoading = historyNeeded && historyMiss !== historyKey;
+  useEffect(() => {
+    if (!historyNeeded || !historyTeamId) return;
+    let active = true;
+    void fetch(`/api/teams/${historyTeamId}/history?from=${historyFrom}&to=${historyTo}`)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { ok?: boolean; events?: TeamEvent[]; rsvps?: { eventId: string; userId: string; status: Rsvp }[] };
+      })
+      .then((body) => {
+        if (!active) return;
+        if (!body?.ok || !body.events) {
+          setHistoryMiss(historyKey);
+          return;
+        }
+        setLoadedHistory((current) => (current.includes(historyKey) ? current : [...current, historyKey]));
+        setPastEvents((current) => {
+          const byId = new Map(current.map((event) => [event.id, event]));
+          for (const event of body.events ?? []) byId.set(event.id, event);
+          return [...byId.values()];
+        });
+        if (body.rsvps?.length) {
+          setRsvp((current) => {
+            const next = { ...current };
+            for (const row of body.rsvps ?? []) next[row.eventId] = { ...(next[row.eventId] ?? {}), [row.userId]: row.status };
+            return next;
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setHistoryMiss(historyKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyFrom, historyKey, historyNeeded, historyTeamId, historyTo]);
+  useEffect(() => {
+    if (!lineup || basePath === "/demo" || !historyTeamId || !openEventId) return;
+    const event = calendarEvents.find((item) => item.id === openEventId);
+    if (!event || event.lineupLoaded !== false) return;
+    let active = true;
+    void fetch(`/api/teams/${historyTeamId}/events/${openEventId}/lineup`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; slots?: TeamEvent["lineupSlots"]; sides?: TeamEvent["lineupSides"] }) : null))
+      .then((body) => {
+        if (!active || !body?.ok) return;
+        const apply = (item: TeamEvent): TeamEvent => (item.id === openEventId ? { ...item, lineupSlots: body.slots ?? {}, lineupSides: body.sides ?? {}, lineupLoaded: true } : item);
+        setPastEvents((current) => current.map(apply));
+        setOwnedTeam((current) => (current && current.id === historyTeamId ? { ...current, events: (current.events ?? []).map(apply) } : current));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [basePath, calendarEvents, historyTeamId, lineup, openEventId]);
   const subteamsOn = moduleOn(FRONTEND_MODULE_KEYS.subteams);
   const subteamByEvent = new Map(filterSubteams.map((item) => [item.id, item]));
   const legendSubteamIds = new Set<string>();
@@ -976,15 +1173,18 @@ export function TeamDashboard({
   const legendSubteams = filterSubteams.filter((item) => legendSubteamIds.has(item.id));
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
+  const lineupReady = !lineupEvent || lineupEvent.lineupLoaded !== false;
   const managesTeam = Boolean(
     profile && activeTeam && !activeTeam.demo && (activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
   );
   const canManageTeam = basePath === "/demo" || managesTeam;
   const canEditLineup = Boolean(managesTeam && !activeTeam?.watching);
+  if (!canManageTeam && (view === "venues" || view === "subteams")) setClientPath(basePath);
   useEffect(() => {
-    if (canManageTeam || (view !== "venues" && view !== "subteams")) return;
-    router.replace(basePath);
-  }, [basePath, canManageTeam, router, view]);
+    if (canManageTeam) return;
+    const path = window.location.pathname;
+    if (path === `${basePath}/venues` || path === `${basePath}/subteams`) softReplace(basePath);
+  }, [basePath, canManageTeam, view]);
 
   return (
     <EntuziastiProvider enabled={entuziastiOn}>
@@ -1024,10 +1224,10 @@ export function TeamDashboard({
           className={`flex flex-wrap gap-1 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:items-stretch min-[600px]:overflow-x-hidden min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:px-2.5" : "min-[600px]:overflow-y-auto min-[600px]:pr-4 min-[600px]:pl-2.5"}`}
           aria-label={t("nav.sections")}
         >
-          <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
-          <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
-          {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
-          {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
+          <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
+          <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
+          {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} busy={pendingNav === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
+          {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
         </nav>
         {account ? (
           <nav
@@ -1084,10 +1284,16 @@ export function TeamDashboard({
         sports={sports}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
-        {account && ownedTeam && !ownedTeam.watching && entuziastiOn && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart ? (
+        {teamPending ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted" role="status">
+            <span className="size-5 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+            {t("admin.teams.loading")}
+          </div>
+        ) : null}
+        {account && ownedTeam && !ownedTeam.watching && entuziastiOn && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart && !teamPending ? (
           <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
         ) : null}
-        {!showStart && pendingVoteEvents.length && !(view === "home" && showPoll && !lineupEvent) ? (
+        {!showStart && !teamPending && pendingVoteEvents.length && !(view === "home" && showPoll && !lineupEvent) ? (
           <div role="status" className="mb-4 rounded-2xl bg-game-soft px-4 py-3 ring-1 ring-line">
             <p className="text-sm font-medium">{t("event.vote.needed")}</p>
             <ul className="mt-2 flex flex-wrap gap-2">
@@ -1106,10 +1312,16 @@ export function TeamDashboard({
           </div>
         ) : null}
         {showStart ? <NoTeamStart sports={sports} enabledModules={teamModules} individualModuleKeys={individualModuleKeys} onCreate={createTeam} onJoin={joinTeam} /> : null}
-        {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart ? (
+        {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart && !teamPending ? (
           <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("frontend_modules.disabled")}</p>
         ) : null}
-        {view === "home" && lineupEvent && lineupAllowed && !showStart && moduleVisible ? (
+        {view === "home" && lineup && lineupAllowed && !showStart && moduleVisible && !teamPending && !lineupReady ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted" role="status">
+            <span className="size-5 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+            {t("lineup.loading")}
+          </div>
+        ) : null}
+        {view === "home" && lineupEvent && lineupAllowed && !showStart && moduleVisible && !teamPending && lineupReady ? (
           <EventLineup
             key={lineupEvent.id}
             event={lineupEvent}
@@ -1140,12 +1352,12 @@ export function TeamDashboard({
               }
               return true;
             }}
-            onBack={() => guardLeave(() => router.push(eventHref(basePath, lineupEvent.id)))}
+            onBack={() => guardLeave(() => softGo(eventHref(basePath, lineupEvent.id)))}
             onUnsaved={rememberLineupUnsaved}
             editable={canEditLineup}
           />
         ) : null}
-        {view === "team" && !showStart && activeTeam && moduleVisible ? (
+        {view === "team" && !showStart && !teamPending && activeTeam && moduleVisible ? (
           <TeamRoster
             key={activeTeam.code}
             teamName={activeTeam.name}
@@ -1155,7 +1367,6 @@ export function TeamDashboard({
             teamId={activeTeam.id ?? null}
             leaderId={activeTeam.leaderId ?? null}
             accountId={profile?.id ?? null}
-            showOrigin={profile?.isAdmin === true}
             trainingVotingHours={activeTeam.trainingVotingHours ?? brand.trainingVotingHours}
             gameVotingHours={activeTeam.gameVotingHours ?? brand.gameVotingHours}
             currency={activeTeam.currency ?? null}
@@ -1163,14 +1374,14 @@ export function TeamDashboard({
             sports={activeTeam.demo ? [] : sports}
             enabledModules={teamModules}
             onTeamSaved={rememberTeam}
-            initialMembers={(activeTeam.demo || !profile ? MEMBERS : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
+            initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
               if (!delta) return member;
               return { ...member, balance: Math.round((member.balance + delta) * 100) / 100 };
             })}
             memberId={route.view === "team" ? route.memberId : null}
-            onOpenMember={(id) => router.push(teamHref(basePath, id))}
-            onCloseMember={() => router.push(teamHref(basePath))}
+            onOpenMember={(id) => softGo(teamHref(basePath, id))}
+            onCloseMember={() => softGo(teamHref(basePath))}
             subteams={activeTeam.demo ? undefined : (activeTeam.subteams ?? [])}
             onMemberSaved={rememberMember}
             onMemberRemoved={forgetMember}
@@ -1194,7 +1405,7 @@ export function TeamDashboard({
             })}
           />
         ) : null}
-        {view === "subteams" && !showStart && moduleVisible && canManageTeam ? (
+        {view === "subteams" && !showStart && !teamPending && moduleVisible && canManageTeam ? (
           <SubteamAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1208,7 +1419,7 @@ export function TeamDashboard({
             }}
           />
         ) : null}
-        {view === "venues" && !showStart && moduleVisible && canManageTeam ? (
+        {view === "venues" && !showStart && !teamPending && moduleVisible && canManageTeam ? (
           <VenueAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1227,9 +1438,21 @@ export function TeamDashboard({
             {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules" || route.section === "sports") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
             )}
-            {route.section === "users" && admin ? <AdminUsersList users={admin.users} sports={sports} /> : null}
-            {route.section === "teams" && admin ? (
-              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} modules={admin.modules} teamModules={admin.teamModules} sports={sports} openTeamId={openTeamId} accountId={account?.id ?? ""} watchedTeamIds={admin.watchedTeamIds} />
+            {route.section === "users" && admin && !admin.usersLoaded ? (
+              <>
+                <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL.users)}</h1>
+                <AdminSectionPending label={t("admin.loading")} />
+              </>
+            ) : null}
+            {route.section === "users" && admin?.usersLoaded ? <AdminUsersList users={admin.users} sports={sports} /> : null}
+            {route.section === "teams" && admin && !admin.membersLoaded ? (
+              <>
+                <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL.teams)}</h1>
+                <AdminSectionPending label={t("admin.loading")} />
+              </>
+            ) : null}
+            {route.section === "teams" && admin?.membersLoaded ? (
+              <AdminTeamsList teams={admin.teams} subteams={admin.subteams} members={admin.members} modules={admin.modules} teamModules={admin.teamModules} sports={sports} openTeamId={(route.view === "admin" && route.section === "teams" ? route.teamId : null) ?? openTeamId} accountId={account?.id ?? ""} watchedTeamIds={admin.watchedTeamIds} onNavigate={softGo} />
             ) : null}
             {route.section === "subteams" && admin ? <AdminSubteamsList teams={admin.teams} subteams={admin.subteams} /> : null}
             {route.section === "modules" && admin ? <AdminModulesPage initialModules={admin.modules} /> : null}
@@ -1239,7 +1462,8 @@ export function TeamDashboard({
             ) : null}
             {route.section === "settings" && admin ? <AdminSettingsForm initial={admin.brand} /> : null}
             {route.section === "languages" && admin ? <AdminLanguagesForm initialLanguages={admin.languages} /> : null}
-            {route.section === "translations" && admin ? (
+            {route.section === "translations" && admin && !admin.translationsLoaded ? <AdminSectionPending label={t("admin.loading")} /> : null}
+            {route.section === "translations" && admin?.translationsLoaded ? (
               <AdminTranslationsManager translations={admin.translations} languages={admin.languages} />
             ) : null}
             {route.section === "email" && admin ? (
@@ -1254,7 +1478,7 @@ export function TeamDashboard({
             {route.section === "cron" && admin ? <AdminCronPage /> : null}
           </div>
         ) : null}
-        <div className={view === "home" && !lineupEvent && !showStart && moduleVisible ? undefined : "hidden"}>
+        <div className={view === "home" && !lineupEvent && !showStart && !teamPending && moduleVisible ? undefined : "hidden"}>
         {pendingVoteEvents.length ? (
           <div className="mb-4">
             <CalendarPollSwitch value={resolvedHomeView} onChange={setHomePick} />
@@ -1319,7 +1543,10 @@ export function TeamDashboard({
                 <IconButton label={t("month.prev")} onClick={() => shiftMonth(-1)}>
                   <Chevron direction="left" />
                 </IconButton>
-                <h2 className="min-w-40 text-center text-lg font-semibold">{formatMonthTitle(year, month, formatLang)}</h2>
+                <h2 className="min-w-40 text-center text-lg font-semibold">
+                  {formatMonthTitle(year, month, formatLang)}
+                  {historyLoading ? <span className="mt-1 block text-xs font-normal text-muted">{t("calendar.history.loading")}</span> : null}
+                </h2>
                 <IconButton label={t("month.next")} onClick={() => shiftMonth(1)}>
                   <Chevron direction="right" />
                 </IconButton>
@@ -1583,14 +1810,14 @@ export function TeamDashboard({
             lineupPending={lineupPendingId === openEvent.id}
             onEdit={basePath === "/demo" || managesTeam ? () => setEditingEvent(openEvent) : undefined}
             onDelete={basePath === "/demo" || managesTeam ? () => setDeleteTarget(openEvent) : undefined}
-            onClose={() => router.push(basePath)}
+            onClose={() => softGo(basePath)}
           />
         ) : null}
         {leaveRun ? (
-          <AdminDialog open title={t("lineup.leave.title")} onClose={() => setLeaveRun(null)}>
+          <AdminDialog open closeButton title={t("lineup.leave.title")} onClose={() => { setLeaveRun(null); setPendingNav(null); }}>
             <p className="text-sm text-muted">{t("lineup.leave.body")}</p>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setLeaveRun(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
+              <button type="button" onClick={() => { setLeaveRun(null); setPendingNav(null); }} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
                 {t("actions.cancel")}
               </button>
               <button
@@ -1609,7 +1836,7 @@ export function TeamDashboard({
           </AdminDialog>
         ) : null}
         {deleteTarget ? (
-          <AdminDialog open title={t("event.delete.title")} onClose={() => { if (!savingEvent) setDeleteTarget(null); }}>
+          <AdminDialog open closeButton title={t("event.delete.title")} onClose={() => { if (!savingEvent) setDeleteTarget(null); }}>
             <p className="text-sm text-muted">{t("event.delete.confirm")}</p>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" disabled={savingEvent} onClick={() => setDeleteTarget(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
@@ -1644,6 +1871,7 @@ export function TeamDashboard({
                 count={adminCounts[item.section]}
                 icon={item.icon}
                 active={route.view === "admin" && route.section === item.section}
+                busy={pendingNav === `admin:${item.section}`}
                 flush
                 onClick={() => {
                   setAdminOpen(false);
@@ -1697,6 +1925,7 @@ function SideItem({
   count,
   icon,
   active,
+  busy = false,
   compact,
   row = false,
   flush = false,
@@ -1706,6 +1935,7 @@ function SideItem({
   count?: number;
   icon: ReactNode;
   active?: boolean;
+  busy?: boolean;
   compact?: boolean;
   row?: boolean;
   flush?: boolean;
@@ -1733,6 +1963,7 @@ function SideItem({
       onFocus={placeTip}
       onBlur={() => setTip(null)}
       aria-current={active ? "page" : undefined}
+      aria-busy={busy || undefined}
       aria-label={caption}
       className={`relative text-white/90 hover:bg-white/10 ${
         flush
@@ -1742,7 +1973,7 @@ function SideItem({
             : "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-start min-[600px]:gap-2 min-[600px]:overflow-hidden min-[600px]:rounded-xl min-[600px]:px-0 min-[600px]:py-0 min-[600px]:text-left min-[600px]:text-sm"
       } ${active ? "bg-white/15" : ""}`}
     >
-      <span className="inline-grid h-9 w-9 shrink-0 place-items-center [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
+      <span className="inline-grid h-9 w-9 shrink-0 place-items-center [&_svg]:h-5 [&_svg]:w-5">{busy ? <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon}</span>
       <span className={flush || row ? "min-w-0 flex-1 truncate" : `whitespace-nowrap min-[600px]:min-w-0 min-[600px]:flex-1 min-[600px]:truncate ${compact ? "min-[600px]:sr-only" : ""}`}>{label}</span>
       {count != null ? <span className={`shrink-0 text-xs tabular-nums whitespace-nowrap text-white/55 ${flush || row ? "pr-4" : compact ? "sr-only" : "hidden pr-4 min-[600px]:inline"}`}>{count}</span> : null}
     </button>

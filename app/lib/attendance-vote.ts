@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BalanceEntry, TeamEvent } from "@/app/lib/demo-data";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
-import { eventVotingOpen } from "@/app/lib/event-voting";
+import { eventHasEnded, eventVotingOpen } from "@/app/lib/event-voting";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import type { MessageKey } from "@/app/lib/messages";
@@ -41,6 +41,7 @@ export async function castMemberVote(
     subteamId: "",
     venueId: event.data.venue_id,
   };
+  if (eventHasEnded(votingEvent)) return { ok: false, error: "event.vote.closed" };
   if (input.enforceDeadline && !eventVotingOpen(votingEvent, team.data.training_voting_hours ?? DEFAULT_TRAINING_VOTING_HOURS, team.data.game_voting_hours ?? DEFAULT_GAME_VOTING_HOURS)) {
     return { ok: false, error: "event.vote.closed" };
   }

@@ -14,6 +14,7 @@ import { deleteTeam, saveTeam, setAdminTeamWatch, setTeamModule } from "@/app/li
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import type { MessageKey } from "@/app/lib/messages";
+import { adminTeamHref } from "@/app/lib/dashboard-path";
 import { sportLabel, type Sport } from "@/app/lib/sports";
 
 const MODULE_LABEL: Record<string, MessageKey> = {
@@ -34,6 +35,7 @@ export function AdminTeamsList({
   openTeamId = null,
   accountId,
   watchedTeamIds,
+  onNavigate,
 }: {
   teams: SystemTeam[];
   subteams: SystemSubteam[];
@@ -44,6 +46,7 @@ export function AdminTeamsList({
   openTeamId?: string | null;
   accountId: string;
   watchedTeamIds: string[];
+  onNavigate?: (href: string) => void;
 }) {
   const { t, lang, languages } = useLanguage();
   const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
@@ -116,7 +119,20 @@ export function AdminTeamsList({
     router.refresh();
   }
 
-  const openTeam = teams.find((team) => team.id === openTeamId) ?? null;
+  const [previewId, setPreviewId] = useState<string | null>(openTeamId);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [seenTeamId, setSeenTeamId] = useState(openTeamId);
+  const [ignoreRouteTeam, setIgnoreRouteTeam] = useState(false);
+  if (openTeamId !== seenTeamId) {
+    setSeenTeamId(openTeamId);
+    if (ignoreRouteTeam) {
+      if (!openTeamId) setIgnoreRouteTeam(false);
+    } else {
+      setPreviewId(openTeamId);
+      setPreviewLoading(false);
+    }
+  }
+  const openTeam = teams.find((team) => team.id === previewId) ?? null;
   const openSubteams = openTeam ? subteams.filter((item) => item.teamId === openTeam.id) : [];
   const individualModules = modules.filter((module) => module.isIndividual);
   const entuziastiModule = modules.find((module) => module.moduleKey === FRONTEND_MODULE_KEYS.entuziasti);
@@ -154,7 +170,21 @@ export function AdminTeamsList({
   }
 
   function openRoster(id: string) {
-    router.push(`/dashboard/admin/teams?team=${id}`);
+    setIgnoreRouteTeam(false);
+    setPreviewId(id);
+    if (openTeamId === id) {
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+    (onNavigate ?? ((href: string) => router.push(href)))(adminTeamHref(id));
+  }
+
+  function closeRoster() {
+    setIgnoreRouteTeam(true);
+    setPreviewLoading(false);
+    setPreviewId(null);
+    (onNavigate ?? ((href: string) => router.push(href)))(adminTeamHref());
   }
 
   const visible = useMemo(() => {
@@ -277,8 +307,15 @@ export function AdminTeamsList({
           </table>
         </div>
       </div>
-      {openTeam ? (
-        <AdminDialog open wide closeButton title={openTeam.name} onClose={() => router.replace("/dashboard/admin/teams")}>
+      {previewId ? (
+        <AdminDialog open blur wide closeButton title={openTeam && !previewLoading ? openTeam.name : t("admin.teams.loading")} onClose={closeRoster}>
+          {previewLoading || !openTeam ? (
+            <div className="flex flex-col items-center gap-3 py-12" role="status">
+              <span className="size-8 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+              <p className="text-sm text-muted">{t("admin.teams.loading")}</p>
+            </div>
+          ) : (
+          <>
           <h3 className="text-sm font-semibold">{t("admin.teams.modules")}</h3>
           {individualModules.length === 0 ? (
             <p className="mt-2 text-sm text-muted">{t("admin.teams.modules.empty")}</p>
@@ -357,12 +394,14 @@ export function AdminTeamsList({
                         {position ? positionLabel(position, t) : ""}
                       </span>
                     ) : null}
-                    <PlayerContact email={player.email} phone={player.phone} originIp={player.originIp} originCountry={player.originCountry} />
+                    <PlayerContact email={player.email} phone={player.phone} />
                   </span>
                 </li>
                 );
               })}
             </ul>
+          )}
+          </>
           )}
         </AdminDialog>
       ) : null}

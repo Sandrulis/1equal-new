@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
+import { trustedClientIp } from "@/app/lib/security/client-ip";
 import { asLang, translate, type Lang, type MessageKey } from "@/app/lib/messages";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { rateLimit } from "@/app/lib/security/rate-limit";
@@ -25,7 +26,7 @@ export async function sendContactMessage(formData: FormData): Promise<{ ok: true
   const subject = readField(formData, "subject").replace(/[\r\n]/g, " ").slice(0, 120);
   const message = readField(formData, "message").slice(0, 2000);
   if (!name || !isEmail(email) || subject.length < 2 || message.length < 2) return { ok: false, error: "landing.contact.error.invalid" };
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const ip = trustedClientIp(await headers()) || "local";
   if (await rateLimit(`contact:${ip}`, 5, 15 * 60 * 1000)) return { ok: false, error: "feedback.error.rate" };
 
   const client = createAdminClient();

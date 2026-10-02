@@ -14,5 +14,5 @@ export default async function DemoPage({ params }: { params: Promise<{ path?: st
   const { path } = await params;
   const route = parseDashboardPath(path);
   if (!route || route.view === "admin") redirect("/demo");
-  return <DashboardApp basePath="/demo" />;
+  return <DashboardApp basePath="/demo" seedDemo />;
 }

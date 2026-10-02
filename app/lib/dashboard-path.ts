@@ -1,5 +1,3 @@
-import { catalogEvents } from "@/app/lib/demo-data";
-
 export type DashboardBase = "/dashboard" | "/demo";
 
 export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "languages", "translations", "email", "todo", "cron", "sports"] as const;
@@ -11,7 +9,7 @@ export type DashboardRoute =
   | { view: "team"; memberId: string | null }
   | { view: "subteams" }
   | { view: "venues" }
-  | { view: "admin"; section: AdminSection };
+  | { view: "admin"; section: AdminSection; teamId: string | null };
 
 function adminSection(value: string): AdminSection | null {
   return ADMIN_SECTIONS.find((section) => section === value) ?? null;
@@ -26,14 +24,17 @@ export function parseDashboardPath(path: string[] | undefined, options?: { demoE
   }
   if (parts[0] === "subteams" && parts.length === 1) return { view: "subteams" };
   if (parts[0] === "venues" && parts.length === 1) return { view: "venues" };
+  if (parts[0] === "admin" && parts[1] === "teams" && parts.length === 3 && /^[A-Za-z0-9-]+$/.test(parts[2])) {
+    return { view: "admin", section: "teams", teamId: parts[2] };
+  }
   if (parts[0] === "admin" && parts.length === 2) {
     const section = adminSection(parts[1]);
-    if (section) return { view: "admin", section };
+    if (section) return { view: "admin", section, teamId: null };
   }
   const demoEvents = options?.demoEvents ?? true;
   const eventId = parts[1];
   const eventPath = parts[0] === "events" && Boolean(eventId && /^[A-Za-z0-9-]+$/.test(eventId));
-  const catalogEvent = catalogEvents().some((event) => event.id === eventId);
+  const catalogEvent = Boolean(eventId?.startsWith("demo-"));
   if (eventPath && (demoEvents || !catalogEvent) && parts.length === 2) {
     return { view: "home", eventId, lineup: false };
   }
@@ -48,6 +49,10 @@ export function routeFromPathname(pathname: string, basePath: DashboardBase): Da
   const prefix = `${basePath}/`;
   if (!pathname.startsWith(prefix)) return { view: "home", eventId: null, lineup: false };
   return parseDashboardPath(pathname.slice(prefix.length).split("/").filter(Boolean), { demoEvents: basePath === "/demo" }) ?? { view: "home", eventId: null, lineup: false };
+}
+
+export function adminTeamHref(teamId?: string | null): string {
+  return teamId ? `/dashboard/admin/teams/${teamId}` : "/dashboard/admin/teams";
 }
 
 export function teamHref(basePath: DashboardBase, memberId?: string | null): string {

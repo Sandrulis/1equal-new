@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { BalanceHistory } from "@/app/components/balance-history";
 import { ContentImage } from "@/app/components/content-image";
 import { PlayerContact } from "@/app/components/player-contact";
@@ -10,7 +10,8 @@ import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { TeamMark } from "@/app/components/team-mark";
-import { formatJersey, MEMBERS, type Member, type Subteam } from "@/app/lib/demo-data";
+import type { Member, Subteam } from "@/app/lib/demo-data";
+import { formatJersey } from "@/app/lib/format-jersey";
 import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -30,7 +31,7 @@ import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDism
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
-import { positionLabel } from "@/app/lib/positions";
+import { positionCode, positionLabel, positionName } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -67,7 +68,7 @@ export function TeamRoster({
   inviteCode,
   sourceUrl = null,
   logoUrl = null,
-  initialMembers = MEMBERS,
+  initialMembers = [],
   teamId = null,
   leaderId = null,
   accountId = null,
@@ -89,7 +90,6 @@ export function TeamRoster({
   persistedEntries = [],
   teamHolds = [],
   memberHolds = {},
-  showOrigin = false,
 }: {
   teamName: string;
   inviteCode: string;
@@ -117,7 +117,6 @@ export function TeamRoster({
   persistedEntries?: TeamEntry[];
   teamHolds?: BalanceHold[];
   memberHolds?: Record<string, BalanceHold[]>;
-  showOrigin?: boolean;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -131,6 +130,11 @@ export function TeamRoster({
   );
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [memberSeed, setMemberSeed] = useState(initialMembers);
+  if (members.length === 0 && initialMembers.length > 0 && memberSeed !== initialMembers) {
+    setMemberSeed(initialMembers);
+    setMembers(initialMembers);
+  }
   const [editing, setEditing] = useState<Member | null>(null);
   const [removing, setRemoving] = useState<Member | null>(null);
   const [removePending, setRemovePending] = useState(false);
@@ -149,12 +153,60 @@ export function TeamRoster({
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
   const teamReserved = Math.round(teamHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
   const statementEntries = [...persistedEntries, ...teamEntries].sort((a, b) => b.at.localeCompare(a.at));
-  const player = memberId ? members.find((member) => member.id === memberId) : undefined;
+  const [previewId, setPreviewId] = useState<string | null>(memberId);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [seenMemberId, setSeenMemberId] = useState(memberId);
+  const [ignoreRouteMember, setIgnoreRouteMember] = useState(false);
+  if (memberId !== seenMemberId) {
+    setSeenMemberId(memberId);
+    if (ignoreRouteMember) {
+      if (!memberId) setIgnoreRouteMember(false);
+    } else {
+      setPreviewId(memberId);
+      setPreviewLoading(false);
+    }
+  }
+  const player = previewId ? members.find((member) => member.id === previewId) : undefined;
 
   function openPlayer(id: string) {
+    setIgnoreRouteMember(false);
+    setPreviewId(id);
+    if (memberId === id) {
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
     onOpenMember(id);
-    window.scrollTo({ top: 0 });
   }
+
+  function closePlayer() {
+    setIgnoreRouteMember(true);
+    setPreviewLoading(false);
+    setPreviewId(null);
+    onCloseMember();
+  }
+
+  useEffect(() => {
+    if (!teamId || !previewId || previewLoading) return;
+    const member = members.find((item) => item.id === previewId);
+    if (!member || member.ledgerLoaded !== false) return;
+    let active = true;
+    void fetch(`/api/teams/${teamId}/ledger?userId=${encodeURIComponent(previewId)}`)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { ok?: boolean; entries?: Member["ledger"]; balance?: number };
+      })
+      .then((body) => {
+        if (!active || !body?.ok || !body.entries) return;
+        const next = { ...member, ledger: body.entries, balance: body.balance ?? member.balance, ledgerLoaded: true };
+        setMembers((current) => current.map((item) => (item.id === next.id ? next : item)));
+        onMemberSaved?.(next, inviteCode);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [inviteCode, members, onMemberSaved, previewId, previewLoading, teamId]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -197,7 +249,7 @@ export function TeamRoster({
       showFeedback({ message: t(result.error), variant: "error" });
       return;
     }
-    const next = { ...member, balance: result.balance, ledger: result.ledger };
+    const next = { ...member, balance: result.balance, ledger: result.ledger, ledgerLoaded: true };
     setMembers((current) => current.map((item) => (item.id === member.id ? next : item)));
     onMemberSaved?.(next, inviteCode);
     setAdjusting(null);
@@ -362,9 +414,9 @@ export function TeamRoster({
                       className="cursor-pointer border-b border-line last:border-b-0 hover:bg-ice"
                     >
                       <td className="w-full max-w-0 px-4 py-3">
-                        <MemberIdentity member={member} leader={member.id === leaderId} showOrigin={showOrigin} />
+                        <MemberIdentity member={member} leader={member.id === leaderId} />
                       </td>
-                      <td className="hidden px-4 py-3 text-center min-[768px]:table-cell">
+                      <td className="hidden px-4 py-3 text-center whitespace-nowrap min-[768px]:table-cell">
                         <MemberMark member={member} groups={groupList} />
                       </td>
                       {finance ? (
@@ -414,7 +466,7 @@ export function TeamRoster({
         />
       ) : null}
       {removing ? (
-        <AdminDialog open title={t("roster.remove.title")} onClose={() => { if (!removePending) setRemoving(null); }}>
+        <AdminDialog open closeButton title={t("roster.remove.title")} onClose={() => { if (!removePending) setRemoving(null); }}>
           <p className="text-sm text-muted">{t("roster.remove.confirm", { name: removing.name })}</p>
           <div className="mt-4 flex justify-end gap-2">
             <button type="button" disabled={removePending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
@@ -480,8 +532,15 @@ export function TeamRoster({
           if (adjusting) void saveAdjustment(adjusting, amount);
         }}
       />
-      {player ? (
-        <AdminDialog open size="player" closeButton title={player.name} onClose={onCloseMember}>
+      {previewId ? (
+        <AdminDialog open blur size="player" closeButton title={player && !previewLoading ? player.name : t("player.loading")} onClose={closePlayer}>
+          {previewLoading || !player ? (
+            <div className="flex flex-col items-center gap-3 py-12" role="status">
+              <span className="size-8 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+              <p className="text-sm text-muted">{t("player.loading")}</p>
+            </div>
+          ) : (
+          <>
           {isLeader && player.id !== leaderId ? (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-ice px-3 py-2.5">
               <span>
@@ -502,6 +561,8 @@ export function TeamRoster({
             </div>
           ) : null}
           <PlayerProfile member={player} subteams={groupList} finance={finance} leader={player.id === leaderId} embedded />
+          </>
+          )}
         </AdminDialog>
       ) : null}
     </div>
@@ -528,7 +589,7 @@ function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose:
   }
 
   return (
-    <AdminDialog open={open} title={t("roster.invite.title")} lead={t("roster.invite.lead")} onClose={onClose}>
+    <AdminDialog open={open} closeButton title={t("roster.invite.title")} lead={t("roster.invite.lead")} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <label className="block text-sm">
           <span className="text-muted">{t("common.email")}</span>
@@ -832,7 +893,7 @@ function BalanceDialog({
   }
 
   return (
-    <AdminDialog open={open} title={title} onClose={onClose}>
+    <AdminDialog open={open} closeButton title={title} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         {described ? (
           <label className="block text-sm">
@@ -879,7 +940,7 @@ function BalanceDialog({
   );
 }
 
-function MemberIdentity({ member, leader = false, showOrigin = false }: { member: Member; leader?: boolean; showOrigin?: boolean }) {
+function MemberIdentity({ member, leader = false }: { member: Member; leader?: boolean }) {
   const { t } = useLanguage();
   const photo = memberFaceUrl(member, useEntuziasti());
   return (
@@ -902,21 +963,47 @@ function MemberIdentity({ member, leader = false, showOrigin = false }: { member
             </span>
           ) : null}
         </span>
-        {showOrigin ? (
-          <PlayerContact email={member.email} phone={member.phone} originIp={member.originIp} originCountry={member.originCountry} />
-        ) : (
-          <>
-            {member.email ? <span className="block truncate text-sm text-muted">{member.email}</span> : null}
-            {member.phone ? <span className="block truncate text-sm text-muted">{member.phone}</span> : null}
-          </>
-        )}
+        <PlayerContact email={member.email} phone={member.phone} />
       </span>
     </div>
   );
 }
 
-function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
+function PositionChip({ code }: { code: string }) {
   const { t } = useLanguage();
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+  const label = positionCode(code);
+  const name = positionName(code, t);
+
+  function place(target: HTMLElement) {
+    const box = target.getBoundingClientRect();
+    setTip({ x: box.left + box.width / 2, y: box.top - 6 });
+  }
+
+  return (
+    <>
+      <span
+        aria-label={name}
+        className="shrink-0 rounded-lg bg-ice px-2 py-1 text-xs font-semibold"
+        onMouseEnter={(event) => place(event.currentTarget)}
+        onMouseLeave={() => setTip(null)}
+      >
+        {label}
+      </span>
+      {tip ? (
+        <span
+          role="tooltip"
+          style={{ left: tip.x, top: tip.y, transform: "translate(-50%, -100%)" }}
+          className="pointer-events-none fixed z-40 rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white"
+        >
+          {name}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const marks = ids.map((id) => groups?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
@@ -924,13 +1011,15 @@ function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
   const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
   if (!jersey && positions.length === 0 && marks.length === 0) return null;
   return (
-    <span className="flex flex-col items-center gap-1.5">
+    <span className="inline-flex w-max flex-col items-center gap-1.5">
       {jersey ? <span className="text-sm font-semibold tabular-nums">{jersey}</span> : null}
-      {positions.map((code) => (
-        <span key={code} className="rounded-lg bg-ice px-2.5 py-1 text-xs font-semibold">
-          {positionLabel(code, t)}
+      {positions.length ? (
+        <span className="inline-flex w-max flex-nowrap items-center justify-center gap-1">
+          {positions.map((code) => (
+            <PositionChip key={code} code={code} />
+          ))}
         </span>
-      ))}
+      ) : null}
       {marks.length ? (
         <span className="flex flex-row flex-wrap justify-center gap-1">
           {marks.map((subteam) => (

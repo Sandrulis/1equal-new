@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { messages, translate, type Lang, type MessageKey } from "@/app/lib/messages";
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import type { Lang, MessageKey } from "@/app/lib/messages";
 import { applyBrandName } from "@/app/lib/site-brand";
 import type { PublicI18n } from "@/app/lib/site-admin/types";
 
@@ -50,27 +50,80 @@ function readStoredLang(languages: PublicI18n["languages"], defaultCode: string)
   return defaultCode;
 }
 
+const packCache = new Map<Lang, Record<string, string>>();
+
+function rememberPack(lang: Lang, pack: Record<string, string>) {
+  packCache.set(lang, pack);
+  return pack;
+}
+
+async function loadPack(lang: Lang): Promise<Record<string, string>> {
+  const cached = packCache.get(lang);
+  if (cached) return cached;
+  const response = await fetch(`/api/i18n/${lang}`);
+  if (!response.ok) return {};
+  const pack = (await response.json()) as Record<string, string>;
+  return rememberPack(lang, pack);
+}
+
 export function LanguageProvider({
   children,
   i18n = FALLBACK_I18N,
   brandName,
+  initialLang,
+  initialPack,
 }: {
   children: ReactNode;
   i18n?: PublicI18n;
   brandName: string;
+  initialLang: Lang;
+  initialPack: Record<string, string>;
 }) {
   const lang = useSyncExternalStore(
     subscribeStoredLang,
     () => readStoredLang(i18n.languages, i18n.defaultCode),
     () => i18n.defaultCode,
   );
+  const [packs, setPacks] = useState<Partial<Record<Lang, Record<string, string>>>>(() => ({ [initialLang]: initialPack }));
+  const [extraOverrides, setExtraOverrides] = useState<PublicI18n["overrides"]>({});
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/i18n/overrides")
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as PublicI18n["overrides"];
+      })
+      .then((body) => {
+        if (!active || !body || typeof body !== "object") return;
+        setExtraOverrides(body);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
 
+  useEffect(() => {
+    const code = builtinLang(lang, i18n.defaultCode);
+    if (packs[code]) return;
+    let active = true;
+    void loadPack(code).then((pack) => {
+      if (!active) return;
+      setPacks((current) => (current[code] ? current : { ...current, [code]: pack }));
+    });
+    return () => {
+      active = false;
+    };
+  }, [i18n.defaultCode, lang, packs]);
+
   const value = useMemo<LanguageValue>(() => {
     const formatLang = builtinLang(lang, i18n.defaultCode);
+    const pack = packs[formatLang] ?? packs[initialLang] ?? initialPack;
     return {
       lang,
       formatLang,
@@ -82,25 +135,14 @@ export function LanguageProvider({
         emitStoredLang();
       },
       t(key, params) {
-        const builtIn = messages[key];
-        if (!builtIn) {
-          let missing = i18n.overrides[key]?.[lang] || i18n.overrides[key]?.[i18n.defaultCode] || key;
-          if (params) {
-            for (const [name, param] of Object.entries(params)) missing = missing.replaceAll(`{${name}}`, String(param));
-          }
-          return applyBrandName(missing, brandName);
-        }
-        const built = lang === "en" || lang === "lv" || lang === "ru" ? builtIn[lang] : undefined;
-        const fallback = i18n.defaultCode === "en" ? builtIn.en : i18n.defaultCode === "ru" ? builtIn.ru : builtIn.lv;
-        let value = i18n.overrides[key]?.[lang] || built || i18n.overrides[key]?.[i18n.defaultCode] || fallback || builtIn.lv;
-        if (!value) value = translate(formatLang, key, params);
-        else if (params) {
+        let value = extraOverrides[key]?.[lang] || i18n.overrides[key]?.[lang] || pack[key] || extraOverrides[key]?.[i18n.defaultCode] || i18n.overrides[key]?.[i18n.defaultCode] || initialPack[key] || key;
+        if (params) {
           for (const [name, param] of Object.entries(params)) value = value.replaceAll(`{${name}}`, String(param));
         }
         return applyBrandName(value, brandName);
       },
     };
-  }, [brandName, i18n.defaultCode, i18n.languages, i18n.overrides, lang]);
+  }, [brandName, extraOverrides, i18n.defaultCode, i18n.languages, i18n.overrides, initialLang, initialPack, lang, packs]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

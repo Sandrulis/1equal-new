@@ -5,7 +5,9 @@ import { FeedbackToastProvider } from "@/app/components/feedback-toast";
 import { SiteBrandProvider } from "@/app/components/site-brand-provider";
 import { SentryClient } from "@/app/components/sentry-client";
 import { UmamiScript } from "@/app/components/umami-script";
+import { messagePack } from "@/app/lib/i18n/pack";
 import { LanguageProvider } from "@/app/lib/language";
+import { asLang } from "@/app/lib/messages";
 import { getPublicI18n, getPublicSentry, getPublicUmami, getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl, siteDescription } from "@/app/lib/site";
 import "./globals.css";
@@ -38,12 +40,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const [brand, i18n, umami, sentry] = await Promise.all([getSiteBrand(), getPublicI18n(), getPublicUmami(), getPublicSentry()]);
   const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || sentry?.dsn || null;
   const sentryEnvironment = process.env.SENTRY_ENVIRONMENT || sentry?.environment || "";
+  const initialLang = asLang(i18n.defaultCode);
   return (
     <html lang={i18n.defaultCode} className={dmSans.variable}>
       <body className="font-sans antialiased">
         <SentryClient dsn={sentryDsn} environment={sentryEnvironment} />
         <SiteBrandProvider brand={brand}>
-          <LanguageProvider i18n={i18n} brandName={brand.name}>
+          <LanguageProvider i18n={i18n} brandName={brand.name} initialLang={initialLang} initialPack={messagePack(initialLang)}>
             <CookieConsentProvider>
               <UmamiScript websiteId={umami?.websiteId ?? null} scriptUrl={umami?.scriptUrl ?? null} />
               <FeedbackToastProvider>{children}</FeedbackToastProvider>

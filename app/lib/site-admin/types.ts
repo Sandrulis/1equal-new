@@ -131,6 +131,11 @@ export type AdminConsole = {
   emailTemplates: EmailTemplate[];
   todos: AdminTodo[];
   watchedTeamIds: string[];
+  usersLoaded: boolean;
+  translationsLoaded: boolean;
+  membersLoaded: boolean;
+  userCount: number;
+  translationCount: number;
 };
 
 export type PublicI18n = {

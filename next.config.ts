@@ -23,6 +23,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.supabase.co", pathname: "/storage/v1/object/public/**" },
+      { protocol: "https", hostname: "ehl.entuziasti.com" },
+    ],
+  },
   async headers() {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
     return [

@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { SUBTEAMS, VENUES, type Subteam, type Venue } from "@/app/lib/demo-data";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Subteam, Venue } from "@/app/lib/demo-data";
 
 type SubteamInput = { name: string; color: string };
 type VenueInput = { name: string; pricePerHour: number };
@@ -21,9 +21,22 @@ type TeamCatalogValue = {
 
 const TeamCatalogContext = createContext<TeamCatalogValue | null>(null);
 
-export function TeamCatalogProvider({ children }: { children: ReactNode }) {
-  const [subteams, setSubteams] = useState<Subteam[]>(SUBTEAMS);
-  const [venues, setVenues] = useState<Venue[]>(VENUES);
+export function TeamCatalogProvider({ seedDemo = false, children }: { seedDemo?: boolean; children: ReactNode }) {
+  const [subteams, setSubteams] = useState<Subteam[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
+
+  useEffect(() => {
+    if (!seedDemo) return;
+    let active = true;
+    void import("@/app/lib/demo-data").then((mod) => {
+      if (!active) return;
+      setSubteams(mod.SUBTEAMS);
+      setVenues(mod.VENUES);
+    });
+    return () => {
+      active = false;
+    };
+  }, [seedDemo]);
 
   const value = useMemo<TeamCatalogValue>(() => {
     return {

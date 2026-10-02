@@ -17,6 +17,7 @@ export function DashboardApp({
   enabledModules = null,
   individualModuleKeys = [],
   sports = [],
+  seedDemo = false,
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
@@ -26,9 +27,10 @@ export function DashboardApp({
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
   sports?: Sport[];
+  seedDemo?: boolean;
 }) {
   return (
-    <TeamCatalogProvider>
+    <TeamCatalogProvider seedDemo={seedDemo}>
       <TeamDashboard basePath={basePath} account={account} admin={admin} initialTeams={initialTeams} openTeamId={openTeamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} />
     </TeamCatalogProvider>
   );

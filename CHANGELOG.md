@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.21
+
+- Pirmajā kadrā ielādējas aktīvā komanda. Sastāvs, vecāki mēneši, spēlētāja bilances rindas un admina lietotāji, tulkojumi vai dalībnieki nāk, kad tos atver
+- Divi faktori jāpabeidz, pirms komandas un admin dati tiek atdoti. Izcelsmes IP nāk no platformas, nevis no klienta pārsūtītās adreses
+- Paneļa klikšķi paliek lapā. Lielai komandai balsis pirmajā kadrā ir pēdējās 45 dienas un nākotne
+
 ## v0.1.20
 
 - Admina lietotāju sarakstā ir e-pasts, tālrunis un valsts ar IP. Pie komandas nosaukuma ir sporta veids

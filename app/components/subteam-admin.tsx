@@ -29,6 +29,7 @@ export function SubteamAdmin({
   const subteams = teamId ? (ownedSubteams ?? []) : catalog.subteams;
   const [pending, setPending] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Subteam | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#0f6e82");
 
@@ -81,9 +82,11 @@ export function SubteamAdmin({
       }
       onChange?.(subteams.filter((item) => item.id !== id));
       if (editingId === id) setEditingId(null);
+      setRemoving(null);
       return;
     }
     catalog.removeSubteam(id);
+    setRemoving(null);
   }
 
   return (
@@ -100,6 +103,7 @@ export function SubteamAdmin({
 
       <AdminDialog
         open={editingId !== null}
+        closeButton
         title={editingId === "new" ? t("catalog.subteams.add") : t("catalog.subteams.edit")}
         onClose={pending ? () => undefined : close}
       >
@@ -131,6 +135,23 @@ export function SubteamAdmin({
         </form>
       </AdminDialog>
 
+      <AdminDialog
+        open={removing !== null}
+        closeButton
+        title={t("catalog.subteams.delete.title")}
+        onClose={() => { if (!pending) setRemoving(null); }}
+      >
+        <p className="text-sm text-muted">{t("catalog.subteams.delete.confirm", { name: removing?.name ?? "" })}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={pending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="button" disabled={pending || !removing} onClick={() => { if (removing) void remove(removing.id); }} className="rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {t("actions.delete")}
+          </button>
+        </div>
+      </AdminDialog>
+
       {subteams.length === 0 ? (
         <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("catalog.subteams.empty")}</p>
       ) : (
@@ -149,7 +170,7 @@ export function SubteamAdmin({
                   <IconTipButton label={t("roster.edit")} tone="train" onClick={() => openEdit(subteam)}>
                     <IconPencil />
                   </IconTipButton>
-                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(subteam.id)}>
+                  <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => setRemoving(subteam)}>
                     <IconTrash />
                   </IconTipButton>
                 </span>

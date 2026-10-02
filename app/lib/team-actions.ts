@@ -17,7 +17,8 @@ import { notifyNewEvent } from "@/app/lib/email/event-mail";
 import { eventHasEnded } from "@/app/lib/event-voting";
 import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
-import { eventFromRow, memberFromRow, requireUserAdmin, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
+import { historySince } from "@/app/lib/history-window";
+import { eventFromRow, memberFromRow, requireUserAdmin, TEAM_EVENT_COLUMNS, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -277,7 +278,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
     gate.client.from("subteams").select("id, name, color, updated_at").eq("team_id", found.data.id),
     gate.client.from("team_member_subteams").select("user_id, subteam_id").eq("team_id", found.data.id),
     gate.client.from("venues").select("id, name, price_per_hour, hidden, updated_at").eq("team_id", found.data.id),
-    gate.client.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, lineup").eq("team_id", found.data.id).order("event_date").order("start_time"),
+    gate.client.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", found.data.id).gte("event_date", historySince()).order("event_date").order("start_time"),
   ]);
   const idsByUser = new Map<string, string[]>();
   for (const link of links.data ?? []) {
@@ -735,7 +736,7 @@ export async function updateOwnedEvent(input: {
     })
     .eq("id", input.eventId)
     .eq("team_id", input.teamId)
-    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, lineup")
+    .select(TEAM_EVENT_COLUMNS)
     .single();
   if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(updated.data);

@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { normalizeSiteDisplay } from "@/app/lib/display-preferences";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, normalizeCurrency, votingHours } from "@/app/lib/team-defaults";
 import { messages } from "@/app/lib/messages";
@@ -12,6 +13,7 @@ import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { listUserOrigins } from "@/app/lib/admin-origin";
 import { displaySportIcon, type Sport } from "@/app/lib/sports";
 import { createAdminClient } from "@/app/lib/supabase/admin";
+import type { AdminSection } from "@/app/lib/dashboard-path";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
 function cachedPublic<T>(key: string, load: () => Promise<T>) {
@@ -86,20 +88,26 @@ export const getPublicI18n = cachedPublic("site-i18n", async (): Promise<PublicI
     if (mapped.length > 0) usable = mapped;
   }
   const defaultCode = usable.find((language) => language.isDefault)?.code ?? usable[0]?.code ?? "lv";
-  const overrides: Record<string, Record<string, string>> = {};
-  if (admin) {
-    const { data } = await admin.from("site_translations").select("translation_key, language_code, value");
-    for (const row of data ?? []) {
-      const bucket = overrides[row.translation_key] ?? {};
-      bucket[row.language_code] = row.value;
-      overrides[row.translation_key] = bucket;
-    }
-  }
   return {
     languages: usable.map((language) => ({ code: language.code, name: language.name, isDefault: language.code === defaultCode })),
     defaultCode,
-    overrides,
+    overrides: {},
   };
+});
+
+export const loadTranslationOverrides = cachedPublic("site-translation-overrides", async (): Promise<PublicI18n["overrides"]> => {
+  const admin = createAdminClient();
+  const overrides: PublicI18n["overrides"] = {};
+  if (!admin) return overrides;
+  const { data } = await admin.from("site_translations").select("translation_key, language_code, value").in("language_code", ["lv", "en", "ru"]);
+  for (const row of data ?? []) {
+    const value = typeof row.value === "string" ? row.value : "";
+    if (!value) continue;
+    const bucket = overrides[row.translation_key] ?? {};
+    bucket[row.language_code] = value;
+    overrides[row.translation_key] = bucket;
+  }
+  return overrides;
 });
 
 function displayName(row: { name: string; first_name: string; last_name: string; email: string }): string {
@@ -125,7 +133,7 @@ function oneRow<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-async function listMemberships(): Promise<MembershipLink[]> {
+const listMemberships = cache(async (): Promise<MembershipLink[]> => {
   const admin = createAdminClient();
   if (!admin) return [];
   const { data, error } = await admin
@@ -133,7 +141,7 @@ async function listMemberships(): Promise<MembershipLink[]> {
     .select("user_id, team_id, jersey_number, position, phone, is_team_admin, ehl_player, users(email, name, first_name, last_name, avatar_url), teams(id, name, sport_id)");
   if (error || !data) return [];
   return data as MembershipLink[];
-}
+});
 
 export async function listSystemUsers(): Promise<SystemUser[]> {
   const admin = createAdminClient();
@@ -370,21 +378,19 @@ export async function listAdminTodos(userId: string): Promise<AdminTodo[]> {
   }));
 }
 
-export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
-  const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
-  const admin = createAdminClient();
+export async function loadTranslationCatalog(): Promise<SiteTranslationRow[]> {
+  const [languages, admin] = await Promise.all([listSiteLanguages(), Promise.resolve(createAdminClient())]);
   const stored = new Map<string, Record<string, string>>();
   if (admin) {
     const { data } = await admin.from("site_translations").select("translation_key, language_code, value");
     for (const row of data ?? []) {
       const bucket = stored.get(row.translation_key) ?? {};
-      bucket[row.language_code] = row.value;
+      bucket[row.language_code] = typeof row.value === "string" ? row.value : "";
       stored.set(row.translation_key, bucket);
     }
   }
-
   const keys = new Set<string>([...Object.keys(messages), ...stored.keys()]);
-  const translations: SiteTranslationRow[] = [...keys].sort().map((key) => {
+  return [...keys].sort().map((key) => {
     const bundled = key in messages;
     const builtIn = bundled ? messages[key as keyof typeof messages] : null;
     const values: Record<string, string> = {};
@@ -399,11 +405,20 @@ export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
     }
     return { key, bundled, values };
   });
+}
 
-  const [users, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, watched] = await Promise.all([
-    listSystemUsers(),
+export async function loadAdminConsole(userId: string, section: AdminSection): Promise<AdminConsole> {
+  const needUsers = section === "users";
+  const needTranslations = section === "translations";
+  const needMembers = section === "teams";
+  const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
+  const admin = createAdminClient();
+  const [users, translations, userCount, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, watched] = await Promise.all([
+    needUsers ? listSystemUsers() : Promise.resolve([] as SystemUser[]),
+    needTranslations ? loadTranslationCatalog() : Promise.resolve([] as SiteTranslationRow[]),
+    needUsers || !admin ? Promise.resolve(0) : admin.from("users").select("id", { count: "exact", head: true }).then((result) => result.count ?? 0),
     listSystemTeams(),
-    listSystemTeamMembers(),
+    needMembers ? listSystemTeamMembers() : Promise.resolve([] as SystemTeamMember[]),
     listSystemSubteams(),
     listFrontendModules().then((modules) => modules ?? []),
     listTeamModuleLinks(),
@@ -415,7 +430,27 @@ export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
       : Promise.resolve({ data: [] as { team_id: string }[] }),
   ]);
   const watchedTeamIds = (watched.data ?? []).map((row) => row.team_id);
-  return { brand, languages, translations, users, teams, members, subteams, modules, teamModules, integrations, googleRedirectUrl: `${await currentPublicOrigin()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
+  return {
+    brand,
+    languages,
+    translations,
+    users,
+    teams,
+    members,
+    subteams,
+    modules,
+    teamModules,
+    integrations,
+    googleRedirectUrl: `${await currentPublicOrigin()}/auth/callback`,
+    emailTemplates,
+    todos,
+    watchedTeamIds,
+    usersLoaded: needUsers,
+    translationsLoaded: needTranslations,
+    membersLoaded: needMembers,
+    userCount: needUsers ? users.length : userCount,
+    translationCount: needTranslations ? translations.length : Object.keys(messages).length,
+  };
 }
 
 export async function listSports(): Promise<Sport[]> {

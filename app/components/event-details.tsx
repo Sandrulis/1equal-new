@@ -3,8 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { IconCheck, IconTipButton, IconX } from "@/app/components/icon-tip-button";
-import { formatJersey, type Member, type TeamEvent } from "@/app/lib/demo-data";
-import { eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
+import type { Member, TeamEvent } from "@/app/lib/demo-data";
+import { formatJersey } from "@/app/lib/format-jersey";
+import { eventHasEnded, eventVotingOpen, voteRemainingParts } from "@/app/lib/event-voting";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { formatWeekday, hoursBetween } from "@/app/lib/format";
@@ -113,6 +114,7 @@ export function EventDetails({
   const formatMoney = useFormatMoney();
   const { formatDate, formatTime } = useDisplayFormat();
   const fee = feeProp ?? eventPlayerFee(event.type);
+  const ended = eventHasEnded(event);
   const statuses = members.map((member, index) => memberRsvp(event.id, member.id, index, rsvp, knownRsvp));
   const going = members.filter((_, index) => statuses[index] === "going");
   const absent = members.filter((_, index) => statuses[index] === "absent");
@@ -197,6 +199,7 @@ export function EventDetails({
                 actorId={actorId}
                 leader={leader}
                 votingOpen={votingOpen}
+                ended={ended}
                 reservedLabel={reservedByUser && (reservedByUser[member.id] ?? 0) > 0 ? t("finance.reserved", { amount: formatMoney(reservedByUser[member.id] ?? 0) }) : null}
                 onRsvp={onRsvp}
               />
@@ -204,12 +207,12 @@ export function EventDetails({
           </AttendanceGroup>
           <AttendanceGroup title={t("event.absent")} count={absent.length} tone="absent" empty={t("event.none")}>
             {absent.map((member) => (
-              <PersonRow key={member.id} member={member} status="absent" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="absent" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
           <AttendanceGroup title={t("event.pending")} count={pending.length} tone="pending" empty={t("event.none")}>
             {pending.map((member) => (
-              <PersonRow key={member.id} member={member} status="pending" actorId={actorId} leader={leader} votingOpen={votingOpen} onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="pending" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
         </div>
@@ -270,6 +273,7 @@ function PersonRow({
   actorId,
   leader,
   votingOpen,
+  ended = false,
   reservedLabel = null,
   onRsvp,
 }: {
@@ -278,6 +282,7 @@ function PersonRow({
   actorId: string | null;
   leader: boolean;
   votingOpen: boolean;
+  ended?: boolean;
   reservedLabel?: string | null;
   onRsvp: (memberId: string, status: Rsvp) => void;
 }) {
@@ -291,7 +296,7 @@ function PersonRow({
       </li>
     );
   }
-  const locked = managed && !leader && !votingOpen;
+  const locked = ended || (managed && !leader && !votingOpen);
   const actionsClass = !managed || mine ? "flex shrink-0 gap-1" : "hidden shrink-0 gap-1 group-hover/player:flex max-[599px]:flex";
   return (
     <li className="group/player flex items-center justify-between gap-3 px-3 py-2">

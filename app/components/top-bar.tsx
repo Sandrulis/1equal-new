@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { AccountSettingsDialog } from "@/app/components/account-settings-dialog";
@@ -10,17 +11,20 @@ import { ChangePasswordDialog } from "@/app/components/change-password-dialog";
 import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { PlayerBalanceDialog } from "@/app/components/player-profile";
-import { HoldDialog, type BalanceHold } from "@/app/components/team-roster";
+import type { BalanceHold } from "@/app/components/team-roster";
 import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
 import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
-import { CURRENT_USER_ID, MEMBERS, type Member } from "@/app/lib/demo-data";
+import type { Member } from "@/app/lib/demo-data";
+import { CURRENT_USER_ID } from "@/app/lib/demo-constants";
 import { useFormatMoney } from "@/app/components/currency-provider";
 import type { CreateTeamInput } from "@/app/lib/team-defaults";
 import type { Sport } from "@/app/lib/sports";
 import { useLanguage } from "@/app/lib/language";
+
+const HoldDialog = dynamic(() => import("@/app/components/team-roster").then((mod) => mod.HoldDialog));
 
 function initials(name: string): string {
   return name
@@ -78,9 +82,21 @@ export function TopBar({
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
-  const demo = MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? MEMBERS[0];
   const [profile, setProfile] = useState(account);
-  const name = profile ? accountName(profile) : demo.name;
+  const [demoName, setDemoName] = useState("");
+  useEffect(() => {
+    if (account) return;
+    let active = true;
+    void import("@/app/lib/demo-data").then((mod) => {
+      if (!active) return;
+      const demo = mod.MEMBERS.find((member) => member.id === CURRENT_USER_ID) ?? mod.MEMBERS[0];
+      setDemoName(demo?.name ?? "");
+    });
+    return () => {
+      active = false;
+    };
+  }, [account]);
+  const name = profile ? accountName(profile) : demoName;
 
   const linkedPhoto = entuziasti ? (teamPlayer(profile, team?.code)?.photoUrl ?? null) : null;
   const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
@@ -162,7 +178,7 @@ export function TopBar({
         ) : null}
       </div>
       {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
-      <HoldDialog holds={holdsOpen ? reservedHolds : null} onClose={() => setHoldsOpen(false)} />
+      {holdsOpen ? <HoldDialog holds={reservedHolds} onClose={() => setHoldsOpen(false)} /> : null}
     </header>
   );
 }
