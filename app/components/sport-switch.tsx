@@ -1,56 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faIconDefinition } from "@/app/lib/fa-icons";
 import { useLanguage } from "@/app/lib/language";
-import { sportLabel, type Sport, type SportIcon } from "@/app/lib/sports";
+import { sportLabel, type Sport } from "@/app/lib/sports";
 
-export function SportIcon({ icon }: { icon: SportIcon }) {
-  if (icon === "ball") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 4c2 2.5 2 13.5 0 16M4 12c2.5-2 13.5-2 16 0" />
-      </svg>
-    );
-  }
-  if (icon === "basket") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="12" cy="8" r="3" />
-        <path d="M5 12h14M7 12c1 5 3 8 5 8s4-3 5-8" />
-      </svg>
-    );
-  }
-  if (icon === "racket") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <ellipse cx="10" cy="9" rx="5" ry="6" />
-        <path d="M14 14l6 6" />
-      </svg>
-    );
-  }
-  if (icon === "swim") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M3 15c2 1 3-1 5 0s3-1 5 0 3-1 5 0 3-1 5 0" />
-        <path d="M3 19c2 1 3-1 5 0s3-1 5 0 3-1 5 0 3-1 5 0" />
-      </svg>
-    );
-  }
-  if (icon === "run") {
-    return (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="15" cy="5" r="2" />
-        <path d="M8 21l3-6 3 2 3-5M10 11l4 1 2 3" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <circle cx="12" cy="12" r="7" />
-      <path d="M12 5v14M8 9h8" />
-    </svg>
-  );
+export function SportIcon({ icon }: { icon: string }) {
+  const [definition, setDefinition] = useState<IconDefinition | null>(null);
+  useEffect(() => {
+    let active = true;
+    void faIconDefinition(icon).then((found) => {
+      if (active) setDefinition(found);
+    });
+    return () => {
+      active = false;
+    };
+  }, [icon]);
+  if (!definition) return <span className="inline-block size-4" aria-hidden="true" />;
+  return <FontAwesomeIcon icon={definition} className="size-4" />;
 }
 
 export function SportSwitch({

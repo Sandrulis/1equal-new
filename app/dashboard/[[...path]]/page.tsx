@@ -5,6 +5,7 @@ import { MfaLoginGate } from "@/app/components/mfa-login-gate";
 import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { parseDashboardPath } from "@/app/lib/dashboard-path";
+import { recordMissingTeamOrigins, recordUserOrigin } from "@/app/lib/admin-origin";
 import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
 import { listOwnedTeams } from "@/app/lib/team-membership";
 
@@ -29,13 +30,18 @@ export default async function DashboardPage({
   const query = await searchParams;
   const route = parseDashboardPath(path, { demoEvents: false });
   if (!route || (route.view === "admin" && !account.isAdmin)) redirect("/dashboard");
-  await touchUserLastSeen(account.id);
-  const [admin, initialTeams, enabledModules, individualModuleKeys, sports] = await Promise.all([
+  const modulesPromise = listEnabledFrontendModuleKeys();
+  const individualPromise = listIndividualFrontendModuleKeys();
+  const sportsPromise = listSports();
+  await Promise.all([touchUserLastSeen(account.id), recordUserOrigin(account.id)]);
+  const initialTeams = await listOwnedTeams(account.id);
+  const ledTeamIds = initialTeams.filter((team) => team.leaderId === account.id && team.id).map((team) => team.id as string);
+  if (ledTeamIds.length > 0) await recordMissingTeamOrigins(ledTeamIds);
+  const [admin, enabledModules, individualModuleKeys, sports] = await Promise.all([
     account.isAdmin ? loadAdminConsole(account.id) : Promise.resolve(null),
-    listOwnedTeams(account.id),
-    listEnabledFrontendModuleKeys(),
-    listIndividualFrontendModuleKeys(),
-    listSports(),
+    modulesPromise,
+    individualPromise,
+    sportsPromise,
   ]);
   return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={query.team ?? null} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} />;
 }

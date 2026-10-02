@@ -57,11 +57,11 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard/admin/users` | Visi `public.users`. Meklēšana. Vārds, e-pasts, loma, komanda, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē) |
-| `/dashboard/admin/teams` | `public.teams`. Meklēšana, labošana, noņemšana. Kolonnas: apakškomandas un spēlētāji. Komandas vārds atver logu ar sarakstu. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`. Admins sastāvā neparādās un komandu tikai skatās |
+| `/dashboard/admin/users` | Visi `public.users`. Meklēšana. Vārds, e-pasts, tālrunis no komandas dalības, valsts un IP no `user_origins`, loma, komanda ar sporta veidu, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē) |
+| `/dashboard/admin/teams` | `public.teams`. Meklēšana, labošana, noņemšana. Kolonnas: apakškomandas un spēlētāji. Aiz komandas vārda ir sporta veids, un vārds atver logu ar sarakstu. Pie spēlētāja ir vadītāja un administratora atzīme, e-pasts, tālrunis un valsts ar IP. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`. Admins sastāvā neparādās un komandu tikai skatās |
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
 | `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, individuāls slēdzis, pievienot pēc atslēgas, dzēst. Individuāls modulis sākas izslēgts katrā komandā. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
-| `/dashboard/admin/sports` | Sporta veidi visās valodās, ikona un piesaistītie moduļi. Vismaz vienam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām |
+| `/dashboard/admin/sports` | Sporta veidi visās valodās. Ikonu meklē starp brīvajām Font Awesome solid, regular un brands ikonām, un ielāde rāda indikatoru. Formā ir tikai kopīgie moduļi. Individuālos ieslēdz komandai. Vismaz vienam sporta veidam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām |
 | `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Tokens ir tikai admina lapā |
 | `/dashboard/admin/settings` | Nosaukums, logotips, favicon. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding` |
 | `/dashboard/admin/integrations` | Turnstile, Google auth, Resend, Umami, Sentry |
@@ -76,8 +76,8 @@ Tabula `site_integrations`. Secret lauki klientam atpakaļ netiek sūtīti, tika
 
 | Atslēga | Lauki | Kas notiek, kad aktīva |
 |---|---|---|
-| `turnstile` | Site Key, Secret Key | Ienākšana, reģistrācija, Google pieslēgums un aizmirstā parole prasa pārbaudi |
-| `google_oauth` | Client ID, Client Secret, Redirect URI `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu |
+| `turnstile` | Site Key, Secret Key | Ienākšana, reģistrācija, Google pieslēgums un aizmirstā parole prasa pārbaudi. Skripts saņem lapas CSP nonce |
+| `google_oauth` | Client ID, Client Secret, Redirect URI ir publiskais hosts plus `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu |
 | `resend` | From, Reply-To, API Key | Reģistrācijas, paroles, e-pasta maiņas un notikumu vēstules ar vienotu izkārtojumu. Saite zem pogas ir tā pati, kas pogai. Tekstā garā domuzīme ir defise. Bez šīs integrācijas jaunu kontu ar paroli izveidot nevar |
 | `umami` | Website ID, Script URL tikai `https://cloud.umami.is` | Skripts ielādējas tikai ar statistikas sīkdatņu piekrišanu |
 | `sentry` | Environment, DSN | Pārlūka un servera kļūdas. Sesiju replay ir izslēgts. Kļūdu replay maskē tekstu un ievadi |
@@ -145,6 +145,9 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `044_entuziasti_module.sql` | `module_entuziasti`. Komandas un spēlētāja saite, arī pa sporta veidiem |
 | `045_team_modules.sql` | Moduļa slēdzis `is_individual` un `team_modules` katrai komandai |
 | `046_user_active_team.sql` | `users.active_team_id`. Izvēlētā komanda paliek pēc atsvaidzināšanas |
+| `047_sport_fontawesome_icons.sql` | Sporta ikona ir Font Awesome nosaukums. Vecās ikonas pāriet uz jaunajām |
+| `048_sport_icon_free_styles.sql` | Ikona drīkst būt arī `far:` un `fab:` |
+| `049_admin_origins.sql` | `user_origins` un `team_origins`. IP un valsts kods, redzams tikai adminam |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.20
+
+- Admina lietotāju sarakstā ir e-pasts, tālrunis un valsts ar IP. Pie komandas nosaukuma ir sporta veids
+- Google atgriešanās adrese ir publiskais hosts. Turnstile skripts saņem lapas nonce, lai pārbaude ielādētos produkcijā
+
+## v0.1.19
+
+- Admina komandas logā pie spēlētāja ir vadītāja un administratora atzīme, e-pasts un tālrunis
+- Sporta veida ikonu meklē starp visām brīvajām Font Awesome ikonām. Ielāde rāda indikatoru
+- Individuālie moduļi sporta veidu lapā nerādās. Tos ieslēdz katrai komandai
+
 ## v0.1.18
 
 - Ielogotu no sākumlapas aizved uz paneli

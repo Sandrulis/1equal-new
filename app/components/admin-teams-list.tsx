@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ContentImage } from "@/app/components/content-image";
+import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
@@ -13,7 +14,7 @@ import { deleteTeam, saveTeam, setAdminTeamWatch, setTeamModule } from "@/app/li
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import type { MessageKey } from "@/app/lib/messages";
-import type { Sport } from "@/app/lib/sports";
+import { sportLabel, type Sport } from "@/app/lib/sports";
 
 const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.subteams]: "nav.subteams",
@@ -44,7 +45,8 @@ export function AdminTeamsList({
   accountId: string;
   watchedTeamIds: string[];
 }) {
-  const { t } = useLanguage();
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const { formatDateTime } = useDisplayFormat();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
@@ -158,8 +160,12 @@ export function AdminTeamsList({
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return teams;
-    return teams.filter((team) => team.name.toLowerCase().includes(needle));
-  }, [query, teams]);
+    return teams.filter((team) => {
+      const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
+      const label = sport ? sportLabel(sport, lang, fallbackLang) : "";
+      return [team.name, label].join(" ").toLowerCase().includes(needle);
+    });
+  }, [fallbackLang, lang, query, sports, teams]);
 
   return (
     <div>
@@ -230,11 +236,14 @@ export function AdminTeamsList({
                 visible.map((team) => {
                   const subteamCount = subteams.filter((item) => item.teamId === team.id).length;
                   const playerCount = members.filter((member) => member.teamId === team.id).length;
+                  const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
+                  const sportName = sport ? sportLabel(sport, lang, fallbackLang) : "";
                   return (
                     <tr key={team.id} className="border-b border-line last:border-b-0">
                       <td className="px-4 py-3">
-                        <button type="button" onClick={() => openRoster(team.id)} className="block max-w-full truncate text-left font-medium text-train">
-                          {team.name}
+                        <button type="button" onClick={() => openRoster(team.id)} className="flex max-w-full items-baseline gap-2 text-left font-medium text-train">
+                          <span className="truncate">{team.name}</span>
+                          {sportName ? <span className="shrink-0 font-normal text-muted">{sportName}</span> : null}
                         </button>
                         <span className="block text-xs text-muted tabular-nums">{formatDateTime(team.updatedAt)}</span>
                       </td>
@@ -332,7 +341,15 @@ export function AdminTeamsList({
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-medium">{name}</span>
+                      {player.userId === openTeam.leaderId ? (
+                        <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("team.leader")}</span>
+                      ) : null}
+                      {player.teamAdmin ? (
+                        <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("roles.admin")}</span>
+                      ) : null}
+                    </span>
                     {player.number != null || position ? (
                       <span className="block truncate text-sm text-muted">
                         {player.number != null ? `#${player.number}` : ""}
@@ -340,7 +357,7 @@ export function AdminTeamsList({
                         {position ? positionLabel(position, t) : ""}
                       </span>
                     ) : null}
-                    {player.phone ? <span className="block truncate text-sm text-muted">{player.phone}</span> : null}
+                    <PlayerContact email={player.email} phone={player.phone} originIp={player.originIp} originCountry={player.originCountry} />
                   </span>
                 </li>
                 );

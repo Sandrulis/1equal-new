@@ -61,6 +61,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.svg-inline--fa {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  overflow: visible;
+  vertical-align: -0.125em;
+}
+
 button.todo-drag-handle {
   cursor: grab;
   touch-action: none;

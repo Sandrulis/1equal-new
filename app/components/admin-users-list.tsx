@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDisplayFormat } from "@/app/components/display-preferences";
+import { PlayerContact } from "@/app/components/player-contact";
+import { originLabel } from "@/app/lib/country-name";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import type { SystemUser } from "@/app/lib/site-admin/types";
+import { sportLabel, type Sport } from "@/app/lib/sports";
 
 function initials(name: string): string {
   const letters = name
@@ -21,8 +24,9 @@ function countKey(count: number): MessageKey {
   return count === 1 ? "admin.users.count.one" : "admin.users.count";
 }
 
-export function AdminUsersList({ users }: { users: SystemUser[] }) {
-  const { t } = useLanguage();
+export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports: Sport[] }) {
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -31,12 +35,18 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
     const matched = needle
       ? users.filter((user) => {
           const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
-          const teams = user.teams.map((team) => team.name).join(" ");
-          return [user.name, user.email, role, teams].join(" ").toLowerCase().includes(needle);
+          const teams = user.teams
+            .map((team) => {
+              const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
+              return [team.name, sport ? sportLabel(sport, lang, fallbackLang) : ""].filter(Boolean).join(" ");
+            })
+            .join(" ");
+          const origin = originLabel(user.originIp, user.originCountry, lang);
+          return [user.name, user.email, user.phone, origin, user.originIp, role, teams].join(" ").toLowerCase().includes(needle);
         })
       : users;
     return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
-  }, [query, t, users]);
+  }, [fallbackLang, lang, query, sports, t, users]);
 
   return (
     <div>
@@ -86,7 +96,7 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
                           </span>
                           <span className="min-w-0">
                             <span className="block font-medium">{user.name}</span>
-                            <span className="block truncate text-muted">{user.email}</span>
+                            <PlayerContact email={user.email} phone={user.phone} originIp={user.originIp} originCountry={user.originCountry} />
                             <span className="block text-muted min-[768px]:hidden">{t(user.isAdmin ? "roles.admin" : "roles.user")}</span>
                           </span>
                         </span>
@@ -97,16 +107,21 @@ export function AdminUsersList({ users }: { users: SystemUser[] }) {
                       <td className="px-4 py-3">
                         {user.teams.length ? (
                           <span className="flex flex-col items-start gap-1">
-                            {user.teams.map((team) => (
-                              <button
-                                key={team.id}
-                                type="button"
-                                onClick={() => router.push(`/dashboard/admin/teams?team=${team.id}`)}
-                                className="text-left font-medium text-train"
-                              >
-                                {team.name}
-                              </button>
-                            ))}
+                            {user.teams.map((team) => {
+                              const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
+                              const sportName = sport ? sportLabel(sport, lang, fallbackLang) : "";
+                              return (
+                                <button
+                                  key={team.id}
+                                  type="button"
+                                  onClick={() => router.push(`/dashboard/admin/teams?team=${team.id}`)}
+                                  className="flex max-w-full items-baseline gap-2 text-left font-medium text-train"
+                                >
+                                  <span className="truncate">{team.name}</span>
+                                  {sportName ? <span className="shrink-0 font-normal text-muted">{sportName}</span> : null}
+                                </button>
+                              );
+                            })}
                           </span>
                         ) : (
                           <span className="text-muted">{t("admin.users.no_team")}</span>

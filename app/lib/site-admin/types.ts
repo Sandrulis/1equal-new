@@ -31,16 +31,20 @@ export type SystemUser = {
   id: string;
   name: string;
   email: string;
+  phone: string;
+  originIp: string;
+  originCountry: string;
   isAdmin: boolean;
   createdAt: string;
   lastSeenAt: string | null;
-  teams: { id: string; name: string }[];
+  teams: { id: string; name: string; sportId: string | null }[];
 };
 
 export type SystemTeam = {
   id: string;
   name: string;
   sportId: string | null;
+  leaderId: string | null;
   updatedAt: string;
 };
 
@@ -63,6 +67,9 @@ export type SystemTeamMember = {
   position: string;
   ehlPosition: string;
   phone: string;
+  teamAdmin: boolean;
+  originIp: string;
+  originCountry: string;
   photoUrl: string | null;
   avatarUrl: string | null;
 };

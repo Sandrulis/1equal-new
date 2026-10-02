@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
+import { SportIconPicker } from "@/app/components/sport-icon-picker";
 import { SportIcon } from "@/app/components/sport-switch";
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import { createSport, deleteSport, setSportActive, updateSport } from "@/app/lib/site-admin/actions";
 import type { SiteLanguage } from "@/app/lib/site-admin/types";
-import { SPORT_ICONS, sportLabel, type Sport, type SportIcon as SportIconName } from "@/app/lib/sports";
+import { DEFAULT_SPORT_ICON, displaySportIcon, sportLabel, type Sport } from "@/app/lib/sports";
 
 const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.subteams]: "nav.subteams",
@@ -19,15 +20,6 @@ const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
   [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
   [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
-};
-
-const ICON_LABEL: Record<SportIconName, MessageKey> = {
-  hockey: "sports.icon.hockey",
-  ball: "sports.icon.ball",
-  basket: "sports.icon.basket",
-  racket: "sports.icon.racket",
-  swim: "sports.icon.swim",
-  run: "sports.icon.run",
 };
 
 export function AdminSportsPage({
@@ -101,7 +93,9 @@ export function AdminSportsPage({
         <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("sports.empty")}</p>
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
-          {sports.map((sport) => (
+          {sports.map((sport) => {
+            const moduleNames = sharedModuleKeys(sport, modules);
+            return (
             <li key={sport.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="flex min-w-0 items-center gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ice text-ink">
@@ -110,8 +104,8 @@ export function AdminSportsPage({
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{sportLabel(sport, lang, fallback)}</span>
                   <span className="block truncate text-xs text-muted">
-                    {sport.moduleKeys.length
-                      ? sport.moduleKeys.map((key) => (MODULE_LABEL[key] ? t(MODULE_LABEL[key]) : key)).join(", ")
+                    {moduleNames.length
+                      ? moduleNames.map((key) => (MODULE_LABEL[key] ? t(MODULE_LABEL[key]) : key)).join(", ")
                       : t("sports.modules.empty")}
                   </span>
                 </span>
@@ -136,7 +130,8 @@ export function AdminSportsPage({
                 </IconTipButton>
               </span>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       {creating || editing ? (
@@ -198,12 +193,13 @@ function SportForm({
   modules: FrontendModule[];
   pending: boolean;
   onClose: () => void;
-  onSave: (input: { names: Record<string, string>; icon: SportIconName; moduleKeys: string[]; isActive: boolean }) => Promise<void>;
+  onSave: (input: { names: Record<string, string>; icon: string; moduleKeys: string[]; isActive: boolean }) => Promise<void>;
 }) {
   const { t } = useLanguage();
+  const sharedModules = modules.filter((module) => !module.isIndividual);
   const [names, setNames] = useState<Record<string, string>>(() => ({ ...(sport?.names ?? {}) }));
-  const [icon, setIcon] = useState<SportIconName>(sport?.icon ?? "hockey");
-  const [moduleKeys, setModuleKeys] = useState<string[]>(() => sport?.moduleKeys ?? modules.filter((item) => item.isEnabled).map((item) => item.moduleKey));
+  const [icon, setIcon] = useState(displaySportIcon(sport?.icon ?? DEFAULT_SPORT_ICON));
+  const [moduleKeys, setModuleKeys] = useState<string[]>(() => sharedModuleKeys(sport, modules));
   const [isActive, setIsActive] = useState(sport?.isActive ?? true);
   const activeLanguages = languages.filter((language) => language.isActive);
   const ready = activeLanguages.every((language) => (names[language.code] ?? "").trim().length > 0);
@@ -215,7 +211,8 @@ function SportForm({
         onSubmit={(event) => {
           event.preventDefault();
           if (!ready || pending) return;
-          void onSave({ names, icon, moduleKeys, isActive });
+          const kept = sport ? sport.moduleKeys.filter((key) => modules.some((module) => module.moduleKey === key && module.isIndividual)) : modules.filter((module) => module.isIndividual && module.isEnabled).map((module) => module.moduleKey);
+          void onSave({ names, icon, moduleKeys: [...moduleKeys, ...kept], isActive });
         }}
       >
         <div className="grid gap-3">
@@ -235,29 +232,12 @@ function SportForm({
             </label>
           ))}
         </div>
-        <div>
-          <p className="text-sm text-muted">{t("sports.icon")}</p>
-          <div className="mt-2 inline-flex rounded-lg bg-paper p-1 ring-1 ring-line" role="group" aria-label={t("sports.icon")}>
-            {SPORT_ICONS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                aria-pressed={icon === item}
-                aria-label={t(ICON_LABEL[item])}
-                disabled={pending}
-                title={t(ICON_LABEL[item])}
-                onClick={() => setIcon(item)}
-                className={`grid h-9 w-11 place-items-center rounded-md disabled:cursor-not-allowed ${icon === item ? "bg-navy text-white" : "text-muted hover:bg-ice hover:text-ink"}`}
-              >
-                <SportIcon icon={item} />
-              </button>
-            ))}
-          </div>
-        </div>
+        <SportIconPicker value={icon} disabled={pending} onChange={setIcon} />
+        {sharedModules.length > 0 ? (
         <fieldset>
           <legend className="text-sm text-muted">{t("sports.modules")}</legend>
           <div className="mt-2 grid gap-2">
-            {modules.map((module) => {
+            {sharedModules.map((module) => {
               const checked = moduleKeys.includes(module.moduleKey);
               const label = MODULE_LABEL[module.moduleKey] ? t(MODULE_LABEL[module.moduleKey]) : module.moduleKey;
               return (
@@ -274,6 +254,7 @@ function SportForm({
             })}
           </div>
         </fieldset>
+        ) : null}
         <label className="flex items-center justify-between gap-3 rounded-xl bg-ice px-3 py-2.5">
           <span className="text-sm font-medium">{t("sports.active")}</span>
           <button
@@ -299,4 +280,10 @@ function SportForm({
       </form>
     </AdminDialog>
   );
+}
+
+function sharedModuleKeys(sport: Sport | null, modules: FrontendModule[]): string[] {
+  const shared = new Set(modules.filter((module) => !module.isIndividual).map((module) => module.moduleKey));
+  const source = sport?.moduleKeys ?? modules.filter((module) => module.isEnabled).map((module) => module.moduleKey);
+  return source.filter((key) => shared.has(key));
 }

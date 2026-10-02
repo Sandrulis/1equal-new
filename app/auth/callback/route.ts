@@ -7,11 +7,13 @@ import {
   googleOAuthStatesMatch,
   parseGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
+import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = publicRequestOrigin(request);
   const cookieStore = await cookies();
   const googleState = parseGoogleOAuthState(cookieStore.get(GOOGLE_OAUTH_COOKIE)?.value);
   const stateParam = searchParams.get("state");

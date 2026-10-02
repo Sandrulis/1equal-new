@@ -3,13 +3,14 @@ import { normalizeSiteDisplay } from "@/app/lib/display-preferences";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, normalizeCurrency, votingHours } from "@/app/lib/team-defaults";
 import { messages } from "@/app/lib/messages";
 import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
-import { getSiteUrl } from "@/app/lib/site";
+import { currentPublicOrigin } from "@/app/lib/public-origin";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { displayPosition } from "@/app/lib/positions";
 import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
-import { isSportIcon, type Sport, type SportIcon } from "@/app/lib/sports";
+import { listUserOrigins } from "@/app/lib/admin-origin";
+import { displaySportIcon, type Sport } from "@/app/lib/sports";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
@@ -113,9 +114,10 @@ type MembershipLink = {
   jersey_number: number | null;
   position: string;
   phone: string;
+  is_team_admin: boolean;
   ehl_player: unknown;
   users: { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null } | { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null }[] | null;
-  teams: { id: string; name: string } | { id: string; name: string }[] | null;
+  teams: { id: string; name: string; sport_id: string | null } | { id: string; name: string; sport_id: string | null }[] | null;
 };
 
 function oneRow<T>(value: T | T[] | null): T | null {
@@ -128,7 +130,7 @@ async function listMemberships(): Promise<MembershipLink[]> {
   if (!admin) return [];
   const { data, error } = await admin
     .from("team_members")
-    .select("user_id, team_id, jersey_number, position, phone, ehl_player, users(email, name, first_name, last_name, avatar_url), teams(id, name)");
+    .select("user_id, team_id, jersey_number, position, phone, is_team_admin, ehl_player, users(email, name, first_name, last_name, avatar_url), teams(id, name, sport_id)");
   if (error || !data) return [];
   return data as MembershipLink[];
 }
@@ -141,24 +143,38 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
     listMemberships(),
   ]);
   if (error || !data) return [];
-  const teamsByUser = new Map<string, { id: string; name: string }[]>();
+  const teamsByUser = new Map<string, { id: string; name: string; sportId: string | null }[]>();
+  const phonesByUser = new Map<string, string[]>();
   for (const link of links) {
+    const phone = link.phone.trim();
+    if (phone) {
+      const phones = phonesByUser.get(link.user_id) ?? [];
+      if (!phones.includes(phone)) phones.push(phone);
+      phonesByUser.set(link.user_id, phones);
+    }
     const team = oneRow(link.teams);
     if (!team) continue;
     const list = teamsByUser.get(link.user_id) ?? [];
-    if (!list.some((item) => item.id === team.id)) list.push({ id: team.id, name: team.name });
+    if (!list.some((item) => item.id === team.id)) list.push({ id: team.id, name: team.name, sportId: team.sport_id });
     teamsByUser.set(link.user_id, list);
   }
+  const origins = await listUserOrigins(data.map((row) => row.id));
   return data
-    .map((row) => ({
-      id: row.id,
-      name: displayName(row),
-      email: row.email,
-      isAdmin: row.is_admin,
-      createdAt: row.created_at,
-      lastSeenAt: row.last_seen_at,
-      teams: (teamsByUser.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "lv")),
-    }))
+    .map((row) => {
+      const origin = origins.get(row.id);
+      return {
+        id: row.id,
+        name: displayName(row),
+        email: row.email,
+        phone: (phonesByUser.get(row.id) ?? []).join(", "),
+        originIp: origin?.ip ?? "",
+        originCountry: origin?.countryCode ?? "",
+        isAdmin: row.is_admin,
+        createdAt: row.created_at,
+        lastSeenAt: row.last_seen_at,
+        teams: (teamsByUser.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "lv")),
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "lv"));
 }
 
@@ -170,11 +186,13 @@ export async function touchUserLastSeen(userId: string): Promise<void> {
 
 export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
   const links = await listMemberships();
+  const origins = await listUserOrigins(links.map((link) => link.user_id));
   return links.flatMap((link) => {
     const user = oneRow(link.users);
     const team = oneRow(link.teams);
     if (!user || !team) return [];
     const ehl = readStoredEhlPlayer(link.ehl_player);
+    const origin = origins.get(link.user_id);
     return [
       {
         teamId: link.team_id,
@@ -186,6 +204,9 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
         position: displayPosition(link.position),
         ehlPosition: displayPosition(ehl?.position),
         phone: link.phone ?? "",
+        teamAdmin: link.is_team_admin === true,
+        originIp: origin?.ip ?? "",
+        originCountry: origin?.countryCode ?? "",
         photoUrl: ehl?.photoUrl ?? user.avatar_url ?? null,
         avatarUrl: user.avatar_url ?? null,
       },
@@ -196,9 +217,9 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
 export async function listSystemTeams(): Promise<SystemTeam[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const { data, error } = await admin.from("teams").select("id, name, sport_id, updated_at").order("name");
+  const { data, error } = await admin.from("teams").select("id, name, sport_id, leader_id, updated_at").order("name");
   if (error || !data) return [];
-  return data.map((row) => ({ id: row.id, name: row.name, sportId: row.sport_id, updatedAt: row.updated_at }));
+  return data.map((row) => ({ id: row.id, name: row.name, sportId: row.sport_id, leaderId: row.leader_id, updatedAt: row.updated_at }));
 }
 
 export async function listSystemSubteams(): Promise<SystemSubteam[]> {
@@ -394,7 +415,7 @@ export async function loadAdminConsole(userId: string): Promise<AdminConsole> {
       : Promise.resolve({ data: [] as { team_id: string }[] }),
   ]);
   const watchedTeamIds = (watched.data ?? []).map((row) => row.team_id);
-  return { brand, languages, translations, users, teams, members, subteams, modules, teamModules, integrations, googleRedirectUrl: `${getSiteUrl()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
+  return { brand, languages, translations, users, teams, members, subteams, modules, teamModules, integrations, googleRedirectUrl: `${await currentPublicOrigin()}/auth/callback`, emailTemplates, todos, watchedTeamIds };
 }
 
 export async function listSports(): Promise<Sport[]> {
@@ -413,7 +434,7 @@ export async function listSports(): Promise<Sport[]> {
     for (const name of nameRows) {
       if (name.sport_id === row.id) sportNames[name.language_code] = name.name;
     }
-    const icon: SportIcon = isSportIcon(row.icon) ? row.icon : "hockey";
+    const icon = displaySportIcon(row.icon);
     return {
       id: row.id,
       icon,

@@ -13,7 +13,7 @@ import { useLanguage } from "@/app/lib/language";
 
 type Mode = "login" | "signup" | "forgot";
 
-export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean }) {
+export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "" }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const router = useRouter();
@@ -127,7 +127,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
               {turnstileRequired && turnstileSiteKey ? (
                 <>
                   <input type="hidden" name="turnstileToken" value={turnstileToken ?? ""} />
-                  <TurnstileWidget ref={turnstileRef} siteKey={turnstileSiteKey} onTokenChange={setTurnstileToken} />
+                  <TurnstileWidget ref={turnstileRef} siteKey={turnstileSiteKey} nonce={scriptNonce} onTokenChange={setTurnstileToken} />
                 </>
               ) : null}
               <button type="submit" disabled={pending || googlePending} className="mt-1 rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-60">

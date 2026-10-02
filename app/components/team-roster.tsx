@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { BalanceHistory } from "@/app/components/balance-history";
 import { ContentImage } from "@/app/components/content-image";
+import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
@@ -88,6 +89,7 @@ export function TeamRoster({
   persistedEntries = [],
   teamHolds = [],
   memberHolds = {},
+  showOrigin = false,
 }: {
   teamName: string;
   inviteCode: string;
@@ -115,6 +117,7 @@ export function TeamRoster({
   persistedEntries?: TeamEntry[];
   teamHolds?: BalanceHold[];
   memberHolds?: Record<string, BalanceHold[]>;
+  showOrigin?: boolean;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -359,7 +362,7 @@ export function TeamRoster({
                       className="cursor-pointer border-b border-line last:border-b-0 hover:bg-ice"
                     >
                       <td className="w-full max-w-0 px-4 py-3">
-                        <MemberIdentity member={member} leader={member.id === leaderId} />
+                        <MemberIdentity member={member} leader={member.id === leaderId} showOrigin={showOrigin} />
                       </td>
                       <td className="hidden px-4 py-3 text-center min-[768px]:table-cell">
                         <MemberMark member={member} groups={groupList} />
@@ -876,7 +879,7 @@ function BalanceDialog({
   );
 }
 
-function MemberIdentity({ member, leader = false }: { member: Member; leader?: boolean }) {
+function MemberIdentity({ member, leader = false, showOrigin = false }: { member: Member; leader?: boolean; showOrigin?: boolean }) {
   const { t } = useLanguage();
   const photo = memberFaceUrl(member, useEntuziasti());
   return (
@@ -899,8 +902,14 @@ function MemberIdentity({ member, leader = false }: { member: Member; leader?: b
             </span>
           ) : null}
         </span>
-        {member.email ? <span className="block truncate text-sm text-muted">{member.email}</span> : null}
-        {member.phone ? <span className="block truncate text-sm text-muted">{member.phone}</span> : null}
+        {showOrigin ? (
+          <PlayerContact email={member.email} phone={member.phone} originIp={member.originIp} originCountry={member.originCountry} />
+        ) : (
+          <>
+            {member.email ? <span className="block truncate text-sm text-muted">{member.email}</span> : null}
+            {member.phone ? <span className="block truncate text-sm text-muted">{member.phone}</span> : null}
+          </>
+        )}
       </span>
     </div>
   );

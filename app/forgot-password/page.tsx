@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { AuthScreen } from "@/app/components/auth-screen";
 import { getPublicTurnstileSiteKey } from "@/app/lib/security/turnstile";
 
@@ -8,6 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function ForgotPasswordPage() {
-  const turnstileSiteKey = await getPublicTurnstileSiteKey();
-  return <AuthScreen mode="forgot" turnstileSiteKey={turnstileSiteKey} />;
+  const [turnstileSiteKey, headerStore] = await Promise.all([getPublicTurnstileSiteKey(), headers()]);
+  return <AuthScreen mode="forgot" turnstileSiteKey={turnstileSiteKey} scriptNonce={headerStore.get("x-nonce") ?? ""} />;
 }

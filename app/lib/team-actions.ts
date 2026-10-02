@@ -1,5 +1,6 @@
 "use server";
 
+import { recordTeamOrigin } from "@/app/lib/admin-origin";
 import { ownAvatarUrl, removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
@@ -176,6 +177,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
     }
   }
   if (!teamId) return { ok: false, error: "auth.error.generic" };
+  await recordTeamOrigin(teamId);
 
   const memberInsert = await gate.client.from("team_members").insert({ team_id: teamId, user_id: gate.account.id }).select(TEAM_MEMBER_COLUMNS).single();
   if (memberInsert.error || !memberInsert.data) {

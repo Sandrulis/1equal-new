@@ -41,6 +41,8 @@ export type Member = {
   updatedAt: string;
   photoUrl?: string | null;
   avatarUrl?: string | null;
+  originIp?: string;
+  originCountry?: string;
   ehl?: EhlPlayerProfile | null;
 };
 

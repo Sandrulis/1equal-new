@@ -27,13 +27,14 @@ declare global {
 
 let turnstileScriptPromise: Promise<void> | null = null;
 
-function loadTurnstileScript() {
+function loadTurnstileScript(nonce: string) {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.turnstile) return Promise.resolve();
   if (turnstileScriptPromise) return turnstileScriptPromise;
-  turnstileScriptPromise = new Promise((resolve, reject) => {
+  const promise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>('script[src^="https://challenges.cloudflare.com/turnstile/"]');
     if (existing) {
+      if (nonce && !existing.nonce) existing.nonce = nonce;
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener("error", () => reject(new Error("Turnstile script failed")), { once: true });
       return;
@@ -42,18 +43,23 @@ function loadTurnstileScript() {
     script.src = TURNSTILE_SCRIPT_SRC;
     script.async = true;
     script.defer = true;
+    if (nonce) script.nonce = nonce;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("Turnstile script failed"));
     document.head.appendChild(script);
   });
-  return turnstileScriptPromise;
+  turnstileScriptPromise = promise;
+  promise.catch(() => {
+    if (turnstileScriptPromise === promise) turnstileScriptPromise = null;
+  });
+  return promise;
 }
 
 export type TurnstileWidgetHandle = {
   reset: () => void;
 };
 
-export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, { siteKey: string; onTokenChange?: (token: string | null) => void }>(function TurnstileWidget({ siteKey, onTokenChange }, ref) {
+export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, { siteKey: string; nonce?: string; onTokenChange?: (token: string | null) => void }>(function TurnstileWidget({ siteKey, nonce = "", onTokenChange }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -74,7 +80,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, { siteKey: stri
   useEffect(() => {
     if (!siteKey || !containerRef.current) return;
     let cancelled = false;
-    void loadTurnstileScript()
+    void loadTurnstileScript(nonce)
       .then(() => {
         if (cancelled || !containerRef.current || !window.turnstile) return;
         if (widgetIdRef.current) {
@@ -97,7 +103,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, { siteKey: stri
         widgetIdRef.current = null;
       }
     };
-  }, [siteKey, updateToken]);
+  }, [nonce, siteKey, updateToken]);
 
   return <div ref={containerRef} className="flex min-h-16 justify-center" />;
 });

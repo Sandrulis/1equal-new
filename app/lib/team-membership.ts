@@ -7,6 +7,7 @@ import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
 import type { Subteam } from "@/app/lib/demo-data";
 import { displayPosition, parseExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
+import { listUserOrigins } from "@/app/lib/admin-origin";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 type UserName = { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null };
@@ -222,6 +223,16 @@ export async function listOwnedTeams(userId: string): Promise<IssuedTeam[]> {
     member.balance = Math.round(ledger.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
     list.push(member);
     byTeam.set(row.team_id, list);
+  }
+  if (userRow.data?.is_admin === true) {
+    const origins = await listUserOrigins((members.data as MemberRow[]).map((row) => row.user_id));
+    for (const list of byTeam.values()) {
+      for (const member of list) {
+        const origin = origins.get(member.id);
+        member.originIp = origin?.ip ?? "";
+        member.originCountry = origin?.countryCode ?? "";
+      }
+    }
   }
   const subteamsByTeam = new Map<string, Subteam[]>();
   for (const row of (groups.data ?? []) as { id: string; team_id: string; name: string; color: string; updated_at: string }[]) {

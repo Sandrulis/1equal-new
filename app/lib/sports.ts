@@ -1,18 +1,37 @@
-export const SPORT_ICONS = ["hockey", "ball", "basket", "racket", "swim", "run"] as const;
+export const DEFAULT_SPORT_ICON = "hockey-puck";
 
-export type SportIcon = (typeof SPORT_ICONS)[number];
+const LEGACY_SPORT_ICONS: Record<string, string> = {
+  hockey: "hockey-puck",
+  ball: "futbol",
+  basket: "basketball",
+  racket: "table-tennis-paddle-ball",
+  swim: "person-swimming",
+  run: "person-running",
+};
 
 export type Sport = {
   id: string;
-  icon: SportIcon;
+  icon: string;
   isActive: boolean;
   sortOrder: number;
   names: Record<string, string>;
   moduleKeys: string[];
 };
 
-export function isSportIcon(value: string): value is SportIcon {
-  return (SPORT_ICONS as readonly string[]).includes(value);
+export function sportIconName(value: string): string | null {
+  const raw = value.trim().toLowerCase();
+  const source = LEGACY_SPORT_ICONS[raw] ?? raw;
+  const match = source.match(/^(?:(fas|far|fab):)?([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+  if (!match) return null;
+  const prefix = match[1] ?? "fas";
+  const name = match[2];
+  const stored = prefix === "fas" ? name : `${prefix}:${name}`;
+  if (stored.length > 80) return null;
+  return stored;
+}
+
+export function displaySportIcon(value: string): string {
+  return sportIconName(value) ?? DEFAULT_SPORT_ICON;
 }
 
 export function sportLabel(sport: Sport, lang: string, fallbackLang: string): string {

@@ -6,7 +6,8 @@ import { getAccountProfile } from "@/app/lib/auth/session";
 import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
 import { messages, type MessageKey } from "@/app/lib/messages";
 import { listAdminTodos, listSports } from "@/app/lib/site-admin/repository";
-import { isSportIcon, type Sport } from "@/app/lib/sports";
+import { resolveSportIcon } from "@/app/lib/fa-icons";
+import type { Sport } from "@/app/lib/sports";
 import { EMAIL_KINDS, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
 import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
@@ -560,7 +561,8 @@ async function sportPayload(
   client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
   input: { names: Record<string, string>; icon: string; moduleKeys: string[] },
 ): Promise<{ ok: true; names: Record<string, string>; icon: Sport["icon"]; moduleKeys: string[] } | { ok: false; error: MessageKey }> {
-  if (!isSportIcon(input.icon)) return { ok: false, error: "sports.error.icon" };
+  const icon = await resolveSportIcon(input.icon);
+  if (!icon) return { ok: false, error: "sports.error.icon" };
   const languages = await client.from("site_languages").select("code, is_active");
   if (languages.error || !languages.data) return { ok: false, error: "auth.error.generic" };
   const names: Record<string, string> = {};
@@ -574,7 +576,7 @@ async function sportPayload(
   if (modules.error || !modules.data) return { ok: false, error: "auth.error.generic" };
   const known = new Set((modules.data as { module_key: string }[]).map((row) => row.module_key));
   const moduleKeys = [...new Set(input.moduleKeys.map((key) => key.trim()))].filter((key) => known.has(key));
-  return { ok: true, names, icon: input.icon, moduleKeys };
+  return { ok: true, names, icon, moduleKeys };
 }
 
 async function replaceSportLinks(

@@ -7,10 +7,12 @@ import {
   isGoogleSignInEnabled,
   serializeGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
+import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = publicRequestOrigin(request);
   const from = searchParams.get("from") === "signup" ? "signup" : "login";
   const back = from === "signup" ? "/signup" : "/login";
 
