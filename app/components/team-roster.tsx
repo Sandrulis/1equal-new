@@ -308,9 +308,9 @@ export function TeamRoster({
                   type="button"
                   onClick={() => setOpenHolds(teamHolds)}
                   aria-label={t("finance.reserved.team", { amount: formatMoney(teamReserved) })}
-                  className="block w-full px-2 text-right text-xs text-muted tabular-nums hover:underline"
+                  className="block w-full whitespace-nowrap px-2 text-right text-xs text-muted tabular-nums hover:underline"
                 >
-                  ({formatMoney(teamReserved)})
+                  {t("finance.reserved", { amount: formatMoney(teamReserved) })}
                 </button>
               ) : null}
             </div>

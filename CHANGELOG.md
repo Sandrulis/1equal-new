@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.23
+
+- Notikuma + poga datorā ir labajā apakšējā stūrī. Pāreja starp sadaļām slīd no tās puses, uz kuru iet
+- Admina Ziņojumi glabā kļūdas, ieteikumus un atsauksmes, un tos var dzēst. Modāļiem ir X
+- Komandas bilancē rezervētā summa ir ar vārdu Rezervēts
+
 ## v0.1.22
 
 - Zem 600px izvēlne ir peldoša josla ar Sākumu, Komandu un atsevišķu + pogu notikumam

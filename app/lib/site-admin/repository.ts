@@ -8,7 +8,7 @@ import { currentPublicOrigin } from "@/app/lib/public-origin";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { displayPosition } from "@/app/lib/positions";
 import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
-import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
+import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminFeedbackItem, type AdminFeedbackKind, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { listUserOrigins } from "@/app/lib/admin-origin";
 import { displaySportIcon, type Sport } from "@/app/lib/sports";
@@ -378,6 +378,39 @@ export async function listAdminTodos(userId: string): Promise<AdminTodo[]> {
   }));
 }
 
+function feedbackKind(value: string): AdminFeedbackKind | null {
+  if (value === "bug" || value === "suggestion" || value === "feedback") return value;
+  return null;
+}
+
+export async function listAdminFeedback(): Promise<AdminFeedbackItem[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin.from("site_user_feedback").select("id, kind, title, body, rating, user_id, created_at").order("created_at", { ascending: false });
+  const rows = data ?? [];
+  const userIds = [...new Set(rows.map((row) => row.user_id).filter((id): id is string => typeof id === "string"))];
+  const people = userIds.length
+    ? await admin.from("users").select("id, first_name, last_name, email").in("id", userIds)
+    : { data: [] as { id: string; first_name: string; last_name: string; email: string }[] };
+  const byId = new Map((people.data ?? []).map((person) => [person.id, person]));
+  return rows.flatMap((row) => {
+    const kind = feedbackKind(row.kind);
+    if (!kind) return [];
+    const person = byId.get(row.user_id);
+    const authorName = [person?.first_name, person?.last_name].filter(Boolean).join(" ");
+    return [{
+      id: row.id,
+      kind,
+      title: row.title ?? "",
+      body: row.body ?? "",
+      rating: typeof row.rating === "number" ? row.rating : null,
+      authorName,
+      authorEmail: person?.email ?? "",
+      createdAt: row.created_at,
+    }];
+  });
+}
+
 export async function loadTranslationCatalog(): Promise<SiteTranslationRow[]> {
   const [languages, admin] = await Promise.all([listSiteLanguages(), Promise.resolve(createAdminClient())]);
   const stored = new Map<string, Record<string, string>>();
@@ -413,7 +446,7 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
   const needMembers = section === "teams";
   const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
   const admin = createAdminClient();
-  const [users, translations, userCount, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, watched] = await Promise.all([
+  const [users, translations, userCount, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, feedback, watched] = await Promise.all([
     needUsers ? listSystemUsers() : Promise.resolve([] as SystemUser[]),
     needTranslations ? loadTranslationCatalog() : Promise.resolve([] as SiteTranslationRow[]),
     needUsers || !admin ? Promise.resolve(0) : admin.from("users").select("id", { count: "exact", head: true }).then((result) => result.count ?? 0),
@@ -425,6 +458,7 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
     listIntegrations(),
     listEmailTemplates(),
     listAdminTodos(userId),
+    listAdminFeedback(),
     admin
       ? admin.from("admin_team_watches").select("team_id").eq("user_id", userId)
       : Promise.resolve({ data: [] as { team_id: string }[] }),
@@ -444,6 +478,7 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
     googleRedirectUrl: `${await currentPublicOrigin()}/auth/callback`,
     emailTemplates,
     todos,
+    feedback,
     watchedTeamIds,
     usersLoaded: needUsers,
     translationsLoaded: needTranslations,

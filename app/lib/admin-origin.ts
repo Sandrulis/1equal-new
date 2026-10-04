@@ -23,15 +23,20 @@ function isPublicIp(ip: string): boolean {
   return true;
 }
 
-async function requestAddress(): Promise<{ ip: string; countryCode: string; publicIp: boolean }> {
+export type RequestAddress = { ip: string; countryCode: string; publicIp: boolean };
+
+export async function captureRequestAddress(): Promise<RequestAddress> {
   const address = trustedClientAddress(await headers());
   return { ip: address.ip, countryCode: address.countryCode, publicIp: Boolean(address.ip) && isPublicIp(address.ip) };
 }
 
-export async function readRequestOrigin(): Promise<OriginSnapshot> {
-  const address = await requestAddress();
+function publicSnapshot(address: RequestAddress): OriginSnapshot {
   if (!address.publicIp) return { ip: "", countryCode: "" };
   return { ip: address.ip, countryCode: address.countryCode };
+}
+
+export async function readRequestOrigin(): Promise<OriginSnapshot> {
+  return publicSnapshot(await captureRequestAddress());
 }
 
 async function lookupCountry(ip: string): Promise<string> {
@@ -77,10 +82,10 @@ export async function listUserOrigins(userIds: string[]): Promise<Map<string, { 
   return map;
 }
 
-export async function recordUserOrigin(userId: string): Promise<void> {
+export async function recordUserOrigin(userId: string, captured?: RequestAddress): Promise<void> {
   const admin = createAdminClient();
   if (!admin) return;
-  const address = await requestAddress();
+  const address = captured ?? (await captureRequestAddress());
   if (!address.ip) return;
   const snapshot = { ip: address.ip, countryCode: address.publicIp ? address.countryCode : "" };
   const existing = await admin.from("user_origins").select("ip, country_code").eq("user_id", userId).maybeSingle();
@@ -100,7 +105,7 @@ export async function recordTeamOrigin(teamId: string): Promise<void> {
   await admin.from("team_origins").upsert({ team_id: teamId, ip: origin.ip, country_code: origin.countryCode, updated_at: new Date().toISOString() });
 }
 
-export async function recordMissingTeamOrigins(teamIds: string[]): Promise<void> {
+export async function recordMissingTeamOrigins(teamIds: string[], captured?: RequestAddress): Promise<void> {
   const admin = createAdminClient();
   if (!admin || teamIds.length === 0) return;
   const existing = await admin.from("team_origins").select("team_id").in("team_id", teamIds);
@@ -108,7 +113,7 @@ export async function recordMissingTeamOrigins(teamIds: string[]): Promise<void>
   const known = new Set((existing.data ?? []).map((row) => row.team_id as string));
   const missing = teamIds.filter((id) => !known.has(id));
   if (missing.length === 0) return;
-  const origin = await resolvedOrigin(await readRequestOrigin());
+  const origin = await resolvedOrigin(captured ? publicSnapshot(captured) : await readRequestOrigin());
   if (!origin.ip) return;
   const now = new Date().toISOString();
   await admin.from("team_origins").insert(missing.map((team_id) => ({ team_id, ip: origin.ip, country_code: origin.countryCode, updated_at: now })));

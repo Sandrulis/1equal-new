@@ -13,7 +13,7 @@ export function AdminDialog({
   onClose,
   children,
   wide = false,
-  closeButton = false,
+  closeButton = true,
   blur = false,
   size,
 }: {

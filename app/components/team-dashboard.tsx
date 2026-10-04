@@ -15,6 +15,7 @@ import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTea
 import { getDemoSession, settleDemoCharges, subscribeDemoSession, updateDemoSession } from "@/app/lib/demo-session";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { SiteContactDialog } from "@/app/components/site-contact-dialog";
+import { AdminFeedbackPage } from "@/app/components/admin-feedback-page";
 import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
 import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveOwnedLineup, saveTeamAvatar, setActiveTeam, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
@@ -192,6 +193,14 @@ function eventTitleKey(titleId: string): MessageKey {
 
 type HomeView = "calendar" | "poll";
 
+function sectionRank(name: string) {
+  if (name === "home") return 0;
+  if (name === "team") return 1;
+  if (name === "subteams") return 2;
+  if (name === "venues") return 3;
+  return null;
+}
+
 export function TeamDashboard({
   basePath,
   account = null,
@@ -293,6 +302,15 @@ export function TeamDashboard({
     };
   }, [admin, adminSection]);
   const view = route.view;
+  const [sectionSeen, setSectionSeen] = useState(view);
+  const [sectionSlide, setSectionSlide] = useState<"left" | "right" | null>(null);
+  if (sectionSeen !== view) {
+    const prev = sectionRank(sectionSeen);
+    const next = sectionRank(view);
+    setSectionSeen(view);
+    setSectionSlide(prev != null && next != null && prev !== next ? (next > prev ? "left" : "right") : null);
+  }
+  const sectionMotion = sectionSlide === "left" ? "section-slide-left" : sectionSlide === "right" ? "section-slide-right" : "";
   const showStart = needsTeam && (view === "home" || view === "team" || view === "subteams" || view === "venues");
 
   async function createTeam(input: CreateTeamInput) {
@@ -1002,6 +1020,7 @@ export function TeamDashboard({
         languages: admin.languages.length,
         translations: admin.translationsLoaded ? admin.translations.length : admin.translationCount,
         email: admin.emailTemplates.length,
+        feedback: admin.feedback.length,
         todo: admin.todos.filter((item) => !item.isDone).length,
       }
     : {};
@@ -1385,6 +1404,7 @@ export function TeamDashboard({
           />
         ) : null}
         {view === "team" && !showStart && !teamPending && activeTeam && moduleVisible ? (
+          <div className={sectionMotion || undefined}>
           <TeamRoster
             key={activeTeam.code}
             teamName={activeTeam.name}
@@ -1431,8 +1451,10 @@ export function TeamDashboard({
               };
             })}
           />
+          </div>
         ) : null}
         {view === "subteams" && !showStart && !teamPending && moduleVisible && canManageTeam ? (
+          <div className={sectionMotion || undefined}>
           <SubteamAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1445,8 +1467,10 @@ export function TeamDashboard({
               setTeams(listMyTeams());
             }}
           />
+          </div>
         ) : null}
         {view === "venues" && !showStart && !teamPending && moduleVisible && canManageTeam ? (
+          <div className={sectionMotion || undefined}>
           <VenueAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
             readOnly={Boolean(activeTeam?.watching)}
@@ -1459,6 +1483,7 @@ export function TeamDashboard({
               setTeams(listMyTeams());
             }}
           />
+          </div>
         ) : null}
         {route.view === "admin" ? (
           <div className="space-y-6">
@@ -1501,11 +1526,14 @@ export function TeamDashboard({
                 initialTemplates={admin.emailTemplates}
               />
             ) : null}
+            {route.section === "feedback" && admin ? (
+              <AdminFeedbackPage items={admin.feedback} onChange={(feedback) => setAdmin((current) => (current ? { ...current, feedback } : current))} />
+            ) : null}
             {route.section === "todo" && admin ? <AdminTodoPage initialTodos={admin.todos} /> : null}
             {route.section === "cron" && admin ? <AdminCronPage /> : null}
           </div>
         ) : null}
-        <div className={view === "home" && !lineupEvent && !showStart && !teamPending && moduleVisible ? undefined : "hidden"}>
+        <div className={view === "home" && !lineupEvent && !showStart && !teamPending && moduleVisible ? (sectionMotion || undefined) : "hidden"}>
         {pendingVoteEvents.length ? (
           <div className="mb-4">
             <CalendarPollSwitch value={resolvedHomeView} onChange={setHomePick} />
@@ -1928,6 +1956,7 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   languages: "nav.admin.languages",
   translations: "nav.admin.translations",
   email: "nav.admin.email",
+  feedback: "nav.admin.feedback",
   todo: "nav.admin.todo",
   cron: "nav.admin.cron",
 };
@@ -1943,6 +1972,7 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
   { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
   { section: "email", label: ADMIN_LABEL.email, icon: <IconMail /> },
+  { section: "feedback", label: ADMIN_LABEL.feedback, icon: <IconComment /> },
   { section: "todo", label: ADMIN_LABEL.todo, icon: <IconTodo /> },
   { section: "cron", label: ADMIN_LABEL.cron, icon: <IconCron /> },
 ];
@@ -2037,9 +2067,10 @@ function MobileDock({
   }
 
   return (
+    <>
     <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 flex items-end justify-center gap-3 px-4 min-[600px]:hidden">
       {hasExtras ? (
-        <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex p-1">
+        <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex h-14 gap-1.5 p-[7px]">
           <DockItem label={homeLabel} icon={<IconCalendar />} onClick={() => undefined} />
           <DockItem label={teamLabel} icon={<IconUsers />} onClick={() => undefined} />
           {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} onClick={() => undefined} /> : null}
@@ -2063,7 +2094,7 @@ function MobileDock({
           ) : null}
         </div>
       ) : null}
-      <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex items-stretch rounded-2xl bg-navy p-1 text-white shadow-lg">
+      <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex h-14 items-stretch gap-1.5 rounded-2xl bg-navy p-[7px] text-white shadow-lg">
         <DockItem label={homeLabel} icon={<IconCalendar />} active={view === "home"} busy={homeBusy} onClick={() => pick(onHome)} />
         <DockItem label={teamLabel} icon={<IconUsers />} active={view === "team"} busy={teamBusy} onClick={() => pick(onTeam)} />
         {inlineExtras ? extraItems() : null}
@@ -2077,6 +2108,12 @@ function MobileDock({
         </button>
       ) : null}
     </div>
+    {canAdd ? (
+      <button type="button" aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto fixed right-6 bottom-6 z-50 hidden size-14 place-items-center rounded-full bg-navy text-white shadow-lg min-[600px]:grid">
+        <span className="[&_svg]:size-6"><IconPlus /></span>
+      </button>
+    ) : null}
+    </>
   );
 }
 
@@ -2088,9 +2125,9 @@ function DockItem({ label, ariaLabel, icon, active, busy = false, onClick }: { l
       aria-busy={busy || undefined}
       aria-label={ariaLabel ?? label}
       onClick={onClick}
-      className={`flex min-h-[3.25rem] min-w-16 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] leading-tight ${active ? "bg-white/15" : "hover:bg-white/10"}`}
+      className={`flex h-full min-w-12 flex-col items-center justify-center gap-0.5 rounded-lg px-2.5 text-[11px] leading-none ${active ? "bg-white/15" : "hover:bg-white/10"}`}
     >
-      <span className="grid h-7 place-items-center [&_svg]:size-5">{busy ? <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon ?? <span className="text-base font-semibold tracking-widest">{label}</span>}</span>
+      <span className="grid h-6 place-items-center [&_svg]:size-5">{busy ? <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon ?? <span className="text-base font-semibold tracking-widest">{label}</span>}</span>
       {icon ? <span className="whitespace-nowrap">{label}</span> : null}
     </button>
   );

@@ -116,6 +116,19 @@ export type AdminTodo = {
   createdAt: string;
 };
 
+export type AdminFeedbackKind = "bug" | "suggestion" | "feedback";
+
+export type AdminFeedbackItem = {
+  id: string;
+  kind: AdminFeedbackKind;
+  title: string;
+  body: string;
+  rating: number | null;
+  authorName: string;
+  authorEmail: string;
+  createdAt: string;
+};
+
 export type AdminConsole = {
   brand: SiteBrand;
   languages: SiteLanguage[];
@@ -130,6 +143,7 @@ export type AdminConsole = {
   googleRedirectUrl: string;
   emailTemplates: EmailTemplate[];
   todos: AdminTodo[];
+  feedback: AdminFeedbackItem[];
   watchedTeamIds: string[];
   usersLoaded: boolean;
   translationsLoaded: boolean;

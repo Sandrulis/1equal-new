@@ -5,10 +5,10 @@ import { refreshSitePublic } from "@/app/lib/cache-tags";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
 import { messages, type MessageKey } from "@/app/lib/messages";
-import { listAdminTodos, listSports } from "@/app/lib/site-admin/repository";
+import { listAdminFeedback, listAdminTodos, listSports } from "@/app/lib/site-admin/repository";
 import { resolveSportIcon } from "@/app/lib/fa-icons";
 import type { Sport } from "@/app/lib/sports";
-import { EMAIL_KINDS, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
+import { EMAIL_KINDS, type AdminFeedbackItem, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
 import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
 import { readFinanceCron, writeFinanceCron } from "@/app/lib/finance-cron";
@@ -510,6 +510,17 @@ export async function reorderAdminTodos(ids: string[]): Promise<{ ok: true; todo
   }
   refresh();
   return todosForAdmin();
+}
+
+export async function deleteAdminFeedback(id: string): Promise<{ ok: true; items: AdminFeedbackItem[] } | { ok: false; error: MessageKey }> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return { ok: false, error: "admin.feedback.error.delete" };
+  }
+  const { error } = await gate.client.from("site_user_feedback").delete().eq("id", id);
+  if (error) return { ok: false, error: "admin.feedback.error.delete" };
+  return { ok: true, items: await listAdminFeedback() };
 }
 
 export async function deleteAdminTodo(id: string): Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: MessageKey }> {

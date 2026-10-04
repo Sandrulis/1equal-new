@@ -59,9 +59,16 @@ export async function sendUserFeedback(input: {
 
   const client = createAdminClient();
   if (!client) return { ok: false, error: "feedback.error.unavailable" };
-  const brand = await getSiteBrand();
-  if (!isEmail(brand.contactEmail)) return { ok: false, error: "feedback.error.unavailable" };
+  const saved = await client.from("site_user_feedback").insert({
+    kind: input.kind,
+    title,
+    body,
+    rating: input.kind === "feedback" ? rating : null,
+    user_id: account.id,
+  });
+  if (saved.error) return { ok: false, error: "feedback.error.unavailable" };
 
+  const brand = await getSiteBrand();
   const integration = await client
     .from("site_integrations")
     .select("client_id, client_secret, is_configured, is_enabled")
@@ -69,8 +76,8 @@ export async function sendUserFeedback(input: {
     .maybeSingle();
   const fromEmail = integration.data?.client_id?.trim() ?? "";
   const apiKey = openIntegrationSecret(integration.data?.client_secret);
-  if (!integration.data?.is_enabled || !integration.data.is_configured || !fromEmail || !apiKey) {
-    return { ok: false, error: "feedback.error.unavailable" };
+  if (!isEmail(brand.contactEmail) || !integration.data?.is_enabled || !integration.data.is_configured || !fromEmail || !apiKey) {
+    return { ok: true };
   }
 
   const language = await client.from("site_languages").select("code").eq("is_default", true).maybeSingle();
@@ -97,7 +104,7 @@ export async function sendUserFeedback(input: {
     language: lang,
   });
 
-  const response = await fetch("https://api.resend.com/emails", {
+  await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -108,6 +115,5 @@ export async function sendUserFeedback(input: {
       html,
     }),
   });
-  if (!response.ok) return { ok: false, error: "feedback.error.send" };
   return { ok: true };
 }

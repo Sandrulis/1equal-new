@@ -6,7 +6,7 @@ import { MfaLoginGate } from "@/app/components/mfa-login-gate";
 import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { parseDashboardPath } from "@/app/lib/dashboard-path";
-import { recordMissingTeamOrigins, recordUserOrigin } from "@/app/lib/admin-origin";
+import { captureRequestAddress, recordMissingTeamOrigins, recordUserOrigin } from "@/app/lib/admin-origin";
 import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
 import { listOwnedTeams, settleFinishedEvents } from "@/app/lib/team-membership";
 
@@ -37,12 +37,13 @@ export default async function DashboardPage({
   const initialTeams = await listOwnedTeams(account.id, account.activeTeamId);
   const ledTeamIds = initialTeams.filter((team) => team.leaderId === account.id && team.id).map((team) => team.id as string);
   const settleIds = initialTeams.some((team) => team.financeReserve) ? [] : initialTeams.filter((team) => team.id && !team.watching).map((team) => team.id as string);
+  const clientAddress = await captureRequestAddress();
   after(async () => {
     await Promise.all([
       touchUserLastSeen(account.id),
       (async () => {
-        await recordUserOrigin(account.id);
-        if (ledTeamIds.length > 0) await recordMissingTeamOrigins(ledTeamIds);
+        await recordUserOrigin(account.id, clientAddress);
+        if (ledTeamIds.length > 0) await recordMissingTeamOrigins(ledTeamIds, clientAddress);
       })(),
       settleIds.length ? settleFinishedEvents(settleIds) : Promise.resolve(),
     ]);
