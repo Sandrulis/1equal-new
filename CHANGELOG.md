@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.24
+
+- `audit:check` pieņem `braces` brīdinājumu, kamēr nav labotas versijas. Pakotne ir tikai ESLint izstrādes atkarība
+
 ## v0.1.23
 
 - Notikuma + poga datorā ir labajā apakšējā stūrī. Pāreja starp sadaļām slīd no tās puses, uz kuru iet

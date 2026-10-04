@@ -12,7 +12,15 @@ import { execFileSync } from "node:child_process";
  * Never add an advisory here without checking that the vulnerable code path is
  * unreachable from user input.
  */
-const ACCEPTED_ADVISORIES = [];
+const ACCEPTED_ADVISORIES = [
+  {
+    url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    package: "braces",
+    reason:
+      "braces 3.0.3 is the newest release. It is a devDependency of micromatch via fast-glob, used by ESLint file matching. Request input never reaches brace expansion.",
+    removeWhen: "npm publishes a braces release above 3.0.3 and the lockfile resolves to it.",
+  },
+];
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
