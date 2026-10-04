@@ -1203,7 +1203,7 @@ export function TeamDashboard({
         />
       ) : null}
       <div className={overlay ? "relative z-40" : "contents"}>
-      <aside className={overlay ? "fixed top-0 left-0 z-40 flex h-screen w-60 flex-col overflow-hidden bg-navy text-white shadow-xl" : `order-2 overflow-hidden bg-navy text-white max-[599px]:fixed max-[599px]:bottom-0 max-[599px]:left-0 max-[599px]:z-50 max-[599px]:flex max-[599px]:h-auto max-[599px]:w-full max-[599px]:flex-row max-[599px]:overflow-visible max-[599px]:pb-[env(safe-area-inset-bottom)] min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
+      <aside className={overlay ? "fixed top-0 left-0 z-40 hidden h-screen w-60 flex-col overflow-hidden bg-navy text-white shadow-xl min-[600px]:flex" : `order-2 hidden overflow-hidden bg-navy text-white min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
         <div className="hidden items-center gap-2 overflow-hidden px-2.5 py-4 min-[600px]:flex">
           <button
             type="button"
@@ -1241,11 +1241,38 @@ export function TeamDashboard({
           </nav>
         ) : null}
       </aside>
+      <MobileDock
+        sectionsLabel={t("nav.sections")}
+        homeLabel={t("nav.home")}
+        teamLabel={t("nav.members")}
+        moreLabel={t("nav.more")}
+        subteamsLabel={t("nav.subteams")}
+        venuesLabel={t("nav.venues")}
+        addLabel={t("event.add")}
+        closeLabel={t("event.close")}
+        view={view}
+        canManage={canManageTeam && !showStart}
+        showSubteams={canManageTeam && !showStart && moduleOn(FRONTEND_MODULE_KEYS.subteams)}
+        showVenues={canManageTeam && !showStart}
+        canAdd={Boolean(canManageTeam && !activeTeam?.watching && !showStart)}
+        homeBusy={pendingNav === "home"}
+        teamBusy={pendingNav === "team"}
+        subteamsBusy={pendingNav === "subteams"}
+        venuesBusy={pendingNav === "venues"}
+        onHome={() => showHome("kalendars")}
+        onTeam={() => showView("team")}
+        onSubteams={() => showView("subteams")}
+        onVenues={() => showView("venues")}
+        onAdd={() => {
+          if (view !== "home" || lineup) showHome("kalendars");
+          setAddingEvent(true);
+        }}
+      />
       {account && menuOpen ? (
         <div className="fixed top-14 right-0 bottom-0 left-0 z-40 min-[600px]:hidden">
           <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={() => setMenuOpen(false)} />
           <aside className="absolute top-0 right-auto bottom-0 left-0 z-10 flex w-64 flex-col bg-navy text-white shadow-xl">
-            <nav aria-label={t("nav.help")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pt-3 pr-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+            <nav aria-label={t("nav.help")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pt-3 pr-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
               <SideItem label={t("nav.report_bug")} icon={<IconBug />} row onClick={() => { setMenuOpen(false); setFeedbackKind("bug"); }} />
               <SideItem label={t("nav.suggestions")} icon={<IconBulb />} row onClick={() => { setMenuOpen(false); setFeedbackKind("suggestion"); }} />
               <SideItem label={t("nav.feedback")} icon={<IconComment />} row onClick={() => { setMenuOpen(false); setFeedbackKind("feedback"); }} />
@@ -1698,7 +1725,7 @@ export function TeamDashboard({
 
           <div className={showPoll ? "hidden" : "contents xl:sticky xl:top-5 xl:flex xl:flex-col xl:gap-3 xl:order-2"}>
           {canManageTeam && !activeTeam?.watching ? (
-            <button type="button" onClick={() => setAddingEvent(true)} className="order-1 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white xl:order-none">
+            <button type="button" onClick={() => setAddingEvent(true)} className="order-1 hidden w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white min-[600px]:inline-flex xl:order-none">
               <IconPlus />
               {t("event.add")}
             </button>
@@ -1850,7 +1877,7 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
-      <div className="order-4 bg-paper max-[599px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <div className="order-4 bg-paper max-[599px]:pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
         <SiteFooter />
       </div>
       </div>
@@ -1863,7 +1890,7 @@ export function TeamDashboard({
           aria-label={t("nav.admin")}
           className={`group/admin z-40 flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 max-[599px]:fixed max-[599px]:top-14 max-[599px]:right-0 max-[599px]:bottom-0 max-[599px]:h-auto max-[599px]:w-72 max-[599px]:shadow-xl min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60 ${adminOpen ? "max-[599px]:flex" : "max-[599px]:hidden"}`}
         >
-          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(6.5rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
             {ADMIN_NAV.map((item) => (
               <SideItem
                 key={item.section}
@@ -1919,6 +1946,155 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "todo", label: ADMIN_LABEL.todo, icon: <IconTodo /> },
   { section: "cron", label: ADMIN_LABEL.cron, icon: <IconCron /> },
 ];
+
+function MobileDock({
+  sectionsLabel,
+  homeLabel,
+  teamLabel,
+  moreLabel,
+  subteamsLabel,
+  venuesLabel,
+  addLabel,
+  closeLabel,
+  view,
+  canManage,
+  showSubteams,
+  showVenues,
+  canAdd,
+  homeBusy,
+  teamBusy,
+  subteamsBusy,
+  venuesBusy,
+  onHome,
+  onTeam,
+  onSubteams,
+  onVenues,
+  onAdd,
+}: {
+  sectionsLabel: string;
+  homeLabel: string;
+  teamLabel: string;
+  moreLabel: string;
+  subteamsLabel: string;
+  venuesLabel: string;
+  addLabel: string;
+  closeLabel: string;
+  view: "home" | "team" | "subteams" | "venues" | "admin";
+  canManage: boolean;
+  showSubteams: boolean;
+  showVenues: boolean;
+  canAdd: boolean;
+  homeBusy: boolean;
+  teamBusy: boolean;
+  subteamsBusy: boolean;
+  venuesBusy: boolean;
+  onHome: () => void;
+  onTeam: () => void;
+  onSubteams: () => void;
+  onVenues: () => void;
+  onAdd: () => void;
+}) {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [inlineExtras, setInlineExtras] = useState(false);
+  const hasExtras = canManage && (showSubteams || showVenues);
+  const moreActive = !inlineExtras && (view === "subteams" || view === "venues");
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const measure = measureRef.current;
+    if (!shell || !measure || !hasExtras) return;
+    function fit() {
+      if (!shell || !measure) return;
+      const style = getComputedStyle(shell);
+      const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const gap = parseFloat(style.columnGap || style.gap) || 0;
+      const plus = shell.querySelector("[data-dock-add]");
+      const plusWidth = plus instanceof HTMLElement ? plus.offsetWidth : 0;
+      const available = shell.clientWidth - pad - (plusWidth > 0 ? gap + plusWidth : 0);
+      const next = measure.offsetWidth <= available + 1;
+      setInlineExtras((current) => (current === next ? current : next));
+      if (next) setMoreOpen(false);
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [hasExtras, canAdd, homeLabel, teamLabel, subteamsLabel, venuesLabel, showSubteams, showVenues]);
+
+  function pick(run: () => void) {
+    setMoreOpen(false);
+    run();
+  }
+
+  function extraItems() {
+    return (
+      <>
+        {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} active={view === "subteams"} busy={subteamsBusy} onClick={() => pick(onSubteams)} /> : null}
+        {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} active={view === "venues"} busy={venuesBusy} onClick={() => pick(onVenues)} /> : null}
+      </>
+    );
+  }
+
+  return (
+    <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 flex items-end justify-center gap-3 px-4 min-[600px]:hidden">
+      {hasExtras ? (
+        <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex p-1">
+          <DockItem label={homeLabel} icon={<IconCalendar />} onClick={() => undefined} />
+          <DockItem label={teamLabel} icon={<IconUsers />} onClick={() => undefined} />
+          {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} onClick={() => undefined} /> : null}
+          {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} onClick={() => undefined} /> : null}
+        </div>
+      ) : null}
+      {moreOpen ? <button type="button" aria-label={closeLabel} className="pointer-events-auto fixed inset-0" onClick={() => setMoreOpen(false)} /> : null}
+      {moreOpen ? (
+        <div className="pointer-events-auto absolute right-4 bottom-full left-4 z-10 mb-3 rounded-2xl bg-paper p-1.5 text-ink shadow-lg ring-1 ring-line">
+          {showSubteams ? (
+            <button type="button" aria-busy={subteamsBusy || undefined} onClick={() => pick(onSubteams)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "subteams" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
+              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{subteamsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconLayers />}</span>
+              {subteamsLabel}
+            </button>
+          ) : null}
+          {showVenues ? (
+            <button type="button" aria-busy={venuesBusy || undefined} onClick={() => pick(onVenues)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "venues" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
+              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{venuesBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconPin />}</span>
+              {venuesLabel}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex items-stretch rounded-2xl bg-navy p-1 text-white shadow-lg">
+        <DockItem label={homeLabel} icon={<IconCalendar />} active={view === "home"} busy={homeBusy} onClick={() => pick(onHome)} />
+        <DockItem label={teamLabel} icon={<IconUsers />} active={view === "team"} busy={teamBusy} onClick={() => pick(onTeam)} />
+        {inlineExtras ? extraItems() : null}
+        {hasExtras && !inlineExtras ? (
+          <DockItem label="..." ariaLabel={moreLabel} active={moreActive || moreOpen} onClick={() => setMoreOpen((open) => !open)} />
+        ) : null}
+      </nav>
+      {canAdd ? (
+        <button type="button" data-dock-add aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto grid size-14 shrink-0 place-items-center rounded-full bg-navy text-white shadow-lg">
+          <span className="[&_svg]:size-6"><IconPlus /></span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function DockItem({ label, ariaLabel, icon, active, busy = false, onClick }: { label: string; ariaLabel?: string; icon?: ReactNode; active?: boolean; busy?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-current={active ? "page" : undefined}
+      aria-busy={busy || undefined}
+      aria-label={ariaLabel ?? label}
+      onClick={onClick}
+      className={`flex min-h-[3.25rem] min-w-16 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] leading-tight ${active ? "bg-white/15" : "hover:bg-white/10"}`}
+    >
+      <span className="grid h-7 place-items-center [&_svg]:size-5">{busy ? <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon ?? <span className="text-base font-semibold tracking-widest">{label}</span>}</span>
+      {icon ? <span className="whitespace-nowrap">{label}</span> : null}
+    </button>
+  );
+}
 
 function SideItem({
   label,

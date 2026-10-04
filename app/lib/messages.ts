@@ -13,6 +13,7 @@ export const messages = {
   "nav.members": { lv: "Komanda", en: "Team", ru: "Команда" },
   "nav.subteams": { lv: "Apakškomandas", en: "Sub-teams", ru: "Подкоманды" },
   "nav.venues": { lv: "Laukumi", en: "Venues", ru: "Катки" },
+  "nav.more": { lv: "Vairāk", en: "More", ru: "Ещё" },
   "nav.help": { lv: "Palīdzība", en: "Help", ru: "Помощь" },
   "nav.report_bug": { lv: "Atrast kļūdu?", en: "Find a bug?", ru: "Нашли ошибку?" },
   "nav.suggestions": { lv: "Ieteikumi", en: "Suggestions", ru: "Предложения" },

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.22
+
+- Zem 600px izvēlne ir peldoša josla ar Sākumu, Komandu un atsevišķu + pogu notikumam
+- Vadītājam un administratoram Apakškomandas un Laukumi ir joslā, ja ietilpst. Citādi tie ir centrētā izvēlnē virs joslas
+
 ## v0.1.21
 
 - Pirmajā kadrā ielādējas aktīvā komanda. Sastāvs, vecāki mēneši, spēlētāja bilances rindas un admina lietotāji, tulkojumi vai dalībnieki nāk, kad tos atver
