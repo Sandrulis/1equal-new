@@ -1,5 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
+import { rigaDayEndExclusiveIso, rigaDayStartIso } from "@/app/lib/balance-range";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
 import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
@@ -58,10 +60,11 @@ type EventRow = {
   subteam_id: string | null;
   expense: number | string | null;
   with_coach: boolean;
+  settled_at?: string | null;
   lineup?: unknown;
 };
 
-export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach";
+export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, settled_at";
 
 export function eventFromRow(row: EventRow): TeamEvent {
   const includesLineup = Object.prototype.hasOwnProperty.call(row, "lineup");
@@ -76,6 +79,7 @@ export function eventFromRow(row: EventRow): TeamEvent {
     venueId: row.venue_id,
     expense: row.expense == null ? null : Number(row.expense),
     withCoach: row.with_coach === true,
+    settled: Boolean(row.settled_at),
     ...(includesLineup ? { ...lineupFromJson(row.lineup), lineupLoaded: true } : { lineupLoaded: false }),
   };
 }
@@ -208,7 +212,6 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     admin.rpc("member_balance_totals", { team_ids: [id] }),
     admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").eq("team_id", id),
     admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", id).gte("event_date", since).order("event_date").order("start_time"),
-    admin.from("team_ledger").select("id, team_id, event_id, amount, event_date, event_type, created_at").eq("team_id", id).gte("event_date", since).order("created_at", { ascending: false }),
     admin.from("finance_reservations").select("team_id, event_id, user_id, amount, team_events!inner(event_date, start_time)").eq("team_id", id).gte("team_events.event_date", today),
     admin.from("team_modules").select("team_id, module_key").eq("team_id", id),
   ]);
@@ -219,7 +222,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   if (teamRows.error || !teamRows.data?.length) return [];
   const detailId = hinted && teamRows.data.some((row) => row.id === hinted) ? hinted : pickDetailTeamId(teamRows.data, null, watchOnly);
   if (!detailId) return [];
-  const [cron, members, groups, links, totals, places, events, ledgerRows, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
+  const [cron, members, groups, links, totals, places, events, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
   const financeReserve = cron.data?.enabled === true;
   const nowStamp = rigaNowStamp();
   const activeHolds = ((holds.data ?? []) as { team_id: string; event_id: string; user_id: string; amount: number | string; team_events: { event_date: string; start_time: string } | { event_date: string; start_time: string }[] | null }[]).filter((row) => {
@@ -326,14 +329,6 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
         ...(detail
           ? {
               moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
-              ledger: ((ledgerRows.data ?? []) as { id: string; team_id: string; event_id: string | null; amount: number | string; event_date: string; event_type: string; created_at: string }[]).map((row): TeamLedgerLine => ({
-                id: row.id,
-                amount: Number(row.amount),
-                at: toLocalDateTimeStamp(row.created_at),
-                eventId: row.event_id,
-                eventDate: String(row.event_date).slice(0, 10),
-                eventType: row.event_type === "game" ? "game" : "training",
-              })),
               rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string }[])
                 .filter((row) => row.status === "going" || row.status === "absent")
                 .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
@@ -367,12 +362,63 @@ export async function canReadTeam(userId: string, teamId: string, isAdmin: boole
   return Boolean(watch.data);
 }
 
-export async function listMemberLedger(teamId: string, userId: string): Promise<BalanceEntry[]> {
+export async function readMemberBalance(client: SupabaseClient, teamId: string, userId: string): Promise<number | null> {
+  const totals = await client.rpc("member_balance_totals", { team_ids: [teamId] });
+  if (totals.error || !totals.data) return null;
+  const row = (totals.data as { user_id: string; total: number | string }[]).find((item) => item.user_id === userId);
+  return Math.round(Number(row?.total ?? 0) * 100) / 100;
+}
+
+export async function listMemberLedger(teamId: string, userId: string, from: string, to: string): Promise<BalanceEntry[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const rows = await admin.from("balance_entries").select(BALANCE_ENTRY_SELECT).eq("team_id", teamId).eq("user_id", userId).order("created_at", { ascending: false });
+  const rows = await admin
+    .from("balance_entries")
+    .select(BALANCE_ENTRY_SELECT)
+    .eq("team_id", teamId)
+    .eq("user_id", userId)
+    .gte("created_at", rigaDayStartIso(from))
+    .lt("created_at", rigaDayEndExclusiveIso(to))
+    .order("created_at", { ascending: false })
+    .limit(500);
   return ((rows.data ?? []) as EntryRow[]).map((row) => mapBalanceEntry(row));
 }
+
+export async function listTeamLedger(teamId: string, from: string, to: string): Promise<TeamLedgerLine[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const rows = await admin
+    .from("team_ledger")
+    .select("id, event_id, amount, event_date, event_type, created_at, team_events(venues(name))")
+    .eq("team_id", teamId)
+    .gte("event_date", from)
+    .lte("event_date", to)
+    .order("event_date", { ascending: false })
+    .limit(500);
+  return ((rows.data ?? []) as TeamLedgerRow[]).map((row) => {
+    const event = one(row.team_events);
+    const venue = one(event?.venues);
+    return {
+      id: row.id,
+      amount: Number(row.amount),
+      at: toLocalDateTimeStamp(row.created_at),
+      eventId: row.event_id,
+      eventDate: String(row.event_date).slice(0, 10),
+      eventType: row.event_type === "game" ? "game" : "training",
+      venueName: venue?.name?.trim() || null,
+    };
+  });
+}
+
+type TeamLedgerRow = {
+  id: string;
+  event_id: string | null;
+  amount: number | string;
+  event_date: string;
+  event_type: string;
+  created_at: string;
+  team_events: { venues?: { name?: string | null } | { name?: string | null }[] | null } | { venues?: { name?: string | null } | { name?: string | null }[] | null }[] | null;
+};
 
 export async function listTeamHistory(teamId: string, from: string, to: string): Promise<{ events: TeamEvent[]; rsvps: { eventId: string; userId: string; status: "going" | "absent" }[] }> {
   const admin = createAdminClient();

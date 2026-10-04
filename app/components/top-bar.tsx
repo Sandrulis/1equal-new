@@ -60,7 +60,7 @@ export function TopBar({
 }: {
   onHome: () => void;
   account?: AccountProfile | null;
-  team?: Pick<IssuedTeam, "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
+  team?: Pick<IssuedTeam, "id" | "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
   teams?: IssuedTeam[];
   onSelectTeam?: (code: string) => void;
   onUnwatchTeam?: (teamId: string) => void | Promise<void>;
@@ -177,7 +177,7 @@ export function TopBar({
           </button>
         ) : null}
       </div>
-      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
+      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} teamId={team && !team.demo ? (team.id ?? null) : null} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
       {holdsOpen ? <HoldDialog holds={reservedHolds} onClose={() => setHoldsOpen(false)} /> : null}
     </header>
   );

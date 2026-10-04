@@ -10,6 +10,7 @@ export type TeamLedgerLine = {
   eventId: string | null;
   eventDate: string;
   eventType: "game" | "training";
+  venueName?: string | null;
 };
 
 export type FinanceHold = {

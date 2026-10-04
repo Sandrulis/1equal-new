@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
-import { BalanceHistory } from "@/app/components/balance-history";
+import { BalanceHistory, BalanceRangeFields, useBalanceRange } from "@/app/components/balance-history";
 import { ContentImage } from "@/app/components/content-image";
 import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
@@ -11,6 +11,7 @@ import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { TeamMark } from "@/app/components/team-mark";
 import type { Member, Subteam } from "@/app/lib/demo-data";
+import type { TeamLedgerLine } from "@/app/lib/invite-code";
 import { formatJersey } from "@/app/lib/format-jersey";
 import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
@@ -71,6 +72,7 @@ export function TeamRoster({
   initialMembers = [],
   teamId = null,
   leaderId = null,
+  asLeader = false,
   accountId = null,
   trainingVotingHours = 24,
   gameVotingHours = 72,
@@ -98,6 +100,7 @@ export function TeamRoster({
   initialMembers?: Member[];
   teamId?: string | null;
   leaderId?: string | null;
+  asLeader?: boolean;
   accountId?: string | null;
   trainingVotingHours?: number;
   gameVotingHours?: number;
@@ -146,7 +149,7 @@ export function TeamRoster({
   const [adjusting, setAdjusting] = useState<Member | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [appointing, setAppointing] = useState(false);
-  const isLeader = Boolean(teamId && leaderId && accountId && leaderId === accountId);
+  const isLeader = Boolean(teamId && accountId && (asLeader || (leaderId && leaderId === accountId)));
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
   const sportKeys = sportId ? (sports.find((item) => item.id === sportId)?.moduleKeys ?? null) : null;
   const entuziasti = entuziastiForSport(enabledModules, sportKeys);
@@ -185,28 +188,6 @@ export function TeamRoster({
     setPreviewId(null);
     onCloseMember();
   }
-
-  useEffect(() => {
-    if (!teamId || !previewId || previewLoading) return;
-    const member = members.find((item) => item.id === previewId);
-    if (!member || member.ledgerLoaded !== false) return;
-    let active = true;
-    void fetch(`/api/teams/${teamId}/ledger?userId=${encodeURIComponent(previewId)}`)
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as { ok?: boolean; entries?: Member["ledger"]; balance?: number };
-      })
-      .then((body) => {
-        if (!active || !body?.ok || !body.entries) return;
-        const next = { ...member, ledger: body.entries, balance: body.balance ?? member.balance, ledgerLoaded: true };
-        setMembers((current) => current.map((item) => (item.id === next.id ? next : item)));
-        onMemberSaved?.(next, inviteCode);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [inviteCode, members, onMemberSaved, previewId, previewLoading, teamId]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -249,7 +230,7 @@ export function TeamRoster({
       showFeedback({ message: t(result.error), variant: "error" });
       return;
     }
-    const next = { ...member, balance: result.balance, ledger: result.ledger, ledgerLoaded: true };
+    const next = { ...member, balance: result.balance, ledger: [], ledgerLoaded: false };
     setMembers((current) => current.map((item) => (item.id === member.id ? next : item)));
     onMemberSaved?.(next, inviteCode);
     setAdjusting(null);
@@ -522,7 +503,7 @@ export function TeamRoster({
           showFeedback({ message: t("roster.balance.saved"), variant: "success" });
         }}
       />
-      <TeamStatementDialog open={statementOpen} entries={statementEntries} onClose={() => setStatementOpen(false)} />
+      <TeamStatementDialog open={statementOpen} teamId={teamId} entries={statementEntries} onClose={() => setStatementOpen(false)} />
       <HoldDialog holds={openHolds} onClose={() => setOpenHolds(null)} />
       <BalanceDialog
         open={adjusting !== null}
@@ -560,7 +541,7 @@ export function TeamRoster({
               </button>
             </div>
           ) : null}
-          <PlayerProfile member={player} subteams={groupList} finance={finance} leader={player.id === leaderId} embedded />
+          <PlayerProfile member={player} subteams={groupList} finance={finance} leader={player.id === leaderId} teamId={teamId} embedded />
           </>
           )}
         </AdminDialog>
@@ -608,19 +589,73 @@ function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose:
   );
 }
 
-function TeamStatementDialog({ open, entries, onClose }: { open: boolean; entries: TeamEntry[]; onClose: () => void }) {
+function TeamStatementDialog({ open, teamId, entries, onClose }: { open: boolean; teamId: string | null; entries: TeamEntry[]; onClose: () => void }) {
   const { t } = useLanguage();
-  const { formatDateTime } = useDisplayFormat();
-  const items = entries.map((entry) => ({
-    id: entry.id,
-    title: entry.description,
-    when: `${formatDateTime(entry.at)} · ${t("player.source.system")}`,
-    amount: entry.amount,
-  }));
+  const { formatDate, formatDateTime } = useDisplayFormat();
+  const range = useBalanceRange();
+  const [remote, setRemote] = useState<TeamLedgerLine[]>([]);
+  const [loadedKey, setLoadedKey] = useState("");
+  const requestKey = `${teamId ?? ""}:${range.from}:${range.to}`;
+  const pending = Boolean(open && teamId && range.allowed && loadedKey !== requestKey);
+  useEffect(() => {
+    if (!open || !teamId || !range.allowed) return;
+    let active = true;
+    void fetch(`/api/teams/${teamId}/ledger?from=${range.from}&to=${range.to}`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; entries?: TeamLedgerLine[] }) : null))
+      .then((body) => {
+        if (!active) return;
+        setRemote(body?.ok && body.entries ? body.entries : []);
+        setLoadedKey(requestKey);
+      })
+      .catch(() => {
+        if (!active) return;
+        setRemote([]);
+        setLoadedKey(requestKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, range.allowed, range.from, range.to, requestKey, teamId]);
+  const local = entries.filter((entry) => {
+    const day = entry.at.slice(0, 10);
+    return day >= range.from && day <= range.to;
+  });
+  const remoteItems = teamId
+    ? remote.map((line) => {
+        const description = t("team.ledger.event", {
+          type: t(line.eventType === "game" ? "legend.game" : "legend.training"),
+          date: formatDate(line.eventDate),
+        });
+        return {
+          id: line.id,
+          title: line.venueName ? `${description} · ${line.venueName}` : description,
+          when: `${formatDate(line.eventDate)} · ${t("player.source.system")}`,
+          amount: line.amount,
+        };
+      })
+    : [];
+  const items = [
+    ...remoteItems,
+    ...local.map((entry) => ({
+      id: entry.id,
+      title: entry.description,
+      when: `${formatDateTime(entry.at)} · ${t("player.source.system")}`,
+      amount: entry.amount,
+    })),
+  ];
 
   return (
     <AdminDialog open={open} title={t("roster.balance.statement")} onClose={onClose}>
-      <BalanceHistory items={items} empty={t("roster.balance.statement.empty")} />
+      <BalanceRangeFields from={range.from} to={range.to} onChange={range.setRange} />
+      {range.allowed ? null : <p className="py-8 text-sm text-muted">{t("balance.range.long")}</p>}
+      {!range.allowed ? null : pending ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted" role="status">
+          <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+          {t("player.ledger.loading")}
+        </div>
+      ) : (
+        <BalanceHistory items={items} empty={t("roster.balance.statement.empty")} />
+      )}
       <div className="mt-4 flex justify-end">
         <button type="button" onClick={onClose} className="rounded-lg bg-ice px-4 py-2 text-sm font-medium">
           {t("event.close")}

@@ -3,11 +3,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { AdminDialog } from "@/app/components/admin-dialog";
-import { IconChevronLeft, IconChevronRight } from "@/app/components/icon-tip-button";
+import { DatePickerModal } from "@/app/components/date-picker-modal";
 import type { EventType, Subteam, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { useCurrencySymbol } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
-import { formatMonthTitle, isoDate, monthGrid, parseIsoDate } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 
 const HOURS = Array.from({ length: 15 }, (_, index) => String(index + 8).padStart(2, "0"));
@@ -113,15 +112,13 @@ export function EventFormDialog({
             </div>
           </fieldset>
         </div>
-        {pickerOpen ? (
-          <EventDatePicker
-            value={dateIso}
-            onChange={(iso) => {
-              setDateIso(iso);
-              setPickerOpen(false);
-            }}
-          />
-        ) : null}
+        <DatePickerModal
+          open={pickerOpen}
+          title={t("event.date")}
+          value={dateIso}
+          onClose={() => setPickerOpen(false)}
+          onSelect={setDateIso}
+        />
         <div>
           <div className={type === "training" ? "grid grid-cols-2 items-end gap-3" : ""}>
             <div className="block text-sm">
@@ -439,59 +436,4 @@ function TimeWheel({
   );
 }
 
-function EventDatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
-  const { formatLang, t } = useLanguage();
-  const { display, headers } = useDisplayFormat();
-  const selected = value ? parseIsoDate(value) : new Date();
-  const [year, setYear] = useState(selected.getFullYear());
-  const [month, setMonth] = useState(selected.getMonth());
-  const today = isoDate(new Date());
-  const cells = monthGrid(year, month, display.weekStartDay);
-
-  function shift(delta: number) {
-    const next = new Date(year, month + delta, 1);
-    setYear(next.getFullYear());
-    setMonth(next.getMonth());
-  }
-
-  return (
-    <div className="rounded-xl bg-ice p-3 ring-1 ring-line">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <button type="button" aria-label={t("month.prev")} onClick={() => shift(-1)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-paper">
-          <IconChevronLeft />
-        </button>
-        <p className="text-sm font-medium">{formatMonthTitle(year, month, formatLang)}</p>
-        <button type="button" aria-label={t("month.next")} onClick={() => shift(1)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-paper">
-          <IconChevronRight />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 text-center text-[11px] text-muted">
-        {headers.map((label) => (
-          <span key={label} className="py-1">
-            {label}
-          </span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {cells.map((date) => {
-          const iso = isoDate(date);
-          const inMonth = date.getMonth() === month;
-          const picked = iso === value;
-          return (
-            <button
-              key={iso}
-              type="button"
-              onClick={() => onChange(iso)}
-              className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-sm ${
-                picked ? "bg-navy text-white" : iso === today ? "bg-train text-white" : inMonth ? "text-ink hover:bg-paper" : "text-muted hover:bg-paper"
-              }`}
-            >
-              {date.getDate()}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 

@@ -297,6 +297,8 @@ export async function setAdminTeamWatch(teamId: string, watch: boolean): Promise
   if (watch) {
     const saved = await client.from("admin_team_watches").upsert({ user_id: account.id, team_id: teamId }, { onConflict: "user_id,team_id" });
     if (saved.error) return { ok: false, error: "auth.error.generic" };
+    const active = await client.from("users").update({ active_team_id: teamId }).eq("id", account.id);
+    if (active.error) return { ok: false, error: "auth.error.generic" };
   } else {
     const removed = await client.from("admin_team_watches").delete().eq("user_id", account.id).eq("team_id", teamId);
     if (removed.error) return { ok: false, error: "auth.error.generic" };

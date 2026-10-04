@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { ContentImage } from "@/app/components/content-image";
 import { AdminDialog } from "@/app/components/admin-dialog";
-import { BalanceHistory, type BalanceHistoryItem } from "@/app/components/balance-history";
-import type { Member, PlayerCharge, Subteam } from "@/app/lib/demo-data";
+import { BalanceHistory, BalanceRangeFields, useBalanceRange, type BalanceHistoryItem } from "@/app/components/balance-history";
+import type { BalanceEntry, Member, PlayerCharge, Subteam } from "@/app/lib/demo-data";
 import { formatJersey } from "@/app/lib/format-jersey";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useFormatMoney } from "@/app/components/currency-provider";
@@ -29,7 +29,7 @@ function roleKey(role: Member["role"]): MessageKey {
   return `role.${role}` as MessageKey;
 }
 
-export function PlayerProfile({ member, subteams, finance = true, leader = false, embedded = false }: { member: Member; subteams?: Subteam[]; finance?: boolean; leader?: boolean; embedded?: boolean }) {
+export function PlayerProfile({ member, subteams, finance = true, leader = false, embedded = false, teamId = null }: { member: Member; subteams?: Subteam[]; finance?: boolean; leader?: boolean; embedded?: boolean; teamId?: string | null }) {
   const { t } = useLanguage();
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
@@ -100,31 +100,55 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
       {finance ? (
         <section className="rounded-2xl bg-paper ring-1 ring-line">
           <h2 className="px-4 pt-4 text-lg font-semibold sm:px-5">{t("player.log")}</h2>
-          <PlayerBalanceLog member={member} inset pending={member.ledgerLoaded === false} />
+          <PlayerBalanceLog member={member} teamId={teamId} inset />
         </section>
       ) : null}
     </div>
   );
 }
 
-export function PlayerBalanceDialog({ member, reserved = 0, onClose }: { member: Member; reserved?: number; onClose: () => void }) {
+export function PlayerBalanceDialog({ member, teamId = null, reserved = 0, onClose }: { member: Member; teamId?: string | null; reserved?: number; onClose: () => void }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
   return (
     <AdminDialog open title={t("player.log")} onClose={onClose} closeButton>
       {reserved > 0 ? <p className="px-4 text-sm font-medium text-train sm:px-5">{t("finance.reserved", { amount: formatMoney(reserved) })}</p> : null}
-      <PlayerBalanceLog member={member} pending={member.ledgerLoaded === false} />
+      <PlayerBalanceLog member={member} teamId={teamId} />
     </AdminDialog>
   );
 }
 
-export function PlayerBalanceLog({ member, inset = false, pending = false }: { member: Member; inset?: boolean; pending?: boolean }) {
+export function PlayerBalanceLog({ member, teamId = null, inset = false }: { member: Member; teamId?: string | null; inset?: boolean }) {
   const { t } = useLanguage();
   const { formatDate, formatTime, formatDateTime } = useDisplayFormat();
-  const usingLedger = member.ledger != null;
+  const range = useBalanceRange();
+  const pad = inset ? "px-4 sm:px-5" : "";
+  const [remote, setRemote] = useState<BalanceEntry[]>([]);
+  const [loadedKey, setLoadedKey] = useState("");
+  const requestKey = `${teamId ?? ""}:${member.id}:${range.from}:${range.to}:${member.balance}`;
+  const pending = Boolean(teamId && range.allowed && loadedKey !== requestKey);
   const [demoCharges, setDemoCharges] = useState<PlayerCharge[]>([]);
   useEffect(() => {
-    if (pending || usingLedger || member.feeExempt) return;
+    if (!teamId || !range.allowed) return;
+    let active = true;
+    void fetch(`/api/teams/${teamId}/ledger?userId=${encodeURIComponent(member.id)}&from=${range.from}&to=${range.to}`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; entries?: BalanceEntry[] }) : null))
+      .then((body) => {
+        if (!active) return;
+        setRemote(body?.ok && body.entries ? body.entries : []);
+        setLoadedKey(requestKey);
+      })
+      .catch(() => {
+        if (!active) return;
+        setRemote([]);
+        setLoadedKey(requestKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestKey, range.allowed, range.from, range.to, teamId, member.id]);
+  useEffect(() => {
+    if (teamId || member.feeExempt) return;
     let active = true;
     void import("@/app/lib/demo-data").then((mod) => {
       if (!active) return;
@@ -138,18 +162,27 @@ export function PlayerBalanceLog({ member, inset = false, pending = false }: { m
     return () => {
       active = false;
     };
-  }, [member.feeExempt, member.id, pending, usingLedger]);
-  if (pending) {
-    return (
-      <div className={`flex items-center justify-center gap-2 py-8 text-sm text-muted ${inset ? "px-4 sm:px-5" : ""}`} role="status">
-        <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
-        {t("player.ledger.loading")}
-      </div>
-    );
-  }
-  const charges = usingLedger ? ledgerCharges(member) : member.feeExempt ? [] : demoCharges;
+  }, [member.feeExempt, member.id, teamId]);
+  const charges = teamId
+    ? ledgerCharges(member.id, remote ?? [])
+    : member.feeExempt
+      ? []
+      : demoCharges.filter((charge) => charge.date >= range.from && charge.date <= range.to);
   const items = charges.map((charge) => historyItem(charge, t, formatDate, formatTime, formatDateTime));
-  return <BalanceHistory items={items} empty={t(usingLedger ? "player.ledger.empty" : "player.empty")} inset={inset} />;
+  return (
+    <div className={pad}>
+      <BalanceRangeFields from={range.from} to={range.to} onChange={range.setRange} />
+      {range.allowed ? null : <p className="py-8 text-sm text-muted">{t("balance.range.long")}</p>}
+      {!range.allowed ? null : pending ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted" role="status">
+          <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+          {t("player.ledger.loading")}
+        </div>
+      ) : (
+        <BalanceHistory items={items} empty={t(teamId ? "player.ledger.empty" : "player.empty")} />
+      )}
+    </div>
+  );
 }
 
 function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
@@ -194,13 +227,13 @@ function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
   );
 }
 
-function ledgerCharges(member: Member): PlayerCharge[] {
-  return (member.ledger ?? []).map((entry) => {
+function ledgerCharges(memberId: string, entries: BalanceEntry[]): PlayerCharge[] {
+  return entries.map((entry) => {
     const [date, time = ""] = entry.at.split("T");
     const kind = entry.kind === "event" ? "event" : "manual";
     return {
       id: entry.id,
-      memberId: member.id,
+      memberId,
       date: entry.eventDate || date,
       time: entry.eventStart || time.slice(0, 5),
       amount: entry.amount,

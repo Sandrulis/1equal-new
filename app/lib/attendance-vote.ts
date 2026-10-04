@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BalanceEntry, TeamEvent } from "@/app/lib/demo-data";
-import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
+import type { TeamEvent } from "@/app/lib/demo-data";
+import { readMemberBalance } from "@/app/lib/team-membership";
 import { eventHasEnded, eventVotingOpen } from "@/app/lib/event-voting";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
@@ -23,7 +23,7 @@ export async function castMemberVote(
     actorId: string;
     enforceDeadline: boolean;
   },
-): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
+): Promise<{ ok: true; memberBalance: number; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
   if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };
   const team = await client.from("teams").select("training_voting_hours, game_voting_hours, balance").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
@@ -143,11 +143,9 @@ export async function castMemberVote(
       }
     }
   }
-  const rows = await client.from("balance_entries").select(BALANCE_ENTRY_SELECT).eq("team_id", input.teamId).eq("user_id", input.userId).order("created_at", { ascending: false });
-  if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
-  const ledger = rows.data.map((row) => mapBalanceEntry(row));
-  const memberBalance = roundMoney(ledger.reduce((sum, item) => sum + item.amount, 0));
+  const memberBalance = await readMemberBalance(client, input.teamId, input.userId);
+  if (memberBalance == null) return { ok: false, error: "auth.error.generic" };
   const hold = await client.from("finance_reservations").select("amount").eq("event_id", input.eventId).eq("user_id", input.userId).maybeSingle();
   const reservation = !hold.error && hold.data ? { eventId: input.eventId, userId: input.userId, amount: roundMoney(Number(hold.data.amount)) } : null;
-  return { ok: true, memberBalance, ledger, teamBalance, reservation };
+  return { ok: true, memberBalance, teamBalance, reservation };
 }

@@ -66,6 +66,7 @@ export type TeamEvent = {
   lineupSlots?: Record<number, string>;
   lineupSides?: Record<string, "black" | "white">;
   lineupLoaded?: boolean;
+  settled?: boolean;
 };
 
 export const VENUES: Venue[] = [

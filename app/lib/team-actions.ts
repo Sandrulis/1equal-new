@@ -4,8 +4,7 @@ import { recordTeamOrigin } from "@/app/lib/admin-origin";
 import { ownAvatarUrl, removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
-import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
-import { BALANCE_ENTRY_SELECT, mapBalanceEntry } from "@/app/lib/balance-entry";
+import type { Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
@@ -15,10 +14,10 @@ import { isEmailAddress } from "@/app/lib/email/email-address";
 import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
 import { notifyNewEvent } from "@/app/lib/email/event-mail";
 import { eventHasEnded } from "@/app/lib/event-voting";
-import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
+import type { IssuedTeam } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
 import { historySince } from "@/app/lib/history-window";
-import { eventFromRow, memberFromRow, requireUserAdmin, TEAM_EVENT_COLUMNS, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
+import { eventFromRow, memberFromRow, readMemberBalance, requireUserAdmin, TEAM_EVENT_COLUMNS, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
@@ -72,12 +71,20 @@ export async function setActiveTeam(teamId: string | null): Promise<{ ok: true }
   return { ok: true };
 }
 
+async function watchesTeam(client: GateClient, teamId: string, userId: string): Promise<boolean> {
+  const user = await client.from("users").select("is_admin").eq("id", userId).maybeSingle();
+  if (user.error || user.data?.is_admin !== true) return false;
+  const watch = await client.from("admin_team_watches").select("team_id").eq("team_id", teamId).eq("user_id", userId).maybeSingle();
+  return !watch.error && Boolean(watch.data);
+}
+
 async function managesTeam(client: GateClient, teamId: string, userId: string): Promise<boolean> {
   const team = await client.from("teams").select("leader_id").eq("id", teamId).maybeSingle();
   if (team.error || !team.data) return false;
   if (team.data.leader_id === userId) return true;
   const row = await client.from("team_members").select("is_team_admin").eq("team_id", teamId).eq("user_id", userId).maybeSingle();
-  return !row.error && row.data?.is_team_admin === true;
+  if (!row.error && row.data?.is_team_admin === true) return true;
+  return watchesTeam(client, teamId, userId);
 }
 
 function inviteCode(): string {
@@ -331,15 +338,16 @@ export async function saveMemberProfile(input: {
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const actor = await gate.client.from("team_members").select("team_id").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
   const target = await gate.client.from("team_members").select("user_id").eq("team_id", input.teamId).eq("user_id", input.userId).maybeSingle();
-  if (actor.error || !actor.data || target.error || !target.data) return { ok: false, error: "auth.error.generic" };
+  if (actor.error || target.error || !target.data) return { ok: false, error: "auth.error.generic" };
   const team = await gate.client.from("teams").select("invite_code, leader_id, sport_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data?.invite_code) return { ok: false, error: "auth.error.generic" };
+  const manager = await managesTeam(gate.client, input.teamId, gate.account.id);
+  const leads = team.data.leader_id === gate.account.id || (manager && !actor.data);
 
-  if ((input.teamAdmin === true || input.teamAdmin === false) && (team.data.leader_id !== gate.account.id || input.userId === team.data.leader_id)) {
+  if ((input.teamAdmin === true || input.teamAdmin === false) && (!leads || input.userId === team.data.leader_id)) {
     return { ok: false, error: "auth.error.generic" };
   }
 
-  const manager = await managesTeam(gate.client, input.teamId, gate.account.id);
   const self = input.userId === gate.account.id;
   if (!manager && !self) return { ok: false, error: "auth.error.generic" };
 
@@ -449,7 +457,9 @@ export async function setMemberTeamAdmin(input: {
   if (!gate) return { ok: false, error: "auth.error.generic" };
   if (input.admin !== true && input.admin !== false) return { ok: false, error: "auth.error.generic" };
   const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
-  if (team.error || !team.data || team.data.leader_id !== gate.account.id) return { ok: false, error: "auth.error.generic" };
+  if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+  const leads = team.data.leader_id === gate.account.id || await watchesTeam(gate.client, input.teamId, gate.account.id);
+  if (!leads) return { ok: false, error: "auth.error.generic" };
   if (input.userId === team.data.leader_id) return { ok: false, error: "auth.error.generic" };
   const updated = await gate.client
     .from("team_members")
@@ -468,8 +478,8 @@ export async function removeOwnedMember(teamId: string, userId: string): Promise
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const actor = await gate.client.from("team_members").select("team_id").eq("team_id", teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
-  const self = userId === gate.account.id;
+  if (actor.error) return { ok: false, error: "auth.error.generic" };
+  const self = userId === gate.account.id && Boolean(actor.data);
   if (!self && !(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
   const removed = await gate.client.from("team_members").delete().eq("team_id", teamId).eq("user_id", userId);
   if (removed.error) return { ok: false, error: "auth.error.generic" };
@@ -500,7 +510,7 @@ export async function adjustMemberBalance(input: {
   teamId: string;
   userId: string;
   amount: number;
-}): Promise<{ ok: true; balance: number; ledger: BalanceEntry[] } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; balance: number } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const amount = Math.round(Number(input.amount) * 100) / 100;
@@ -515,17 +525,10 @@ export async function adjustMemberBalance(input: {
     .single();
   if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
   await writeAudit("balance.adjust", "balance_entries", inserted.data.id, { teamId: input.teamId, userId: input.userId, amount });
-  const rows = await gate.client
-    .from("balance_entries")
-    .select(BALANCE_ENTRY_SELECT)
-    .eq("team_id", input.teamId)
-    .eq("user_id", input.userId)
-    .order("created_at", { ascending: false });
-  if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
-  const ledger = rows.data.map((row) => mapBalanceEntry(row));
-  const balance = Math.round(ledger.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+  const balance = await readMemberBalance(gate.client, input.teamId, input.userId);
+  if (balance == null) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
-  return { ok: true, balance, ledger };
+  return { ok: true, balance };
 }
 
 function venueFromRow(row: { id: string; name: string; price_per_hour: number | string; hidden: boolean; updated_at: string }): Venue {
@@ -629,19 +632,6 @@ function storedExpense(type: "game" | "training", value: number | null): number 
   return expense;
 }
 
-async function readTeamLedger(client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"], teamId: string): Promise<TeamLedgerLine[] | null> {
-  const rows = await client.from("team_ledger").select("id, event_id, amount, event_date, event_type, created_at").eq("team_id", teamId).order("created_at", { ascending: false });
-  if (rows.error || !rows.data) return null;
-  return rows.data.map((row) => ({
-    id: row.id,
-    amount: Number(row.amount),
-    at: toLocalDateTimeStamp(row.created_at),
-    eventId: row.event_id,
-    eventDate: String(row.event_date).slice(0, 10),
-    eventType: row.event_type === "game" ? "game" : "training",
-  }));
-}
-
 async function bumpBalance(client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"], teamId: string, delta: number): Promise<number | null> {
   const bumped = await client.rpc("adjust_team_balance", { target: teamId, delta });
   if (bumped.error || bumped.data == null) return null;
@@ -706,7 +696,7 @@ export async function updateOwnedEvent(input: {
   subteamId: string | null;
   expense: number | null;
   withCoach: boolean;
-}): Promise<{ ok: true; event: TeamEvent; teamBalance: number; ledger: TeamLedgerLine[] } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; event: TeamEvent; teamBalance: number } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
@@ -742,10 +732,10 @@ export async function updateOwnedEvent(input: {
   const event = eventFromRow(updated.data);
   const teamBalance = await applyEventSettlement(gate.client, input.teamId, { ...event, expense: event.expense ?? null }, existing.data.settled_at);
   if (teamBalance == null) return { ok: false, error: "auth.error.generic" };
-  const ledger = await readTeamLedger(gate.client, input.teamId);
-  if (!ledger) return { ok: false, error: "auth.error.generic" };
+  const fresh = await gate.client.from("team_events").select("settled_at").eq("id", event.id).maybeSingle();
+  if (fresh.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
-  return { ok: true, event, teamBalance, ledger };
+  return { ok: true, event: { ...event, settled: Boolean(fresh.data?.settled_at) }, teamBalance };
 }
 
 export async function saveOwnedLineup(input: {
@@ -790,7 +780,7 @@ function cleanSides(sides: Record<string, "black" | "white"> | undefined, allowe
 export async function deleteOwnedEvent(input: {
   teamId: string;
   eventId: string;
-}): Promise<{ ok: true; teamBalance: number; ledger: TeamLedgerLine[]; refunds: { userId: string; balance: number; ledger: BalanceEntry[] }[] } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; teamBalance: number; refunds: { userId: string; balance: number }[] } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const team = await gate.client.from("teams").select("balance").eq("id", input.teamId).maybeSingle();
@@ -812,21 +802,17 @@ export async function deleteOwnedEvent(input: {
     if (delta !== 0) await bumpBalance(gate.client, input.teamId, -delta);
     return { ok: false, error: "auth.error.generic" };
   }
-  const userIds = [...new Set((charges.data ?? []).map((row) => row.user_id))];
-  const refunds: { userId: string; balance: number; ledger: BalanceEntry[] }[] = [];
+  const userIds = [...new Set((charges.data ?? []).map((row) => row.user_id as string))];
+  const refunds: { userId: string; balance: number }[] = [];
   if (userIds.length) {
-    const rows = await gate.client.from("balance_entries").select(BALANCE_ENTRY_SELECT).eq("team_id", input.teamId).in("user_id", userIds).order("created_at", { ascending: false });
-    if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
-    for (const userId of userIds) {
-      const ledger = rows.data.filter((row) => row.user_id === userId).map((row) => mapBalanceEntry(row));
-      refunds.push({ userId, balance: roundMoney(ledger.reduce((sum, item) => sum + item.amount, 0)), ledger });
-    }
+    const totals = await gate.client.rpc("member_balance_totals", { team_ids: [input.teamId] });
+    if (totals.error || !totals.data) return { ok: false, error: "auth.error.generic" };
+    const byUser = new Map((totals.data as { user_id: string; total: number | string }[]).map((row) => [row.user_id, roundMoney(Number(row.total))]));
+    for (const userId of userIds) refunds.push({ userId, balance: byUser.get(userId) ?? 0 });
   }
-  const ledger = await readTeamLedger(gate.client, input.teamId);
-  if (!ledger) return { ok: false, error: "auth.error.generic" };
   await writeAudit("event.delete", "team_events", input.eventId, { teamId: input.teamId });
   refreshTeamData();
-  return { ok: true, teamBalance, ledger, refunds };
+  return { ok: true, teamBalance, refunds };
 }
 
 export async function setEventAttendance(input: {
@@ -834,15 +820,18 @@ export async function setEventAttendance(input: {
   eventId: string;
   userId: string;
   status: "going" | "absent" | "pending";
-}): Promise<{ ok: true; memberBalance: number; ledger: BalanceEntry[]; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; memberBalance: number; teamBalance: number; reservation: { eventId: string; userId: string; amount: number } | null } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   if (input.status !== "going" && input.status !== "absent" && input.status !== "pending") return { ok: false, error: "auth.error.generic" };
   const team = await gate.client.from("teams").select("leader_id").eq("id", input.teamId).maybeSingle();
   if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
   const actor = await gate.client.from("team_members").select("user_id, is_team_admin").eq("team_id", input.teamId).eq("user_id", gate.account.id).maybeSingle();
-  if (actor.error || !actor.data) return { ok: false, error: "auth.error.generic" };
-  const manage = team.data.leader_id === gate.account.id || actor.data.is_team_admin === true;
+  if (actor.error) return { ok: false, error: "auth.error.generic" };
+  const watching = !actor.data && (await watchesTeam(gate.client, input.teamId, gate.account.id));
+  if (!actor.data && !watching) return { ok: false, error: "auth.error.generic" };
+  if (input.userId === gate.account.id && !actor.data) return { ok: false, error: "auth.error.generic" };
+  const manage = team.data.leader_id === gate.account.id || actor.data?.is_team_admin === true || watching;
   if (input.userId !== gate.account.id && !manage) return { ok: false, error: "auth.error.generic" };
   const result = await castMemberVote(gate.client, {
     teamId: input.teamId,

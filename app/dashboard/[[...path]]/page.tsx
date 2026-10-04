@@ -36,7 +36,7 @@ export default async function DashboardPage({
   const sportsPromise = listSports();
   const initialTeams = await listOwnedTeams(account.id, account.activeTeamId);
   const ledTeamIds = initialTeams.filter((team) => team.leaderId === account.id && team.id).map((team) => team.id as string);
-  const settleIds = initialTeams.some((team) => team.financeReserve) ? [] : initialTeams.filter((team) => team.id && !team.watching).map((team) => team.id as string);
+  const settleIds = initialTeams.some((team) => team.financeReserve) ? [] : initialTeams.filter((team) => team.id).map((team) => team.id as string);
   const clientAddress = await captureRequestAddress();
   after(async () => {
     await Promise.all([

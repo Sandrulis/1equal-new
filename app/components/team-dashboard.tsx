@@ -20,6 +20,7 @@ import { SiteFeedbackDialog } from "@/app/components/site-feedback-dialog";
 import type { FeedbackKind } from "@/app/lib/feedback/actions";
 import { createOwnedEvent, createOwnedTeam, deleteOwnedEvent, joinOwnedTeam, saveOwnedLineup, saveTeamAvatar, setActiveTeam, setEventAttendance, updateOwnedEvent, updateOwnedTeam } from "@/app/lib/team-actions";
 import { setAdminTeamWatch } from "@/app/lib/site-admin/actions";
+import { clearTeamSwitch, peekTeamSwitch, subscribeTeamSwitch } from "@/app/lib/pending-team-switch";
 import { mergeDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/team-defaults";
 import {
@@ -278,7 +279,20 @@ export function TeamDashboard({
   }, [basePath]);
   const adminSection = route.view === "admin" ? route.section : null;
   useEffect(() => {
-    if (!admin || !adminSection) return;
+    if (basePath === "/demo" || !adminSection) return;
+    if (!admin) {
+      let active = true;
+      void fetch(`/api/admin/console?section=${adminSection}&full=1`)
+        .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; admin?: AdminConsole }) : null))
+        .then((body) => {
+          if (!active || !body?.ok || !body.admin) return;
+          setAdmin(body.admin);
+        })
+        .catch(() => undefined);
+      return () => {
+        active = false;
+      };
+    }
     const missing = adminSection === "users" ? !admin.usersLoaded : adminSection === "translations" ? !admin.translationsLoaded : adminSection === "teams" ? !admin.membersLoaded : false;
     if (!missing) return;
     let active = true;
@@ -300,7 +314,7 @@ export function TeamDashboard({
     return () => {
       active = false;
     };
-  }, [admin, adminSection]);
+  }, [admin, adminSection, basePath]);
   const view = route.view;
   const [sectionSeen, setSectionSeen] = useState(view);
   const [sectionSlide, setSectionSlide] = useState<"left" | "right" | null>(null);
@@ -391,6 +405,10 @@ export function TeamDashboard({
     setOwnedTeam(next);
     if (ownedTeam?.id === teamId) void setActiveTeam(next?.id ?? null);
     showFeedback({ message: t("admin.teams.unwatched"), variant: "success" });
+    const href = `${basePath}/admin/teams`;
+    setClientPath(href);
+    router.push(href);
+    router.refresh();
   }
 
   function rememberTeam(patch: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string }) {
@@ -585,11 +603,14 @@ export function TeamDashboard({
       setTeams([]);
       setRsvp({});
     } else {
-      const remembered = ownedTeam?.code ?? preferredCode ?? (account?.activeTeamId ? initialTeams.find((team) => team.id === account.activeTeamId)?.code : null);
+      const queuedId = peekTeamSwitch();
+      const queued = queuedId ? initialTeams.find((team) => team.id === queuedId) ?? null : null;
+      const remembered = queued?.code ?? ownedTeam?.code ?? preferredCode ?? (account?.activeTeamId ? initialTeams.find((team) => team.id === account.activeTeamId)?.code : null);
       const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0].code;
       const incoming = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
       const next = incoming.loaded === false && ownedTeam && ownedTeam.id === incoming.id && ownedTeam.loaded !== false ? ownedTeam : incoming;
       setOwnedTeam(next);
+      if (queued && next.id === queued.id) setHomePick("calendar");
       setTeams(initialTeams);
       const seeded: Record<string, Record<string, Rsvp>> = {};
       for (const row of next.rsvps ?? []) seeded[row.eventId] = { ...seeded[row.eventId], [row.userId]: row.status };
@@ -603,6 +624,14 @@ export function TeamDashboard({
     const preferred = remembered && initialTeams.some((team) => team.code === remembered) ? remembered : initialTeams[0]?.code;
     if (preferred) selectMyTeam(preferred);
   }, [account, initialTeams, ownedTeam?.code, preferredCode, serverTeams]);
+  useEffect(() => subscribeTeamSwitch(() => {
+    setClientPath(basePath);
+    setHomePick("calendar");
+  }), [basePath]);
+  useEffect(() => {
+    const queuedId = peekTeamSwitch();
+    if (queuedId && ownedTeam?.id === queuedId) clearTeamSwitch(queuedId);
+  }, [ownedTeam?.id]);
   useEffect(() => {
     if (basePath === "/demo" || !ownedTeam?.id || ownedTeam.loaded !== false) return;
     const teamId = ownedTeam.id;
@@ -738,7 +767,7 @@ export function TeamDashboard({
       return;
     }
     const members = (ownedTeam.members ?? []).map((member) =>
-      member.id === memberId ? { ...member, balance: result.memberBalance, ledger: result.ledger, ledgerLoaded: true } : member,
+      member.id === memberId ? { ...member, balance: result.memberBalance, ledger: [], ledgerLoaded: false } : member,
     );
     const rsvps = (ownedTeam.rsvps ?? []).filter((row) => !(row.eventId === eventId && row.userId === memberId));
     if (status === "going" || status === "absent") rsvps.push({ eventId, userId: memberId, status });
@@ -816,7 +845,6 @@ export function TeamDashboard({
         ...ownedTeam,
         events: (ownedTeam.events ?? []).map((item) => (item.id === updated.event.id ? withLineup(item, updated.event) : item)),
         balance: updated.teamBalance,
-        ledger: updated.ledger,
       };
     } else {
       const created = await createOwnedEvent({ teamId: ownedTeam.id, ...input });
@@ -895,14 +923,13 @@ export function TeamDashboard({
     const refunded = new Map(result.refunds.map((row) => [row.userId, row]));
     const members = (ownedTeam.members ?? []).map((member) => {
       const refund = refunded.get(member.id);
-      return refund ? { ...member, balance: refund.balance, ledger: refund.ledger, ledgerLoaded: true } : member;
+      return refund ? { ...member, balance: refund.balance, ledger: [], ledgerLoaded: false } : member;
     });
     const next = {
       ...ownedTeam,
       events: (ownedTeam.events ?? []).filter((item) => item.id !== event.id),
       members,
       balance: result.teamBalance,
-      ledger: result.ledger,
       rsvps: (ownedTeam.rsvps ?? []).filter((row) => row.eventId !== event.id),
     };
     setCurrentTeam(next);
@@ -1000,13 +1027,14 @@ export function TeamDashboard({
   const moduleVisible = !activeModule || moduleOn(activeModule);
   const lineupAllowed = moduleOn(FRONTEND_MODULE_KEYS.gameLayout);
   const teamPending = Boolean(account && ownedTeam?.loaded === false);
-  const roster = activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : demoMembers;
+  const ghostLeader = Boolean(activeTeam?.watching && account?.isAdmin);
+  const roster = (activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : demoMembers).filter((member) => !(ghostLeader && member.id === profile?.id));
   const knownRsvp = Boolean(activeTeam && !activeTeam.demo && activeTeam.id);
   const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
   const entuziastiOn = moduleOn(FRONTEND_MODULE_KEYS.entuziasti);
   const teamModules = enabledModules?.filter((key) => !individualModuleKeys.includes(key) || (activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key))) ?? null;
   const lineupBlocked = lineup && !lineupAllowed;
-  const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? demoMembers.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
+  const rosterCount = !activeTeam || showStart ? 0 : activeTeam.demo || !profile ? demoMembers.length : ghostLeader ? roster.length : activeTeam.members?.length ? activeTeam.members.length : profile ? 1 : 0;
   const subteamCount = showStart ? 0 : filterSubteams.length;
   const venueSource = showStart ? [] : activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.venues ?? []) : venues;
   const venueCount = venueSource.filter((item) => !item.hidden).length;
@@ -1062,7 +1090,7 @@ export function TeamDashboard({
       : (activeTeam.members ?? []).find((member) => member.id === profile?.id) ?? null;
   const financeReserve = Boolean(financeAllowed && activeTeam && !activeTeam.demo && activeTeam.financeReserve);
   const reservations = financeReserve ? (activeTeam?.reservations ?? []) : [];
-  const settledEventIds = new Set((activeTeam?.ledger ?? []).map((line) => line.eventId).filter((id): id is string => Boolean(id)));
+  const settledEventIds = new Set((activeTeam?.events ?? []).filter((event) => event.settled).map((event) => event.id));
   function playerHold(eventId: string, userId: string) {
     return reservations.find((row) => row.eventId === eventId && row.userId === userId)?.amount ?? 0;
   }
@@ -1194,10 +1222,10 @@ export function TeamDashboard({
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupReady = !lineupEvent || lineupEvent.lineupLoaded !== false;
   const managesTeam = Boolean(
-    profile && activeTeam && !activeTeam.demo && (activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
+    profile && activeTeam && !activeTeam.demo && (ghostLeader || activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
   );
   const canManageTeam = basePath === "/demo" || managesTeam;
-  const canEditLineup = Boolean(managesTeam && !activeTeam?.watching);
+  const canEditLineup = managesTeam;
   if (!canManageTeam && (view === "venues" || view === "subteams")) setClientPath(basePath);
   useEffect(() => {
     if (canManageTeam) return;
@@ -1273,7 +1301,7 @@ export function TeamDashboard({
         canManage={canManageTeam && !showStart}
         showSubteams={canManageTeam && !showStart && moduleOn(FRONTEND_MODULE_KEYS.subteams)}
         showVenues={canManageTeam && !showStart}
-        canAdd={Boolean(canManageTeam && !activeTeam?.watching && !showStart)}
+        canAdd={Boolean(canManageTeam && !showStart)}
         homeBusy={pendingNav === "home"}
         teamBusy={pendingNav === "team"}
         subteamsBusy={pendingNav === "subteams"}
@@ -1308,7 +1336,7 @@ export function TeamDashboard({
       <TopBar
         key={ownedTeam ? teamPlayer(profile, ownedTeam.code)?.sourceUrl ?? ownedTeam.code : "account"}
         account={profile}
-        team={activeTeam ? { name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl, sportId: activeTeam.sportId, moduleKeys: activeTeam.moduleKeys, demo: activeTeam.demo } : null}
+        team={activeTeam ? { id: activeTeam.id, name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl, sportId: activeTeam.sportId, moduleKeys: activeTeam.moduleKeys, demo: activeTeam.demo } : null}
         teams={account ? teams : []}
         onHome={() => showHome()}
         onSelectTeam={selectTeam}
@@ -1413,6 +1441,7 @@ export function TeamDashboard({
             logoUrl={activeTeam.logoUrl}
             teamId={activeTeam.id ?? null}
             leaderId={activeTeam.leaderId ?? null}
+            asLeader={ghostLeader}
             accountId={profile?.id ?? null}
             trainingVotingHours={activeTeam.trainingVotingHours ?? brand.trainingVotingHours}
             gameVotingHours={activeTeam.gameVotingHours ?? brand.gameVotingHours}
@@ -1421,7 +1450,7 @@ export function TeamDashboard({
             sports={activeTeam.demo ? [] : sports}
             enabledModules={teamModules}
             onTeamSaved={rememberTeam}
-            initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
+            initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.watching ? (activeTeam.members ?? []).filter((member) => member.id !== profile.id) : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
               if (!delta) return member;
               return { ...member, balance: Math.round((member.balance + delta) * 100) / 100 };
@@ -1436,7 +1465,7 @@ export function TeamDashboard({
             persistedBalance={activeTeam.demo ? demoTeamDelta : (activeTeam.balance ?? 0)}
             teamHolds={teamHolds}
             memberHolds={memberHolds}
-            persistedEntries={(activeTeam.demo ? demoCharges : (activeTeam.ledger ?? [])).map((line) => {
+            persistedEntries={(activeTeam.demo ? demoCharges : []).map((line) => {
               const event = (activeTeam.events ?? []).find((item) => item.id === line.eventId);
               const venue = (activeTeam.venues ?? []).find((item) => item.id === event?.venueId)?.name;
               const description = t("team.ledger.event", {
@@ -1446,7 +1475,7 @@ export function TeamDashboard({
               return {
                 id: line.id,
                 amount: line.amount,
-                at: line.at,
+                at: line.eventDate || line.at,
                 description: venue ? `${description} · ${venue}` : description,
               };
             })}
@@ -1457,7 +1486,6 @@ export function TeamDashboard({
           <div className={sectionMotion || undefined}>
           <SubteamAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
-            readOnly={Boolean(activeTeam?.watching)}
             subteams={activeTeam?.subteams}
             onChange={(subteams) => {
               if (!ownedTeam) return;
@@ -1473,7 +1501,6 @@ export function TeamDashboard({
           <div className={sectionMotion || undefined}>
           <VenueAdmin
             teamId={activeTeam && !activeTeam.demo ? (activeTeam.id ?? null) : null}
-            readOnly={Boolean(activeTeam?.watching)}
             venues={activeTeam?.venues}
             onChange={(venues) => {
               if (!ownedTeam) return;
@@ -1490,6 +1517,7 @@ export function TeamDashboard({
             {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules" || route.section === "sports") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
             )}
+            {!admin ? <AdminSectionPending label={t("admin.loading")} /> : null}
             {route.section === "users" && admin && !admin.usersLoaded ? (
               <>
                 <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL.users)}</h1>
@@ -1752,7 +1780,7 @@ export function TeamDashboard({
           </div>
 
           <div className={showPoll ? "hidden" : "contents xl:sticky xl:top-5 xl:flex xl:flex-col xl:gap-3 xl:order-2"}>
-          {canManageTeam && !activeTeam?.watching ? (
+          {canManageTeam ? (
             <button type="button" onClick={() => setAddingEvent(true)} className="order-1 hidden w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white min-[600px]:inline-flex xl:order-none">
               <IconPlus />
               {t("event.add")}

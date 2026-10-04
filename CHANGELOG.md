@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.25
+
+- Neredzams admins pieslēdzas komandai un uzreiz redz tās kalendāru. Sastāvā viņš neparādās. Atvienošana no saraksta aizved uz admina komandām
+- Bilances izraksts sākas ar šo mēnesi. Citu periodu līdz trim mēnešiem apstiprina ar ķeksi, un datums ir tas pats kalendāra logs, ko notikumam
+- Paneļa saite vairs neatjauno iepriekšējo lapu. Admina sadaļa bez datiem tos pieprasa pati. `/old-2-new` rāda Pingvīnu pārneses priekšskatu
+
 ## v0.1.24
 
 - `audit:check` pieņem `braces` brīdinājumu, kamēr nav labotas versijas. Pakotne ir tikai ESLint izstrādes atkarība

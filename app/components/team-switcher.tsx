@@ -141,6 +141,7 @@ export function TeamSwitcher({
                   onClick={() => {
                     const teamId = item.id;
                     if (!teamId || !onUnwatch || unwatchingId) return;
+                    setOpen(false);
                     setUnwatchingId(teamId);
                     void Promise.resolve(onUnwatch(teamId)).finally(() => setUnwatchingId(null));
                   }}

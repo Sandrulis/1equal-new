@@ -15,6 +15,7 @@ import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import type { MessageKey } from "@/app/lib/messages";
 import { adminTeamHref } from "@/app/lib/dashboard-path";
+import { queueTeamSwitch } from "@/app/lib/pending-team-switch";
 import { sportLabel, type Sport } from "@/app/lib/sports";
 
 const MODULE_LABEL: Record<string, MessageKey> = {
@@ -116,6 +117,10 @@ export function AdminTeamsList({
       return;
     }
     showFeedback({ message: t(watch ? "admin.teams.watched" : "admin.teams.unwatched"), variant: "success" });
+    if (watch) {
+      queueTeamSwitch(id);
+      router.push("/dashboard");
+    }
     router.refresh();
   }
 
