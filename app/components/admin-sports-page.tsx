@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminSportPositions } from "@/app/components/admin-sport-positions";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
@@ -43,6 +44,7 @@ export function AdminSportsPage({
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Sport | null>(null);
+  const [positionsSportId, setPositionsSportId] = useState<string | null>(null);
   if (initialSports !== seen) {
     setSeen(initialSports);
     setSports(initialSports);
@@ -79,6 +81,8 @@ export function AdminSportsPage({
     router.refresh();
   }
 
+  const positionsSport = sports.find((item) => item.id === positionsSportId) ?? null;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -106,6 +110,9 @@ export function AdminSportsPage({
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{sportLabel(sport, lang, fallback)}</span>
                   <span className="block truncate text-xs text-muted">
+                    {sport.positions.length ? sport.positions.map((position) => position.code).join(", ") : t("sports.positions.empty")}
+                  </span>
+                  <span className="block truncate text-xs text-muted">
                     {moduleNames.length
                       ? moduleNames.map((key) => (MODULE_LABEL[key] ? t(MODULE_LABEL[key]) : key)).join(", ")
                       : t("sports.modules.empty")}
@@ -113,6 +120,9 @@ export function AdminSportsPage({
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
+                <button type="button" onClick={() => setPositionsSportId(sport.id)} disabled={pending} className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink ring-1 ring-line hover:bg-ice disabled:cursor-not-allowed disabled:opacity-40">
+                  {t("sports.positions")}
+                </button>
                 <button
                   type="button"
                   role="switch"
@@ -136,6 +146,17 @@ export function AdminSportsPage({
           })}
         </ul>
       )}
+      {positionsSport ? (
+        <AdminSportPositions
+          sport={positionsSport}
+          languages={orderedLanguages}
+          onClose={() => setPositionsSportId(null)}
+          onChange={(next) => {
+            setSports(next);
+            router.refresh();
+          }}
+        />
+      ) : null}
       {creating || editing ? (
         <SportForm
           sport={editing}

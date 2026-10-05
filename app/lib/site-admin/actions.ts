@@ -8,6 +8,7 @@ import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type Frontend
 import { messages, type MessageKey } from "@/app/lib/messages";
 import { listAdminFeedback, listAdminTodos, listSports } from "@/app/lib/site-admin/repository";
 import { resolveSportIcon } from "@/app/lib/fa-icons";
+import { cleanPositionCode, memberUsesCode } from "@/app/lib/positions";
 import type { Sport } from "@/app/lib/sports";
 import { EMAIL_KINDS, type AdminFeedbackItem, type AdminTodo, type EmailKind, type EmailTemplate } from "@/app/lib/site-admin/types";
 import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
@@ -706,6 +707,155 @@ export async function deleteSport(id: string): Promise<{ ok: true; sports: Sport
   if ((used.count ?? 0) > 0) return { ok: false, error: "sports.error.used" };
   const removed = await gate.client.from("sports").delete().eq("id", id);
   if (removed.error) return { ok: false, error: sportWriteError(removed.error) };
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+async function positionNames(
+  client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
+  input: Record<string, string>,
+): Promise<{ ok: true; names: Record<string, string> } | { ok: false; error: MessageKey }> {
+  const languages = await client.from("site_languages").select("code, is_active");
+  if (languages.error || !languages.data) return { ok: false, error: "auth.error.generic" };
+  const names: Record<string, string> = {};
+  for (const language of languages.data as { code: string; is_active: boolean }[]) {
+    const value = (input[language.code] ?? "").trim().slice(0, 80);
+    if (language.is_active && !value) return { ok: false, error: "sports.error.name" };
+    if (value) names[language.code] = value;
+  }
+  if (Object.keys(names).length === 0) return { ok: false, error: "sports.error.name" };
+  return { ok: true, names };
+}
+
+async function replacePositionNames(
+  client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
+  positionId: string,
+  names: Record<string, string>,
+): Promise<MessageKey | null> {
+  const cleared = await client.from("sport_position_names").delete().eq("position_id", positionId);
+  if (cleared.error) return "auth.error.generic";
+  const saved = await client.from("sport_position_names").insert(Object.entries(names).map(([language_code, name]) => ({ position_id: positionId, language_code, name })));
+  return saved.error ? "auth.error.generic" : null;
+}
+
+async function teamsForSport(client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>, sportId: string): Promise<string[] | null> {
+  const teams = await client.from("teams").select("id").eq("sport_id", sportId);
+  if (teams.error) return null;
+  return (teams.data ?? []).map((row) => row.id as string);
+}
+
+async function renameMemberPosition(
+  client: NonNullable<Awaited<ReturnType<typeof adminClient>>["client"]>,
+  sportId: string,
+  from: string,
+  to: string,
+): Promise<MessageKey | null> {
+  if (from === to) return null;
+  const teamIds = await teamsForSport(client, sportId);
+  if (!teamIds) return "auth.error.generic";
+  if (teamIds.length === 0) return null;
+  const members = await client.from("team_members").select("team_id, user_id, position, extra_positions").in("team_id", teamIds);
+  if (members.error) return "auth.error.generic";
+  const now = new Date().toISOString();
+  for (const row of members.data ?? []) {
+    const current = cleanPositionCode(row.position) || "";
+    const extras = String(row.extra_positions ?? "")
+      .split(",")
+      .map((part) => cleanPositionCode(part))
+      .filter(Boolean)
+      .map((part) => (part === from ? to : part));
+    const position = current === from ? to : current;
+    const extraPositions = [...new Set(extras.filter((part) => part !== position))].join(",");
+    if (position === (row.position ?? "") && extraPositions === (row.extra_positions ?? "")) continue;
+    const saved = await client.from("team_members").update({ position, extra_positions: extraPositions, updated_at: now }).eq("team_id", row.team_id).eq("user_id", row.user_id);
+    if (saved.error) return "auth.error.generic";
+  }
+  return null;
+}
+
+function positionWriteError(error: { code?: string } | null): MessageKey {
+  if (error?.code === "23505") return "sports.positions.error.exists";
+  return "auth.error.generic";
+}
+
+export async function saveSportPosition(input: {
+  sportId: string;
+  id?: string | null;
+  code: string;
+  names: Record<string, string>;
+}): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(input.sportId)) return { ok: false, error: "auth.error.generic" };
+  const code = cleanPositionCode(input.code);
+  if (!code) return { ok: false, error: "sports.positions.error.code" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const sport = await gate.client.from("sports").select("id").eq("id", input.sportId).maybeSingle();
+  if (sport.error || !sport.data) return { ok: false, error: "auth.error.generic" };
+  const names = await positionNames(gate.client, input.names);
+  if (!names.ok) return names;
+  const positionId = (input.id ?? "").trim();
+  if (positionId) {
+    if (!/^[0-9a-f-]{36}$/i.test(positionId)) return { ok: false, error: "auth.error.generic" };
+    const existing = await gate.client.from("sport_positions").select("id, code").eq("id", positionId).eq("sport_id", input.sportId).maybeSingle();
+    if (existing.error || !existing.data) return { ok: false, error: "auth.error.generic" };
+    const saved = await gate.client.from("sport_positions").update({ code, updated_at: new Date().toISOString() }).eq("id", positionId);
+    if (saved.error) return { ok: false, error: positionWriteError(saved.error) };
+    const linked = await replacePositionNames(gate.client, positionId, names.names);
+    if (linked) return { ok: false, error: linked };
+    const renamed = await renameMemberPosition(gate.client, input.sportId, existing.data.code, code);
+    if (renamed) return { ok: false, error: renamed };
+  } else {
+    const last = await gate.client.from("sport_positions").select("sort_order").eq("sport_id", input.sportId).order("sort_order", { ascending: false }).limit(1);
+    if (last.error) return { ok: false, error: "auth.error.generic" };
+    const sortOrder = ((last.data?.[0]?.sort_order as number | undefined) ?? -1) + 1;
+    const inserted = await gate.client.from("sport_positions").insert({ sport_id: input.sportId, code, sort_order: sortOrder }).select("id").single();
+    if (inserted.error || !inserted.data) return { ok: false, error: positionWriteError(inserted.error) };
+    const linked = await replacePositionNames(gate.client, inserted.data.id, names.names);
+    if (linked) return { ok: false, error: linked };
+  }
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+export async function deleteSportPosition(sportId: string, id: string): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(sportId) || !/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const existing = await gate.client.from("sport_positions").select("id, code").eq("id", id).eq("sport_id", sportId).maybeSingle();
+  if (existing.error || !existing.data) return { ok: false, error: "auth.error.generic" };
+  const code = existing.data.code;
+  const teamIds = await teamsForSport(gate.client, sportId);
+  if (!teamIds) return { ok: false, error: "auth.error.generic" };
+  if (teamIds.length) {
+    const members = await gate.client.from("team_members").select("position, extra_positions").in("team_id", teamIds);
+    if (members.error) return { ok: false, error: "auth.error.generic" };
+    const used = (members.data ?? []).some((row) => memberUsesCode(row.position ?? "", row.extra_positions ?? "", code));
+    if (used) return { ok: false, error: "sports.positions.error.used" };
+  }
+  const removed = await gate.client.from("sport_positions").delete().eq("id", id);
+  if (removed.error) return { ok: false, error: "auth.error.generic" };
+  refresh();
+  return { ok: true, sports: await listSports() };
+}
+
+export async function moveSportPosition(sportId: string, id: string, direction: "up" | "down"): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(sportId) || !/^[0-9a-f-]{36}$/i.test(id) || (direction !== "up" && direction !== "down")) return { ok: false, error: "auth.error.generic" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const rows = await gate.client.from("sport_positions").select("id, sort_order").eq("sport_id", sportId).order("sort_order").order("code");
+  if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
+  const ordered = rows.data.map((row) => row.id as string);
+  const index = ordered.indexOf(id);
+  const swap = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || swap < 0 || swap >= ordered.length) return { ok: true, sports: await listSports() };
+  const next = [...ordered];
+  const [moved] = next.splice(index, 1);
+  next.splice(swap, 0, moved);
+  const now = new Date().toISOString();
+  for (let place = 0; place < next.length; place += 1) {
+    const saved = await gate.client.from("sport_positions").update({ sort_order: place, updated_at: now }).eq("id", next[place]);
+    if (saved.error) return { ok: false, error: "auth.error.generic" };
+  }
   refresh();
   return { ok: true, sports: await listSports() };
 }

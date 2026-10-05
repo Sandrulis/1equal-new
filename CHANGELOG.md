@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.38
+
+- Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G
+- Sporta lapām katrā valodā ir savs slugs, vecās adreses iet ar 301, un lapu kartei ir hreflang
+- Produkcijas būve prasa `https://1equal.com`. E-pasta balsojuma API CI atpazīst pēc tokena
+
 ## v0.1.37
 
 - Publiskās lapas ir latviešu saknē, ar `/en` un `/ru`, kanonisko adresi, hreflang un lapu karti

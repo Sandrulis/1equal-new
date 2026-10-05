@@ -9,6 +9,13 @@ const LEGACY_SPORT_ICONS: Record<string, string> = {
   run: "person-running",
 };
 
+export type SportPosition = {
+  id: string;
+  code: string;
+  sortOrder: number;
+  names: Record<string, string>;
+};
+
 export type Sport = {
   id: string;
   icon: string;
@@ -16,6 +23,7 @@ export type Sport = {
   sortOrder: number;
   names: Record<string, string>;
   moduleKeys: string[];
+  positions: SportPosition[];
 };
 
 export function sportIconName(value: string): string | null {

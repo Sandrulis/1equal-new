@@ -3,21 +3,13 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withSentryConfig } from "@sentry/nextjs/config";
 import { canonicalHostRedirectRules, robotsNoIndexHeaderSources } from "./app/lib/seo";
+import { legacyPathRedirects } from "./app/lib/seo-slugs";
+import { getIndexableSiteUrl } from "./app/lib/site";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 if (process.env.NODE_ENV === "production") {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
-  let local = !siteUrl;
-  try {
-    const host = new URL(siteUrl).hostname;
-    local = !siteUrl || !siteUrl.startsWith("https://") || host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host.endsWith(".local") || host.startsWith("127.") || host.startsWith("10.") || host.startsWith("192.168.") || host === "::1";
-  } catch {
-    local = true;
-  }
-  if (local) {
-    console.error("NEXT_PUBLIC_SITE_URL is missing, local, or not https. Production metadata uses https://1equal.com.");
-  }
+  getIndexableSiteUrl();
 }
 
 const nextConfig: NextConfig = {
@@ -62,7 +54,10 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
-    return canonicalHostRedirectRules();
+    return [
+      ...canonicalHostRedirectRules(),
+      ...legacyPathRedirects().map((rule) => ({ source: rule.source, destination: rule.destination, statusCode: 301 })),
+    ];
   },
 };
 

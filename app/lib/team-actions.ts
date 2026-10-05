@@ -24,7 +24,7 @@ import { eventFromRow, memberFromRow, readMemberBalance, requireUserAdmin, TEAM_
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
-import { normalizePositionCode, serializeExtraPositions } from "@/app/lib/positions";
+import { normalizePositionCode, resolvePositionCode, serializeExtraPositions, type PositionCatalogItem } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { normalizeJoinCode, JOIN_INVITE_COOKIE } from "@/app/lib/join-invite";
 import { rateLimit } from "@/app/lib/security/rate-limit";
@@ -51,6 +51,13 @@ async function attachSport(
 }
 
 type GateClient = NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"];
+
+async function sportPositionCatalog(client: GateClient, sportId: string | null): Promise<PositionCatalogItem[] | null> {
+  if (!sportId) return [];
+  const rows = await client.from("sport_positions").select("code, sort_order").eq("sport_id", sportId).order("sort_order");
+  if (rows.error) return null;
+  return ((rows.data ?? []) as { code: string }[]).map((row) => ({ code: row.code }));
+}
 
 async function rememberActiveTeam(client: GateClient, userId: string, teamId: string) {
   await client.from("users").update({ active_team_id: teamId }).eq("id", userId);
@@ -400,8 +407,10 @@ export async function saveMemberProfile(input: {
   if (keptLinks?.error) return { ok: false, error: "auth.error.generic" };
   const subteamIds = manager ? [...new Set(input.subteamIds.filter((id) => allowedIds.has(id)))] : (keptLinks?.data ?? []).map((row) => row.subteam_id);
   const number = cleanNumber(input.number) ?? (player?.number ? cleanNumber(player.number) : null);
-  const position = normalizePositionCode(input.position) || normalizePositionCode(player?.position || "");
-  const extraPositions = serializeExtraPositions(input.extraPositions, position);
+  const catalog = await sportPositionCatalog(gate.client, team.data.sport_id);
+  if (!catalog) return { ok: false, error: "auth.error.generic" };
+  const position = resolvePositionCode(input.position, catalog) || resolvePositionCode(player?.position || "", catalog);
+  const extraPositions = serializeExtraPositions(input.extraPositions, position, catalog);
   const phone = cleanText(input.phone, 40);
   const memberPatch: {
     jersey_number: number | null;

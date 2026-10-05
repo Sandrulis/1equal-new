@@ -134,8 +134,8 @@ jobs:
                   fi
                   continue
                   ;;
-                # Email vote link: hashed token, not a session cookie.
-                app/v/\[token\]/\[choice\]/route.ts)
+                # Email vote: one-time hashed token in the POST body, not a session cookie.
+                app/api/email-vote/route.ts)
                   if ! grep -q "voteFromEmailLink" "$file"; then
                     echo "FAIL: No vote token check in $file"
                     exit 1

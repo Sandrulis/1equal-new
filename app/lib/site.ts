@@ -31,36 +31,26 @@ function isLocalUrl(value: string): boolean {
   }
 }
 
-let warnedAboutSiteUrl = false;
-
 export function getSiteUrl(): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ?? "";
   const production = process.env.NODE_ENV === "production";
   if (configured && !isLocalUrl(configured) && (!production || configured.startsWith("https://"))) return configured;
-  if (production) {
-    if (!warnedAboutSiteUrl) {
-      warnedAboutSiteUrl = true;
-      console.error("NEXT_PUBLIC_SITE_URL is missing, local, or not https. Production metadata uses https://1equal.com.");
-    }
-    return PRODUCTION_SITE_URL;
-  }
+  if (production) return PRODUCTION_SITE_URL;
   return configured || "http://localhost:3130";
 }
 
 /**
  * Canonical, Open Graph, JSON-LD, sitemap and robots.
- * Uses NEXT_PUBLIC_SITE_URL when it is a public https origin.
- * Development may be localhost. Production falls back to https://1equal.com and logs an error.
+ * Production requires NEXT_PUBLIC_SITE_URL to be a public https origin.
  */
 export function getIndexableSiteUrl(): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ?? "";
-  if (configured && !isLocalUrl(configured) && configured.startsWith("https://")) return configured;
   if (process.env.NODE_ENV === "production") {
-    if (!warnedAboutSiteUrl) {
-      warnedAboutSiteUrl = true;
-      console.error("NEXT_PUBLIC_SITE_URL is missing, local, or not https. Production metadata uses https://1equal.com.");
+    if (!configured || isLocalUrl(configured) || !configured.startsWith("https://")) {
+      throw new Error("NEXT_PUBLIC_SITE_URL must be a public https origin such as https://1equal.com. Production build refuses a missing or localhost value.");
     }
-    return PRODUCTION_SITE_URL;
+    return configured;
   }
+  if (configured && !isLocalUrl(configured) && configured.startsWith("https://")) return configured;
   return configured || "http://localhost:3130";
 }

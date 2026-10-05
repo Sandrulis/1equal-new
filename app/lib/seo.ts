@@ -1,7 +1,30 @@
 import { getSiteUrl } from "./site";
 
-/** Private and noindex routes. Latvian public pages are unprefixed. English and Russian use /en and /ru. */
+/**
+ * robots.txt Disallow values. Google matches these as prefixes.
+ * Segment roots that could swallow a public slug use a trailing slash:
+ * `/v` would block `/volejbola-komandas`, `/training` would block `/training-management`.
+ */
 export const ROBOTS_DISALLOW_PATHS = [
+  "/v/",
+  "/cal/",
+  "/training/",
+  "/join/",
+  "/auth/",
+  "/api/",
+  "/demo",
+  "/dashboard",
+  "/panel",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/maintenance",
+  "/old-2-new",
+] as const;
+
+/** Real private route roots. Header matching is not prefix-based like robots.txt. */
+const PRIVATE_HEADER_ROOTS = [
   "/dashboard",
   "/demo",
   "/panel",
@@ -22,7 +45,7 @@ export const ROBOTS_DISALLOW_PATHS = [
 /** Next.js `headers()` sources that should send `X-Robots-Tag: noindex, nofollow`. */
 export function robotsNoIndexHeaderSources(): string[] {
   const sources: string[] = [];
-  for (const path of ROBOTS_DISALLOW_PATHS) {
+  for (const path of PRIVATE_HEADER_ROOTS) {
     sources.push(path);
     sources.push(`${path}/:path*`);
   }

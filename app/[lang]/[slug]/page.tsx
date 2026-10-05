@@ -5,15 +5,14 @@ import { TopicLanding } from "@/app/components/topic-landing";
 import { getSeoLanding, seoCopy } from "@/app/lib/seo-landings";
 import { translate } from "@/app/lib/messages";
 import { publicPageMetadata, webPageJsonLd } from "@/app/lib/public-metadata";
-import { FEATURE_SLUGS, LEGACY_SPORT_REDIRECTS, PUBLIC_LOCALES, SPORT_SLUGS, TOPIC_SLUGS, publicPath, type PublicLocale } from "@/app/lib/seo-slugs";
+import { PUBLIC_LOCALES, groupForSlug, publicPath, routableSlugs, type PublicLocale } from "@/app/lib/seo-slugs";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getTopicPage, topicCopy } from "@/app/lib/topic-pages";
 
 export const revalidate = 3600;
 
 export function generateStaticParams(): { lang: PublicLocale; slug: string }[] {
-  const slugs = [...FEATURE_SLUGS, ...SPORT_SLUGS, ...TOPIC_SLUGS];
-  return PUBLIC_LOCALES.flatMap((lang) => slugs.map((slug) => ({ lang, slug })));
+  return PUBLIC_LOCALES.flatMap((lang) => routableSlugs().map((slug) => ({ lang, slug })));
 }
 
 export const dynamicParams = false;
@@ -22,17 +21,22 @@ function asLocale(value: string): PublicLocale | null {
   return PUBLIC_LOCALES.find((locale) => locale === value) ?? null;
 }
 
+function resolvedContent(slug: string) {
+  const group = groupForSlug(slug);
+  const topic = group?.topic ? getTopicPage(group.topic) : getTopicPage(slug);
+  const page = topic ? null : group?.seo ? getSeoLanding(group.seo) : getSeoLanding(slug);
+  return { topic, page };
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; slug: string }> }): Promise<Metadata> {
   const { lang, slug } = await params;
   const locale = asLocale(lang);
-  if (!locale || LEGACY_SPORT_REDIRECTS[slug] || (locale === "lv" && getTopicPage(slug))) {
-    return { robots: { index: false, follow: false } };
-  }
-  const topic = getTopicPage(slug);
-  const page = topic ? null : getSeoLanding(slug);
+  if (!locale) return { robots: { index: false, follow: false } };
+  const path = publicPath(locale, `/${slug}`);
+  if (path !== `/${locale}/${slug}`) return { robots: { index: false, follow: false } };
+  const { topic, page } = resolvedContent(slug);
   if (!topic && !page) return { robots: { index: false, follow: false } };
   const brand = await getSiteBrand();
-  const path = publicPath(locale, `/${slug}`);
   return publicPageMetadata({
     locale,
     path,
@@ -47,14 +51,12 @@ export default async function SeoLandingRoute({ params }: { params: Promise<{ la
   const { lang, slug } = await params;
   const locale = asLocale(lang);
   if (!locale) notFound();
-  const legacy = LEGACY_SPORT_REDIRECTS[slug];
-  if (legacy) permanentRedirect(publicPath(locale, `/${legacy}`));
-  const topic = getTopicPage(slug);
+  const path = publicPath(locale, `/${slug}`);
+  if (path !== `/${locale}/${slug}`) permanentRedirect(path);
+  const { topic, page: landing } = resolvedContent(slug);
   if (topic) {
-    if (locale === "lv") permanentRedirect(publicPath("lv", `/${topic.slug}`));
     const title = topicCopy(locale, topic.title);
     const description = topicCopy(locale, topic.description);
-    const path = publicPath(locale, `/${topic.slug}`);
     const jsonLd = webPageJsonLd({
       locale,
       path,
@@ -72,11 +74,10 @@ export default async function SeoLandingRoute({ params }: { params: Promise<{ la
       </>
     );
   }
-  const page = getSeoLanding(slug);
+  const page = landing;
   if (!page) notFound();
   const title = seoCopy(locale, page.title);
   const description = seoCopy(locale, page.description);
-  const path = publicPath(locale, `/${page.slug}`);
   const jsonLd = webPageJsonLd({
     locale,
     path,

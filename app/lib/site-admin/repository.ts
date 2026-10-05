@@ -544,14 +544,18 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
 export async function listSports(): Promise<Sport[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const [sports, names, links] = await Promise.all([
+  const [sports, names, links, positions, positionNames] = await Promise.all([
     admin.from("sports").select("id, icon, is_active, sort_order").order("sort_order").order("created_at"),
     admin.from("sport_names").select("sport_id, language_code, name"),
     listSportModuleLinks(),
+    admin.from("sport_positions").select("id, sport_id, code, sort_order").order("sort_order").order("code"),
+    admin.from("sport_position_names").select("position_id, language_code, name"),
   ]);
   if (sports.error || !sports.data) return [];
   const nameRows = (names.data ?? []) as { sport_id: string; language_code: string; name: string }[];
   const linkRows = links;
+  const positionRows = (positions.error ? [] : (positions.data ?? [])) as { id: string; sport_id: string; code: string; sort_order: number }[];
+  const positionNameRows = (positionNames.error ? [] : (positionNames.data ?? [])) as { position_id: string; language_code: string; name: string }[];
   return (sports.data as { id: string; icon: string; is_active: boolean; sort_order: number }[]).map((row) => {
     const sportNames: Record<string, string> = {};
     for (const name of nameRows) {
@@ -565,6 +569,15 @@ export async function listSports(): Promise<Sport[]> {
       sortOrder: row.sort_order,
       names: sportNames,
       moduleKeys: linkRows.filter((link) => link.sportId === row.id).map((link) => link.moduleKey),
+      positions: positionRows
+        .filter((position) => position.sport_id === row.id)
+        .map((position) => {
+          const positionLabels: Record<string, string> = {};
+          for (const label of positionNameRows) {
+            if (label.position_id === position.id) positionLabels[label.language_code] = label.name;
+          }
+          return { id: position.id, code: position.code, sortOrder: position.sort_order, names: positionLabels };
+        }),
     };
   });
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { getSeoLanding, SEO_CHROME, seoCopy, type SeoLandingPage } from "@/app/lib/seo-landings";
-import { LEGACY_SPORT_REDIRECTS, publicPath, type PublicLocale } from "@/app/lib/seo-slugs";
+import { publicPath, type PublicLocale } from "@/app/lib/seo-slugs";
 
 export function SeoLanding({ lang, page }: { lang: PublicLocale; page: SeoLandingPage }) {
   const related = page.related
@@ -39,7 +39,7 @@ export function SeoLanding({ lang, page }: { lang: PublicLocale; page: SeoLandin
           <ul className="mt-4 grid gap-2 text-sm">
             {related.map((item) => (
               <li key={item.slug}>
-                <Link href={publicPath(lang, `/${LEGACY_SPORT_REDIRECTS[item.slug] ?? item.slug}`)} className="cursor-pointer font-medium text-navy hover:underline">
+                <Link href={publicPath(lang, `/${item.slug}`)} className="cursor-pointer font-medium text-navy hover:underline">
                   {seoCopy(lang, item.h1)}
                 </Link>
               </li>
