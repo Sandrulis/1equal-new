@@ -497,7 +497,6 @@ export async function addAdminTodo(title: string): Promise<{ ok: true; todos: Ad
   const sortOrder = Number(existing.data?.[0]?.sort_order ?? 0) + 1;
   const { error } = await gate.client.from("user_todos").insert({ user_id: account.id, title: trimmed, sort_order: sortOrder });
   if (error) return { ok: false, error: "admin.todo.error.save" };
-  refresh();
   return todosForAdmin();
 }
 
@@ -512,7 +511,6 @@ export async function setAdminTodoDone(id: string, done: boolean): Promise<{ ok:
     .eq("id", id)
     .eq("user_id", account.id);
   if (error) return { ok: false, error: "admin.todo.error.save" };
-  refresh();
   return todosForAdmin();
 }
 
@@ -535,7 +533,6 @@ export async function reorderAdminTodos(ids: string[]): Promise<{ ok: true; todo
       return current.ok ? { ok: false, error: "admin.todo.error.save", todos: current.todos } : { ok: false, error: "admin.todo.error.save" };
     }
   }
-  refresh();
   return todosForAdmin();
 }
 
@@ -557,7 +554,6 @@ export async function deleteAdminTodo(id: string): Promise<{ ok: true; todos: Ad
   if (!account) return { ok: false, error: "admin.error.forbidden" };
   const { error } = await gate.client.from("user_todos").delete().eq("id", id).eq("user_id", account.id);
   if (error) return { ok: false, error: "admin.todo.error.save" };
-  refresh();
   return todosForAdmin();
 }
 

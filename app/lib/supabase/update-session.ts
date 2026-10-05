@@ -87,13 +87,16 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const maintenance = await siteMaintenanceOn(supabase);
-  if (!maintenance && !hasAuthCookie && isPublic) return nextWithPolicy(requestHeaders, policy);
-  if (!maintenance && pathname === "/maintenance") return redirectWithCookies(request, "/", policy, supabaseResponse);
+  const maintenancePromise = siteMaintenanceOn(supabase);
+  if (!hasAuthCookie && isPublic) {
+    const maintenance = await maintenancePromise;
+    if (!maintenance) return nextWithPolicy(requestHeaders, policy);
+    if (pathname === "/maintenance") return redirectWithCookies(request, "/", policy, supabaseResponse);
+  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [maintenance, userResult] = await Promise.all([maintenancePromise, supabase.auth.getUser()]);
+  if (!maintenance && pathname === "/maintenance") return redirectWithCookies(request, "/", policy, supabaseResponse);
+  const user = userResult.data.user;
   let activeUser = user;
 
   const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");

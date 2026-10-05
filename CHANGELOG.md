@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.33
+
+- Viesu saite un saraksts rādās tikai tad, ja ir vismaz viens viesis. Laukumus var meklēt pēc nosaukuma
+- Admina uzdevuma atzīme griežas tikai uz nospiestās rindas, un pārējās paliek klikšķināmas
+- Vienā pieprasījumā sesija tiek pārbaudīta vienreiz, un checkboxiem ir rokas kursors
+
 ## v0.1.32
 
 - Noņemta `www` novirze uz `1equal.com`, jo Vercel jau sūta otrādi un pārlūks palika noviržu cilpā

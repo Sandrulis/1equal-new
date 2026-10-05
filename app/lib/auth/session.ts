@@ -1,26 +1,21 @@
+import { cache } from "react";
 import { EMPTY_USER_DISPLAY_PREFERENCES, readUserDisplayPreferences } from "@/app/lib/display-preferences";
 import { readStoredEhlPlayers } from "@/app/lib/ehl-player";
 import type { AccountProfile } from "@/app/lib/auth/profile";
-import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
+import { getVerifiedAuth, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
-import { createClient } from "@/app/lib/supabase/server";
 
 export type { AccountProfile } from "@/app/lib/auth/profile";
 
 export async function getCurrentUser() {
-  if (!isSupabaseConfigured()) return null;
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user;
+  const { user } = await getVerifiedAuth();
+  return user;
 }
 
-export async function getAccountProfile(): Promise<AccountProfile | null> {
+export const getAccountProfile = cache(async (): Promise<AccountProfile | null> => {
   if (!isSupabaseConfigured()) return null;
-  if (await sessionNeedsMfaVerify()) return null;
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
-  if (!user) return null;
+  const { supabase, user } = await getVerifiedAuth();
+  if (!supabase || !user || (await sessionNeedsMfaVerify())) return null;
 
   const profile = await supabase
     .from("users")
@@ -63,4 +58,4 @@ export async function getAccountProfile(): Promise<AccountProfile | null> {
     display: EMPTY_USER_DISPLAY_PREFERENCES,
     activeTeamId: null,
   };
-}
+});

@@ -52,7 +52,9 @@ body {
 
 button,
 [role="button"],
-select {
+select,
+input[type="checkbox"],
+label:has(input[type="checkbox"]) {
   cursor: pointer;
 }
 
@@ -75,7 +77,9 @@ select {
   animation: mfa-verify-result-in 0.42s cubic-bezier(0.22, 1.15, 0.32, 1) both;
 }
 
-button:disabled {
+button:disabled,
+input[type="checkbox"]:disabled,
+label:has(input[type="checkbox"]:disabled) {
   cursor: not-allowed;
 }
 

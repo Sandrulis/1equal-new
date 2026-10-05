@@ -59,6 +59,10 @@ export function GuestRoster({
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">{t("pond.guests")}</h1>
       <p className="mt-1 text-sm text-muted">{t(countKey(people.length), { count: people.length })}</p>
+      {people.length === 0 ? (
+        <p className="mt-4 rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("pond.history.empty")}</p>
+      ) : (
+      <>
       <label className="mt-4 flex items-center gap-2 rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line focus-within:ring-train">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted" aria-hidden="true">
           <circle cx="11" cy="11" r="7" />
@@ -85,7 +89,7 @@ export function GuestRoster({
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-muted">{needle ? t("pond.search.empty") : t("pond.history.empty")}</td>
+                  <td colSpan={3} className="px-4 py-8 text-muted">{t("pond.search.empty")}</td>
                 </tr>
               ) : (
                 visible.map((person) => {
@@ -122,6 +126,8 @@ export function GuestRoster({
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

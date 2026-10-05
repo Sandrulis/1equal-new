@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { redirect } from "next/navigation";
 import { deletionBlockedReason, scheduleAccountDeletion, sendAccountDeletionConfirmation, settleAccountDeletionOnSignIn } from "@/app/lib/auth/account-deletion";
-import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
+import { getVerifiedAuth, needsMfaChallenge, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
@@ -89,8 +89,7 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
     await supabase.auth.signOut();
     return { error: "user.delete.gone" };
   }
-  const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  const needsMfa = !assurance.error && assurance.data?.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2";
+  const needsMfa = data.user ? needsMfaChallenge(data.user, data.session?.access_token) : false;
 
   return { ok: true, needsMfa, restored: settlement === "restored" };
 }
@@ -176,14 +175,12 @@ async function signInAfterSignup(email: string, password: string): Promise<AuthR
     await supabase.auth.signOut();
     return { error: "user.delete.gone" };
   }
-  const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  const needsMfa = !assurance.error && assurance.data?.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2";
+  const needsMfa = signedIn.data.user ? needsMfaChallenge(signedIn.data.user, signedIn.data.session?.access_token) : false;
   return { ok: true, needsMfa, restored: settlement === "restored" };
 }
 
 export async function changePassword(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
-  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
 
   const current = typeof formData.get("currentPassword") === "string" ? String(formData.get("currentPassword")) : "";
   const next = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
@@ -193,17 +190,16 @@ export async function changePassword(formData: FormData): Promise<AuthResult> {
   if (next !== confirm) return { error: "user.password.mismatch" };
   if (next === current) return { error: "user.password.same" };
 
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const email = data.user?.email;
-  if (!email) return { error: "auth.error.generic" };
+  const { supabase, user } = await getVerifiedAuth();
+  const email = user?.email;
+  if (!supabase || !user || !email || (await sessionNeedsMfaVerify())) return { error: "auth.error.generic" };
 
   const checked = await supabase.auth.signInWithPassword({ email, password: current });
   if (checked.error) return { error: "user.password.wrong" };
 
   const updated = await supabase.auth.updateUser({ password: next });
   if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
-  if (data.user) await markPasswordSet(data.user.id, data.user.app_metadata);
+  await markPasswordSet(user.id, user.app_metadata);
 
   return { ok: true };
 }
@@ -227,12 +223,11 @@ export async function resetPassword(formData: FormData): Promise<AuthResult> {
 export async function setNewPassword(formData: FormData): Promise<AuthResult> {
   const password = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
   if (password.length < MIN_PASSWORD) return { error: "auth.error.weak" };
-  const supabase = await createClient();
-  const user = await supabase.auth.getUser();
-  if (!user.data.user) return { error: "auth.error.generic" };
+  const { supabase, user } = await getVerifiedAuth();
+  if (!supabase || !user) return { error: "auth.error.generic" };
   const updated = await supabase.auth.updateUser({ password });
   if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
-  await markPasswordSet(user.data.user.id, user.data.user.app_metadata);
+  await markPasswordSet(user.id, user.app_metadata);
   return { ok: true };
 }
 
@@ -285,7 +280,6 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
 
 export async function updateProfile(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
-  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
 
   const firstName = readField(formData, "firstName");
   const lastName = readField(formData, "lastName");
@@ -293,18 +287,17 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const email = readField(formData, "email").toLowerCase();
   if (!firstName || !lastName) return { error: "auth.error.generic" };
 
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { error: "auth.error.generic" };
+  const { supabase, user } = await getVerifiedAuth();
+  if (!supabase || !user || (await sessionNeedsMfaVerify())) return { error: "auth.error.generic" };
   const admin = createAdminClient();
   if (!admin) return { error: "auth.error.config" };
 
-  const currentEmail = data.user.email?.trim().toLowerCase() ?? "";
+  const currentEmail = user.email?.trim().toLowerCase() ?? "";
   const emailChanged = email !== "" && email !== currentEmail;
   if (emailChanged) {
     if (!isEmailAddress(email)) return { error: "roster.error.email" };
-    if (await rateLimit(`email-change:${data.user.id}`, 5, 15 * 60 * 1000)) return { error: "auth.error.rate" };
-    const taken = await emailTakenByOther(admin, email, data.user.id);
+    if (await rateLimit(`email-change:${user.id}`, 5, 15 * 60 * 1000)) return { error: "auth.error.rate" };
+    const taken = await emailTakenByOther(admin, email, user.id);
     if (taken === null) return { error: "auth.error.generic" };
     if (taken) return { error: "auth.error.exists" };
   }
@@ -350,7 +343,7 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     phone,
   };
   if (savePlayer) {
-    const current = await admin.from("users").select("ehl_player").eq("id", data.user.id).maybeSingle();
+    const current = await admin.from("users").select("ehl_player").eq("id", user.id).maybeSingle();
     if (current.error) return { error: "auth.error.generic" };
     profile.ehl_player = mergeStoredEhlPlayer(current.data?.ehl_player, teamCode, player);
   }
@@ -361,16 +354,16 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     profile.time_format = display.timeFormat;
     profile.timezone = display.timezone;
   }
-  const saved = await admin.from("users").update(profile).eq("id", data.user.id);
+  const saved = await admin.from("users").update(profile).eq("id", user.id);
   if (saved.error) return { error: "auth.error.generic" };
-  await admin.from("team_members").update({ phone, updated_at: new Date().toISOString() }).eq("user_id", data.user.id);
+  await admin.from("team_members").update({ phone, updated_at: new Date().toISOString() }).eq("user_id", user.id);
 
   await supabase.auth.updateUser({ data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}` } });
   let emailSent = false;
   if (emailChanged) {
-    emailSent = await requestEmailChange(admin, data.user.id, email);
+    emailSent = await requestEmailChange(admin, user.id, email);
     if (!emailSent) return { error: "auth.email.unavailable" };
-    await writeAudit("user.email_request", "users", data.user.id, {});
+    await writeAudit("user.email_request", "users", user.id, {});
   }
   return includePlayer ? { ok: true, ehlPlayer: player, teamCode, display: display ?? undefined, emailSent } : { ok: true, display: display ?? undefined, emailSent };
 }
@@ -417,51 +410,43 @@ async function loadEhlPlayer(raw: string): Promise<{ profile: EhlPlayerProfile }
 }
 
 export async function saveUserAvatar(formData: FormData): Promise<{ ok: true; url: string | null } | { ok: false; error: MessageKey }> {
-  if (await sessionNeedsMfaVerify()) return { ok: false, error: "auth.error.generic" };
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { ok: false, error: "auth.error.generic" };
+  const { user } = await getVerifiedAuth();
+  if (!user || (await sessionNeedsMfaVerify())) return { ok: false, error: "auth.error.generic" };
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "auth.error.config" };
-  const path = `users/${data.user.id}.jpg`;
+  const path = `users/${user.id}.jpg`;
   const file = formData.get("file");
   if (formData.get("remove") === "1") {
     await removeAvatar(path);
-    const cleared = await admin.from("users").update({ avatar_url: null }).eq("id", data.user.id);
+    const cleared = await admin.from("users").update({ avatar_url: null }).eq("id", user.id);
     if (cleared.error) return { ok: false, error: "avatar.error.save" };
     return { ok: true, url: null };
   }
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "avatar.error.file" };
-  const uploaded = await uploadAvatarJpeg(file, path, data.user.id);
+  const uploaded = await uploadAvatarJpeg(file, path, user.id);
   if ("error" in uploaded) return { ok: false, error: uploaded.error };
-  const saved = await admin.from("users").update({ avatar_url: uploaded.url }).eq("id", data.user.id);
+  const saved = await admin.from("users").update({ avatar_url: uploaded.url }).eq("id", user.id);
   if (saved.error) return { ok: false, error: "avatar.error.save" };
   return { ok: true, url: uploaded.url };
 }
 
 export async function saveEventEmails(enabled: boolean): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
   if (typeof enabled !== "boolean") return { ok: false, error: "auth.error.generic" };
-  if (await sessionNeedsMfaVerify()) return { ok: false, error: "auth.error.generic" };
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { ok: false, error: "auth.error.generic" };
+  const { user } = await getVerifiedAuth();
+  if (!user || (await sessionNeedsMfaVerify())) return { ok: false, error: "auth.error.generic" };
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "auth.error.config" };
-  const saved = await admin.from("users").update({ event_emails: enabled }).eq("id", data.user.id);
+  const saved = await admin.from("users").update({ event_emails: enabled }).eq("id", user.id);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
   return { ok: true };
 }
 
 export async function requestAccountDeletion(formData: FormData): Promise<AuthResult> {
   if (!isSupabaseConfigured()) return { error: "auth.error.config" };
-  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
-
   const password = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  const { supabase, user } = await getVerifiedAuth();
   const email = user?.email?.trim().toLowerCase() ?? "";
-  if (!user || !email) return { error: "auth.error.generic" };
+  if (!supabase || !user || !email || (await sessionNeedsMfaVerify())) return { error: "auth.error.generic" };
   if (await rateLimit(`delete-account:${user.id}`, 5, 15 * 60 * 1000)) return { error: "auth.error.rate" };
 
   const blocked = await deletionBlockedReason(user.id);
@@ -483,17 +468,16 @@ export async function saveUserLanguage(code: string): Promise<boolean> {
   const languageCode = code.trim().toLowerCase();
   if (!/^[a-z]{2,12}$/.test(languageCode)) return false;
   if (!isSupabaseConfigured()) return false;
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return false;
+  const { user } = await getVerifiedAuth();
+  if (!user) return false;
   const admin = createAdminClient();
   if (!admin) return false;
   const known = await admin.from("site_languages").select("code").eq("code", languageCode).eq("is_active", true).maybeSingle();
   if (!known.data) return false;
-  const current = await admin.from("users").select("language_code").eq("id", data.user.id).maybeSingle();
+  const current = await admin.from("users").select("language_code").eq("id", user.id).maybeSingle();
   if (current.error) return false;
   if (current.data?.language_code === languageCode) return true;
-  const saved = await admin.from("users").update({ language_code: languageCode }).eq("id", data.user.id);
+  const saved = await admin.from("users").update({ language_code: languageCode }).eq("id", user.id);
   return !saved.error;
 }
 

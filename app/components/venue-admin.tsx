@@ -34,6 +34,11 @@ export function VenueAdmin({
   const [removing, setRemoving] = useState<Venue | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? venues.filter((venue) => `${venue.name} ${venue.pricePerHour}`.toLowerCase().includes(needle))
+    : venues;
 
   function openNew() {
     setEditingId("new");
@@ -170,8 +175,22 @@ export function VenueAdmin({
       {venues.length === 0 ? (
         <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("catalog.venues.empty")}</p>
       ) : (
+        <>
+          <label className="mb-4 flex items-center gap-2 rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line focus-within:ring-train">
+            <IconSearch />
+            <span className="sr-only">{t("venues.searchLabel")}</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("venues.search")}
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+            />
+          </label>
+          {visible.length === 0 ? (
+            <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("venues.search.empty")}</p>
+          ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
-          {venues.map((venue) => (
+          {visible.map((venue) => (
             <li key={venue.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="min-w-0">
                 <span className="block truncate font-medium">
@@ -192,7 +211,18 @@ export function VenueAdmin({
             </li>
           ))}
         </ul>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
   );
 }

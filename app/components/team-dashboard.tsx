@@ -1283,15 +1283,15 @@ export function TeamDashboard({
   const pondEvent = Boolean(openEvent && pondOn && openEvent.type === "training" && !openEvent.withCoach);
   const eventGuests = pondEvent ? (ownedTeam?.guests ?? []).filter((guest) => guest.eventId === openEvent?.id) : [];
   const guestCount = new Set((ownedTeam?.guests ?? []).map((guest) => guest.userId)).size;
-  const showGuests = pondOn && managesTeam;
+  const showGuests = pondOn && managesTeam && !teamPending && guestCount > 0;
   const canEditLineup = managesTeam;
-  if ((!canManageTeam && (view === "venues" || view === "subteams" || view === "guests")) || (view === "guests" && !pondOn)) setClientPath(basePath);
+  if ((!canManageTeam && (view === "venues" || view === "subteams" || view === "guests")) || (view === "guests" && !teamPending && (!pondOn || guestCount === 0))) setClientPath(basePath);
   useEffect(() => {
     const path = window.location.pathname;
     const managePath = path === `${basePath}/venues` || path === `${basePath}/subteams` || path === `${basePath}/guests`;
     if (!managePath) return;
-    if (!canManageTeam || (path === `${basePath}/guests` && !pondOn)) softReplace(basePath);
-  }, [basePath, canManageTeam, pondOn, view]);
+    if (!canManageTeam || (path === `${basePath}/guests` && !teamPending && (!pondOn || guestCount === 0))) softReplace(basePath);
+  }, [basePath, canManageTeam, guestCount, pondOn, teamPending, view]);
 
   return (
     <EntuziastiProvider enabled={entuziastiOn}>

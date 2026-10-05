@@ -15,13 +15,32 @@ export function AdminTodoPage({ initialTodos }: { initialTodos: AdminTodo[] }) {
   const [draft, setDraft] = useState("");
   const [archive, setArchive] = useState(false);
   const [pending, setPending] = useState(false);
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dragId = useRef<string | null>(null);
   const overRef = useRef<string | null>(null);
   const saveQueue = useRef(Promise.resolve());
+  const savingIdsRef = useRef(new Set<string>());
   const visible = todos.filter((item) => item.isDone === archive);
+
+  function toggleDone(item: AdminTodo) {
+    if (savingIdsRef.current.has(item.id)) return;
+    savingIdsRef.current.add(item.id);
+    setSavingIds(new Set(savingIdsRef.current));
+    const nextDone = !item.isDone;
+    saveQueue.current = saveQueue.current.then(async () => {
+      const result = await setAdminTodoDone(item.id, nextDone);
+      savingIdsRef.current.delete(item.id);
+      setSavingIds(new Set(savingIdsRef.current));
+      if (!result.ok) {
+        showFeedback({ message: t(result.error), variant: "error" });
+        return;
+      }
+      setTodos(result.todos);
+    });
+  }
 
   async function run(action: () => Promise<{ ok: true; todos: AdminTodo[] } | { ok: false; error: Parameters<typeof t>[0] }>) {
     if (pending) return;
@@ -167,14 +186,17 @@ export function AdminTodoPage({ initialTodos }: { initialTodos: AdminTodo[] }) {
                 <GripIcon />
               </button>
             )}
-            <input
-              type="checkbox"
-              checked={item.isDone}
-              disabled={pending}
-              aria-label={item.title}
-              onChange={() => void run(() => setAdminTodoDone(item.id, !item.isDone))}
-              className="mt-1"
-            />
+            {savingIds.has(item.id) ? (
+              <span className="mt-1 size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+            ) : (
+              <input
+                type="checkbox"
+                checked={item.isDone}
+                aria-label={item.title}
+                onChange={() => toggleDone(item)}
+                className="mt-1 size-4"
+              />
+            )}
             <div className="min-w-0 flex-1">
               <p className={`text-sm ${item.isDone ? "text-muted line-through" : "text-ink"}`}>{item.title}</p>
               {item.completedAt ? <p className="text-xs text-muted">{t("admin.todo.completed", { date: formatDateTime(item.completedAt) })}</p> : null}
