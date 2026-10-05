@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
-import { IconChevronRight, IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
+import { IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import { useLanguage } from "@/app/lib/language";
 import { cleanPositionCode } from "@/app/lib/positions";
-import { deleteSportPosition, moveSportPosition, saveSportPosition } from "@/app/lib/site-admin/actions";
+import { deleteSportPosition, reorderSportPositions, saveSportPosition } from "@/app/lib/site-admin/actions";
 import type { SiteLanguage } from "@/app/lib/site-admin/types";
 import { sportLabel, type Sport, type SportPosition } from "@/app/lib/sports";
 
@@ -30,22 +30,94 @@ export function AdminSportPositions({
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SportPosition | null>(null);
+  const [positions, setPositions] = useState(sport.positions);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const dragId = useRef<string | null>(null);
+  const overRef = useRef<string | null>(null);
+  const pendingOrder = useRef<string | null>(null);
+  const saveQueue = useRef(Promise.resolve());
   const formOpen = creating || editing !== null;
+  const incomingOrder = sport.positions.map((position) => position.id).join(",");
+
+  useEffect(() => {
+    if (pendingOrder.current && pendingOrder.current !== incomingOrder) return;
+    pendingOrder.current = null;
+    setPositions(sport.positions);
+  }, [incomingOrder, sport.positions]);
+
+  function closeForm() {
+    if (pending) return;
+    setCreating(false);
+    setEditing(null);
+  }
 
   async function persist(task: () => Promise<{ ok: true; sports: Sport[] } | { ok: false; error: Parameters<typeof t>[0] }>, savedKey: "sports.positions.saved" | "sports.positions.deleted" | null) {
     if (pending) return;
     setPending(true);
-    const result = await task();
-    setPending(false);
-    if (!result.ok) {
-      showFeedback({ message: t(result.error), variant: "error" });
-      return;
+    try {
+      const result = await task();
+      if (!result.ok) {
+        showFeedback({ message: t(result.error), variant: "error" });
+        return;
+      }
+      onChange(result.sports);
+      setCreating(false);
+      setEditing(null);
+      setDeleteTarget(null);
+      if (savedKey) showFeedback({ message: t(savedKey), variant: "success" });
+    } catch {
+      showFeedback({ message: t("auth.error.generic"), variant: "error" });
+    } finally {
+      setPending(false);
     }
-    onChange(result.sports);
-    setCreating(false);
-    setEditing(null);
-    setDeleteTarget(null);
-    if (savedKey) showFeedback({ message: t(savedKey), variant: "success" });
+  }
+
+  function pointOver(clientY: number) {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-position-id]") ?? [];
+    for (const row of rows) {
+      const box = row.getBoundingClientRect();
+      if (clientY >= box.top && clientY <= box.bottom) return row.dataset.positionId ?? null;
+    }
+    return null;
+  }
+
+  function movePosition(fromId: string, toId: string) {
+    if (fromId === toId || pending || formOpen) return;
+    setPositions((current) => {
+      const from = current.findIndex((position) => position.id === fromId);
+      const to = current.findIndex((position) => position.id === toId);
+      if (from < 0 || to < 0) return current;
+      const next = [...current];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      const ids = next.map((position) => position.id);
+      const sent = ids.join(",");
+      pendingOrder.current = sent;
+      saveQueue.current = saveQueue.current.then(async () => {
+        const result = await reorderSportPositions(sport.id, ids);
+        if (pendingOrder.current !== sent) return;
+        pendingOrder.current = null;
+        if (!result.ok) {
+          showFeedback({ message: t(result.error), variant: "error" });
+          if (result.sports) onChange(result.sports);
+          return;
+        }
+        onChange(result.sports);
+      });
+      return next;
+    });
+  }
+
+  function finishDrag() {
+    const fromId = dragId.current;
+    const toId = overRef.current;
+    dragId.current = null;
+    overRef.current = null;
+    setDraggingId(null);
+    setOverId(null);
+    if (fromId && toId) movePosition(fromId, toId);
   }
 
   return (
@@ -55,52 +127,62 @@ export function AdminSportPositions({
         wide
         title={sportLabel(sport, lang, fallback)}
         lead={t("sports.positions.lead")}
-        onClose={pending || deleteTarget ? () => undefined : onClose}
+        onClose={pending || formOpen || deleteTarget ? () => undefined : onClose}
       >
         <div className="space-y-4">
-          {formOpen ? (
-            <PositionForm
-              position={editing}
-              languages={languages}
-              pending={pending}
-              onCancel={() => {
-                if (pending) return;
-                setCreating(false);
-                setEditing(null);
-              }}
-              onSave={(input) =>
-                void persist(
-                  () => saveSportPosition({ sportId: sport.id, id: editing?.id, code: input.code, names: input.names }),
-                  "sports.positions.saved",
-                )
-              }
-            />
-          ) : (
-            <button type="button" onClick={() => setCreating(true)} disabled={pending} className="inline-flex items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
-              <IconPlus />
-              {t("sports.positions.add")}
-            </button>
-          )}
-          {sport.positions.length === 0 ? (
+          <button type="button" onClick={() => { setEditing(null); setCreating(true); }} disabled={pending || formOpen} className="inline-flex items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            <IconPlus />
+            {t("sports.positions.add")}
+          </button>
+          {positions.length === 0 ? (
             <p className="rounded-xl bg-ice px-3 py-4 text-sm text-muted">{t("sports.positions.empty")}</p>
           ) : (
-            <ul className="divide-y divide-line overflow-hidden rounded-xl ring-1 ring-line">
-              {sport.positions.map((position, index) => {
+            <ul ref={listRef} className="divide-y divide-line overflow-hidden rounded-xl ring-1 ring-line">
+              {positions.map((position) => {
                 const name = position.names[lang]?.trim() || position.names[fallback]?.trim() || "";
+                const dragging = draggingId === position.id;
                 return (
-                  <li key={position.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <span className="min-w-0">
+                  <li key={position.id} data-position-id={position.id} className={`flex items-center gap-2 px-2 py-2 ${dragging ? "opacity-50" : ""} ${overId === position.id && draggingId && draggingId !== position.id ? "bg-ice" : ""}`}>
+                    <button
+                      type="button"
+                      className="list-drag-handle grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted"
+                      aria-label={t("admin.todo.drag")}
+                      disabled={pending || formOpen}
+                      onPointerDown={(event) => {
+                        if (pending || formOpen || event.button !== 0) return;
+                        event.preventDefault();
+                        dragId.current = position.id;
+                        overRef.current = position.id;
+                        setDraggingId(position.id);
+                        setOverId(position.id);
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                      }}
+                      onPointerMove={(event) => {
+                        if (dragId.current !== position.id) return;
+                        const next = pointOver(event.clientY);
+                        if (!next || next === overRef.current) return;
+                        overRef.current = next;
+                        setOverId(next);
+                      }}
+                      onPointerUp={() => {
+                        if (dragId.current === position.id) finishDrag();
+                      }}
+                      onPointerCancel={() => {
+                        if (dragId.current !== position.id) return;
+                        dragId.current = null;
+                        overRef.current = null;
+                        setDraggingId(null);
+                        setOverId(null);
+                      }}
+                    >
+                      <GripIcon />
+                    </button>
+                    <span className="min-w-0 flex-1">
                       <span className="font-semibold">{position.code}</span>
                       {name ? <span className="ml-2 text-sm text-muted">{name}</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
-                      <IconTipButton label={t("sports.positions.up")} tone="muted" disabled={pending || formOpen || index === 0} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "up"), null)}>
-                        <span className="inline-flex -rotate-90"><IconChevronRight /></span>
-                      </IconTipButton>
-                      <IconTipButton label={t("sports.positions.down")} tone="muted" disabled={pending || formOpen || index === sport.positions.length - 1} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "down"), null)}>
-                        <span className="inline-flex rotate-90"><IconChevronRight /></span>
-                      </IconTipButton>
-                      <IconTipButton label={t("actions.edit")} tone="muted" disabled={pending || formOpen} onClick={() => setEditing(position)}>
+                      <IconTipButton label={t("actions.edit")} tone="muted" disabled={pending || formOpen} onClick={() => { setCreating(false); setEditing(position); }}>
                         <IconPencil />
                       </IconTipButton>
                       <IconTipButton label={t("actions.delete")} tone="game" disabled={pending || formOpen} onClick={() => setDeleteTarget(position)}>
@@ -115,7 +197,28 @@ export function AdminSportPositions({
         </div>
       </AdminDialog>
       <AdminDialog
+        open={formOpen}
+        layer="top"
+        title={editing ? t("actions.edit") : t("sports.positions.add")}
+        onClose={closeForm}
+      >
+        <PositionForm
+          key={editing?.id ?? "new"}
+          position={editing}
+          languages={languages}
+          pending={pending}
+          onCancel={closeForm}
+          onSave={(input) =>
+            void persist(
+              () => saveSportPosition({ sportId: sport.id, id: editing?.id ?? null, code: input.code, names: input.names }),
+              "sports.positions.saved",
+            )
+          }
+        />
+      </AdminDialog>
+      <AdminDialog
         open={deleteTarget !== null}
+        layer="top"
         title={t("sports.positions.delete.title")}
         lead={deleteTarget ? t("sports.positions.delete.lead", { code: deleteTarget.code }) : undefined}
         onClose={pending ? () => undefined : () => setDeleteTarget(null)}
@@ -141,6 +244,19 @@ export function AdminSportPositions({
   );
 }
 
+function GripIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+      <circle cx="5" cy="3.5" r="1.2" />
+      <circle cx="11" cy="3.5" r="1.2" />
+      <circle cx="5" cy="8" r="1.2" />
+      <circle cx="11" cy="8" r="1.2" />
+      <circle cx="5" cy="12.5" r="1.2" />
+      <circle cx="11" cy="12.5" r="1.2" />
+    </svg>
+  );
+}
+
 function PositionForm({
   position,
   languages,
@@ -155,21 +271,28 @@ function PositionForm({
   onSave: (input: { code: string; names: Record<string, string> }) => void;
 }) {
   const { t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
   const [code, setCode] = useState(position?.code ?? "");
   const [names, setNames] = useState<Record<string, string>>(() => ({ ...(position?.names ?? {}) }));
   const activeLanguages = languages.filter((language) => language.isActive);
-  const ready = Boolean(cleanPositionCode(code)) && activeLanguages.every((language) => (names[language.code] ?? "").trim().length > 0);
 
   return (
     <form
-      className="space-y-3 rounded-xl bg-ice p-3"
+      className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!ready || pending) return;
+        if (pending) return;
+        if (!cleanPositionCode(code)) {
+          showFeedback({ message: t("sports.positions.error.code"), variant: "error" });
+          return;
+        }
+        if (!activeLanguages.every((language) => (names[language.code] ?? "").trim().length > 0)) {
+          showFeedback({ message: t("sports.error.name"), variant: "error" });
+          return;
+        }
         onSave({ code, names });
       }}
     >
-      <p className="text-sm font-medium">{position ? t("actions.edit") : t("sports.positions.add")}</p>
       <label className="block text-sm">
         <span className="text-muted">{t("sports.positions.code")}</span>
         <input
@@ -197,10 +320,10 @@ function PositionForm({
         </label>
       ))}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-paper disabled:cursor-not-allowed">
+        <button type="button" onClick={onCancel} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
           {t("actions.cancel")}
         </button>
-        <button type="submit" disabled={!ready || pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+        <button type="submit" disabled={pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
           {t("actions.save")}
         </button>
       </div>

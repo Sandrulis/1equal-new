@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0
+
+- Jauna pozīcija atveras savā logā. Kļūda un saglabāšana rādās kā paziņojums
+- Pozīciju secību maina velkot. Kods TRAINER un citi 1-8 burtu kodi vairs netiek noraidīti
+- Sākumlapa saka, ka pozīcijas pieder sporta veidam
+
 ## v0.1.39
 
 - Sākumlapā komandas kalendāram ir viena saite

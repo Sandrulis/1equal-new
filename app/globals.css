@@ -91,12 +91,14 @@ label:has(input[type="checkbox"]:disabled) {
   vertical-align: -0.125em;
 }
 
-button.todo-drag-handle {
+button.todo-drag-handle,
+button.list-drag-handle {
   cursor: grab;
   touch-action: none;
 }
 
-button.todo-drag-handle:active {
+button.todo-drag-handle:active,
+button.list-drag-handle:active {
   cursor: grabbing;
 }
 

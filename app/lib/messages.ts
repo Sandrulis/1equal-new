@@ -245,8 +245,6 @@ export const messages = {
   "sports.positions.error.code": { lv: "Kodam jābūt 1-8 burtiem vai cipariem.", en: "The code needs 1-8 letters or digits.", ru: "Код должен быть из 1-8 букв или цифр." },
   "sports.positions.error.exists": { lv: "Šāds kods šim sporta veidam jau ir.", en: "This sport already has that code.", ru: "Такой код у этого вида спорта уже есть." },
   "sports.positions.error.used": { lv: "Šo pozīciju lieto spēlētājs.", en: "A player uses this position.", ru: "Эту позицию использует игрок." },
-  "sports.positions.up": { lv: "Augstāk", en: "Move up", ru: "Выше" },
-  "sports.positions.down": { lv: "Zemāk", en: "Move down", ru: "Ниже" },
   "roster.positions.empty": { lv: "Šim sporta veidam nav pozīciju.", en: "This sport has no positions.", ru: "У этого вида спорта нет позиций." },
   "admin.cron.lead": {
     lv: "Ievadi saiti cron-job.org un iestati pārbaudi katru 1 stundu. Slēdzis ieslēdz rezervācijas: dalība rezervē naudu, atteikums rezervāciju atceļ, un nauda tiek noņemta tikai pēc notikuma sākuma.",
@@ -1073,9 +1071,9 @@ export const messages = {
   },
   "landing.feature.team.title": { lv: "Komanda", en: "Team", ru: "Команда" },
   "landing.feature.team.text": {
-    lv: "Dalībnieki, numuri, pozīcijas un apakškomandas vienā sarakstā.",
-    en: "Members, numbers, positions and sub-teams in one list.",
-    ru: "Участники, номера, позиции и подкоманды в одном списке."
+    lv: "Dalībnieki, numuri, sava sporta veida pozīcijas un apakškomandas vienā sarakstā.",
+    en: "Members, numbers, positions for that sport and sub-teams in one list.",
+    ru: "Участники, номера, позиции своего вида спорта и подкоманды в одном списке."
   },
   "landing.feature.invite.title": { lv: "Uzaicinājumi", en: "Invites", ru: "Приглашения" },
   "landing.feature.invite.text": {
@@ -1177,9 +1175,9 @@ export const messages = {
   },
   "landing.faq.6.q": { lv: "Kuriem sporta veidiem 1Equal der?", en: "Which sports can use 1Equal?", ru: "Каким видам спорта подходит 1Equal?" },
   "landing.faq.6.a": {
-    lv: "Kalendāru, dalību un laukuma cenu var lietot arī florbola, basketbola un volejbola komanda. Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G.",
-    en: "A floorball, basketball or volleyball team can use the same calendar, attendance and venue price. Each sport has its own positions. Hockey starts with LW, C, RW, D and G.",
-    ru: "Календарь, явку и цену площадки может использовать и флорбольная, баскетбольная или волейбольная команда. У каждого вида спорта свои позиции. У хоккея в начале LW, C, RW, D и G.",
+    lv: "Hokeja, florbola, basketbola un volejbola komanda lieto vienu kalendāru, dalību un laukuma cenu. Pozīcijas sastāvā ir katram sporta veidam savas.",
+    en: "Hockey, floorball, basketball and volleyball teams use one calendar, attendance and venue price. Roster positions are defined for each sport.",
+    ru: "Хоккейная, флорбольная, баскетбольная и волейбольная команда пользуются одним календарём, явкой и ценой площадки. Позиции в составе задаются для каждого вида спорта.",
   },
   "landing.faq.7.q": { lv: "Kā uzaicināt cilvēku?", en: "How do I invite someone?", ru: "Как пригласить человека?" },
   "landing.faq.7.a": {
@@ -1223,9 +1221,9 @@ export const messages = {
   },
   "landing.faq.13.q": { lv: "Vai der florbola vai basketbola komandai?", en: "Does it fit a floorball or basketball team?", ru: "Подойдёт ли флорбольной или баскетбольной команде?" },
   "landing.faq.13.a": {
-    lv: "Kalendāru, dalību un laukuma cenu var lietot arī florbola vai basketbola komanda. Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G.",
-    en: "A floorball or basketball team can use the same calendar, attendance and venue price. Each sport has its own positions. Hockey starts with LW, C, RW, D and G.",
-    ru: "Календарь, явку и цену площадки может использовать и флорбольная или баскетбольная команда. У каждого вида спорта свои позиции. У хоккея в начале LW, C, RW, D и G.",
+    lv: "Jā. Florbola un basketbola komanda lieto to pašu kalendāru, dalību un laukuma cenu, ar sava sporta veida pozīcijām.",
+    en: "Yes. A floorball or basketball team uses the same calendar, attendance and venue price, with positions for its own sport.",
+    ru: "Да. Флорбольная и баскетбольная команда используют тот же календарь, явку и цену площадки, с позициями своего вида спорта.",
   },
   "landing.faq.14.q": { lv: "Kā aprēķina ledus naudu?", en: "How is ice money calculated?", ru: "Как считается оплата льда?" },
   "landing.faq.14.a": {
@@ -1247,9 +1245,9 @@ export const messages = {
   },
   "landing.audience.title": { lv: "Kur to var lietot", en: "Where it can be used", ru: "Где это можно использовать" },
   "landing.audience.lead": {
-    lv: "Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G. Florbola, basketbola un volejbola komanda lieto to pašu kalendāru, dalību un laukuma cenu.",
-    en: "Each sport has its own positions. Hockey starts with LW, C, RW, D and G. A floorball, basketball or volleyball team uses the same calendar, attendance and venue price.",
-    ru: "У каждого вида спорта свои позиции. У хоккея в начале LW, C, RW, D и G. Флорбольная, баскетбольная или волейбольная команда использует тот же календарь, явку и цену площадки.",
+    lv: "Pozīcijas sastāvā nosaka sporta veids. Hokeja, florbola, basketbola un volejbola komanda lieto vienu kalendāru, dalību un laukuma cenu.",
+    en: "Roster positions follow the sport. Hockey, floorball, basketball and volleyball teams share one calendar, attendance and venue price.",
+    ru: "Позиции в составе определяет вид спорта. Хоккейная, флорбольная, баскетбольная и волейбольная команда пользуются одним календарём, явкой и ценой площадки.",
   },
   "landing.audience.hockey": { lv: "Hokeja komandām", en: "Hockey teams", ru: "Хоккейным командам" },
   "landing.audience.hockey.text": {
@@ -1282,9 +1280,9 @@ export const messages = {
     ru: "Здесь будет опыт команд, когда будет разрешение публиковать цифры и название.",
   },
   "landing.everyday.sports": {
-    lv: "Hokeja komanda to lieto ar savām pozīcijām. Cita komandu sporta komanda var lietot kalendāru, dalību un laukuma cenu.",
-    en: "A hockey team uses it with its own positions. Another team sport can use the calendar, attendance and venue price.",
-    ru: "Хоккейная команда пользуется им со своими позициями. Другая командная игра может использовать календарь, явку и цену площадки.",
+    lv: "Pozīcijas sastāvā atbilst komandas sporta veidam. Kalendāru, dalību un laukuma cenu lieto jebkura komandu sporta komanda.",
+    en: "Roster positions match the team's sport. Any team sport can use the calendar, attendance and venue price.",
+    ru: "Позиции в составе соответствуют виду спорта команды. Календарём, явкой и ценой площадки пользуется любая командная игра.",
   },
   "landing.everyday.links": { lv: "Vairāk par iespējām", en: "More about the tools", ru: "Подробнее о возможностях" },
   "landing.link.management": { lv: "sporta komandas vadība", en: "sports team management", ru: "управление спортивной командой" },

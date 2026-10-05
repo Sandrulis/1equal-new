@@ -220,9 +220,9 @@ export const TOPIC_PAGES: TopicPage[] = [
         heading: L("Sastāvs un dalība no telefona", "Roster and attendance from a phone", "Состав и явка с телефона"),
         paragraphs: [
           L(
-            "Komandas sastāvā ieraksta cilvēku un numuru. Pozīcijas nosaka katram sporta veidam. Hokejam sākumā ir LW, C, RW, D un G, un volejbolam var ielikt savas. Spēlētāju dalība ir atzīme, vai cilvēks būs uz šo notikumu. To var izdarīt telefonā pārlūkā. E-pasta saite ved uz to pašu atbildi. Treniņam bez trenera viesis saņem saiti bez konta. Cilvēks, kurš pievienojas sastāvam, reģistrējas ar uzaicinājumu.",
-            "The roster stores a person and a number. Positions are set for each sport. Hockey starts with LW, C, RW, D and G, and volleyball can have its own. Attendance is a mark of whether the person is coming to that event. It can be done on a phone in the browser. The email link opens the same answer. For a training session without a coach, a guest gets a link without an account. A person who joins the roster registers from the invite.",
-            "В составе хранится человек и номер. Позиции задаются для каждого вида спорта. У хоккея в начале LW, C, RW, D и G, а волейболу можно задать свои. Явка - отметка, придёт ли человек на это событие. Это можно сделать с телефона в браузере. Ссылка из письма открывает тот же ответ. На тренировку без тренера гость получает ссылку без аккаунта. Кто входит в состав, регистрируется по приглашению.",
+            "Komandas sastāvā ieraksta cilvēku, numuru un sava sporta veida pozīciju. Spēlētāju dalība ir atzīme, vai cilvēks būs uz šo notikumu. To var izdarīt telefonā pārlūkā. E-pasta saite ved uz to pašu atbildi. Treniņam bez trenera viesis saņem saiti bez konta. Cilvēks, kurš pievienojas sastāvam, reģistrējas ar uzaicinājumu.",
+            "The roster stores a person, a number and a position for that sport. Attendance is a mark of whether the person is coming to that event. It can be done on a phone in the browser. The email link opens the same answer. For a training session without a coach, a guest gets a link without an account. A person who joins the roster registers from the invite.",
+            "В составе хранится человек, номер и позиция своего вида спорта. Явка - отметка, придёт ли человек на это событие. Это можно сделать с телефона в браузере. Ссылка из письма открывает тот же ответ. На тренировку без тренера гость получает ссылку без аккаунта. Кто входит в состав, регистрируется по приглашению.",
           ),
         ],
       },

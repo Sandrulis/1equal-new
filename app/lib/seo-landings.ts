@@ -61,9 +61,9 @@ export const SEO_PAGES: SeoLandingPage[] = [
         heading: L("Treneris un spēlētājs", "Coach and player", "Тренер и игрок"),
         paragraphs: [
           L(
-            "Vispirms trenerim un cilvēkam, kurš vada komandu: sapulcina sastāvu, liek spēles un treniņus, un redz, kurš atbildējis. Spēlētājs redz savu dalību un maksu, nevis visu komandas naudu. Kalendāru, dalību un laukuma cenu var lietot arī cita komandu sporta komanda. Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G.",
-            "It starts with the coach and the person who runs the team: they gather the roster, add games and training, and see who has replied. A player sees their own attendance and fee, not the whole team's money. Another team sport can use the calendar, attendance and venue price. Each sport has its own positions. Hockey starts with LW, C, RW, D and G.",
-            "В первую очередь это для тренера и человека, который ведёт команду: собирает состав, ставит игры и тренировки и видит, кто ответил. Игрок видит свою явку и свой взнос, а не все деньги команды. Календарь, явку и цену площадки может использовать и другая командная игра. У каждого вида спорта свои позиции. У хоккея в начале LW, C, RW, D и G.",
+            "Vispirms trenerim un cilvēkam, kurš vada komandu: sapulcina sastāvu, liek spēles un treniņus, un redz, kurš atbildējis. Spēlētājs redz savu dalību un maksu, nevis visu komandas naudu. Kalendāru, dalību un laukuma cenu var lietot arī cita komandu sporta komanda. Pozīcijas sastāvā ir katram sporta veidam savas.",
+            "It starts with the coach and the person who runs the team: they gather the roster, add games and training, and see who has replied. A player sees their own attendance and fee, not the whole team's money. Another team sport can use the calendar, attendance and venue price. Roster positions are defined for each sport.",
+            "В первую очередь это для тренера и человека, который ведёт команду: собирает состав, ставит игры и тренировки и видит, кто ответил. Игрок видит свою явку и свой взнос, а не все деньги команды. Календарь, явку и цену площадки может использовать и другая командная игра. Позиции в составе задаются для каждого вида спорта.",
           ),
           L(
             "Telefons un dators abi der, jo tas ir pārlūks, nevis atsevišķa lietotne.",

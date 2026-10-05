@@ -90,7 +90,7 @@ function FeedbackToast({
         hoveredRef.current = false;
         startTimer();
       }}
-      className={`pointer-events-auto fixed right-4 bottom-4 z-[80] w-[min(100%-2rem,22rem)] ${aboveAppNav ? "max-[599px]:bottom-24" : ""} ${VARIANT_CLASS[variant]} rounded-xl px-4 py-3 text-sm shadow-[0_16px_40px_rgba(16,36,51,0.16)] ring-1`}
+      className={`pointer-events-auto fixed right-4 bottom-4 z-[110] w-[min(100%-2rem,22rem)] ${aboveAppNav ? "max-[599px]:bottom-24" : ""} ${VARIANT_CLASS[variant]} rounded-xl px-4 py-3 text-sm shadow-[0_16px_40px_rgba(16,36,51,0.16)] ring-1`}
     >
       <div className="flex items-start gap-3">
         <p className="min-w-0 flex-1 leading-6">{message}</p>

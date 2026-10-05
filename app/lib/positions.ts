@@ -70,7 +70,7 @@ export const HOCKEY_POSITION_CATALOG: PositionCatalogItem[] = PLAYING_POSITIONS.
 
 export function cleanPositionCode(value: string): string {
   const code = value.trim().toUpperCase();
-  if (!/^[A-Z0-9]{1,8}$/.test(code) || RETIRED_POSITION.test(code)) return "";
+  if (!/^[A-Z0-9]{1,8}$/.test(code)) return "";
   return code;
 }
 

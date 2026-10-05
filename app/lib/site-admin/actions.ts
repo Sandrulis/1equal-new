@@ -838,23 +838,19 @@ export async function deleteSportPosition(sportId: string, id: string): Promise<
   return { ok: true, sports: await listSports() };
 }
 
-export async function moveSportPosition(sportId: string, id: string, direction: "up" | "down"): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey }> {
-  if (!/^[0-9a-f-]{36}$/i.test(sportId) || !/^[0-9a-f-]{36}$/i.test(id) || (direction !== "up" && direction !== "down")) return { ok: false, error: "auth.error.generic" };
+export async function reorderSportPositions(sportId: string, ids: string[]): Promise<{ ok: true; sports: Sport[] } | { ok: false; error: MessageKey; sports?: Sport[] }> {
+  if (!/^[0-9a-f-]{36}$/i.test(sportId) || !Array.isArray(ids) || ids.some((id) => !/^[0-9a-f-]{36}$/i.test(id))) return { ok: false, error: "auth.error.generic" };
   const gate = await adminClient();
   if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
-  const rows = await gate.client.from("sport_positions").select("id, sort_order").eq("sport_id", sportId).order("sort_order").order("code");
+  const ordered = [...new Set(ids)];
+  const rows = await gate.client.from("sport_positions").select("id").eq("sport_id", sportId);
   if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
-  const ordered = rows.data.map((row) => row.id as string);
-  const index = ordered.indexOf(id);
-  const swap = direction === "up" ? index - 1 : index + 1;
-  if (index < 0 || swap < 0 || swap >= ordered.length) return { ok: true, sports: await listSports() };
-  const next = [...ordered];
-  const [moved] = next.splice(index, 1);
-  next.splice(swap, 0, moved);
+  const existing = new Set(rows.data.map((row) => row.id as string));
+  if (ordered.length !== existing.size || ordered.some((id) => !existing.has(id))) return { ok: false, error: "auth.error.generic" };
   const now = new Date().toISOString();
-  for (let place = 0; place < next.length; place += 1) {
-    const saved = await gate.client.from("sport_positions").update({ sort_order: place, updated_at: now }).eq("id", next[place]);
-    if (saved.error) return { ok: false, error: "auth.error.generic" };
+  for (let place = 0; place < ordered.length; place += 1) {
+    const saved = await gate.client.from("sport_positions").update({ sort_order: place, updated_at: now }).eq("id", ordered[place]).eq("sport_id", sportId);
+    if (saved.error) return { ok: false, error: "auth.error.generic", sports: await listSports() };
   }
   refresh();
   return { ok: true, sports: await listSports() };
