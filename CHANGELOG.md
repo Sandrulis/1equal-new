@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.28
+
+- Iestatījumos e-pasts un tālrunis ir blakus. Viesa tālrunis rādās aiz e-pasta notikumā un viesu reģistrā
+- Viesu piezīme ir trešā kolonna. Individuālu moduli ieslēdz komandai, un bez tā viesis treniņu sānjoslā neredz
+
+## v0.1.27
+
+- Treniņam bez trenera vadītājs vai administrators var atļaut viesus, ja sportam ir modulis Viesi bez trenera. Viesis piesakās ar saiti, nemaksā un nav sastāvā
+- Publiskā lapa rāda komandu un veidu vienā līmenī ar cenu, datumu un laukumu. Ielogotais redz vārdu, e-pastu un iziešanu
+- Sporta veida ikona saglabājas no Font Awesome kataloga
+
+## v0.1.26
+
+- Lietotājs pats ieplāno konta dzēšanu pēc 30 dienām. Parole vai e-pasta saite apstiprina, ielogošanās atceļ, un trīs vēstules ir e-pasta dizainā
+- Admina lietotājiem un komandām ir alfabeta josla Visi, A-Z un #
+- Sistēmas iestatījumos katrai valodai ir slogans, kas rādās e-pasta kājenē
+
 ## v0.1.25
 
 - Neredzams admins pieslēdzas komandai un uzreiz redz tās kalendāru. Sastāvā viņš neparādās. Atvienošana no saraksta aizved uz admina komandām

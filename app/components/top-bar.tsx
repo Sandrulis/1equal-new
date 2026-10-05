@@ -104,7 +104,7 @@ export function TopBar({
   const [holdsOpen, setHoldsOpen] = useState(false);
   const reservedBalance = Math.round(reservedHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
 
-  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) {
+  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string }) {
     setProfile((current) => (current ? { ...current, ...next } : current));
     if (profile) onAccountChange?.({ ...profile, ...next });
   }

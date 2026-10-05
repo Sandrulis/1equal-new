@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { settleAccountDeletionOnSignIn, withAccountRestoredCookie } from "@/app/lib/auth/account-deletion";
+import { safeTrainingPath } from "@/app/lib/safe-next";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -24,6 +26,7 @@ export type GoogleOAuthState = {
   nonce: string;
   remember: boolean;
   from: "login" | "signup";
+  next: string | null;
 };
 
 function secureCookie() {
@@ -58,21 +61,23 @@ export async function isGoogleSignInEnabled() {
   return (await readGoogleOAuthCredentials()) !== null;
 }
 
-export function createGoogleOAuthState(remember: boolean, from: "login" | "signup"): GoogleOAuthState {
-  return { nonce: randomBytes(16).toString("hex"), remember, from };
+export function createGoogleOAuthState(remember: boolean, from: "login" | "signup", next: string | null = null): GoogleOAuthState {
+  return { nonce: randomBytes(16).toString("hex"), remember, from, next };
 }
 
 export function serializeGoogleOAuthState(state: GoogleOAuthState) {
-  return `v1.${state.nonce}.${state.remember ? "1" : "0"}.${state.from}`;
+  const base = `v1.${state.nonce}.${state.remember ? "1" : "0"}.${state.from}`;
+  return state.next ? `${base}.${encodeURIComponent(state.next)}` : base;
 }
 
 export function parseGoogleOAuthState(raw: string | null | undefined): GoogleOAuthState | null {
   if (!raw) return null;
-  const [version, nonce, remember, from] = raw.split(".");
+  const [version, nonce, remember, from, encoded] = raw.split(".");
   if (version !== "v1" || !nonce || nonce.length !== 32) return null;
   if (remember !== "0" && remember !== "1") return null;
   if (from !== "login" && from !== "signup") return null;
-  return { nonce, remember: remember === "1", from };
+  const next = encoded ? safeTrainingPath(decodeURIComponent(encoded)) : null;
+  return { nonce, remember: remember === "1", from, next };
 }
 
 function sameNonce(left: string, right: string) {
@@ -220,7 +225,7 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
   const tokenHash = link.data?.properties?.hashed_token?.trim() ?? "";
   if (link.error || !tokenHash) return fail();
 
-  const redirectResponse = NextResponse.redirect(`${origin}/dashboard`);
+  const redirectResponse = NextResponse.redirect(`${origin}${state.next ?? "/dashboard"}`);
   redirectResponse.cookies.set(REMEMBER_SESSION_COOKIE, state.remember ? "1" : "", rememberPreferenceOptions(state.remember));
   const requestCookies = readRequestCookies(request);
   const supabase = createServerClient(env.url, env.anonKey, {
@@ -244,6 +249,13 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
   });
   const verified = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
   if (verified.error) return fail();
+  const settlement = await settleAccountDeletionOnSignIn(userId);
+  if (settlement === "deleted") {
+    await supabase.auth.signOut();
+    redirectResponse.headers.set("location", `${origin}/login?error=deleted`);
+    return clearGoogleOAuthCookie(redirectResponse);
+  }
+  if (settlement === "restored") withAccountRestoredCookie(redirectResponse);
   return clearGoogleOAuthCookie(redirectResponse);
 }
 

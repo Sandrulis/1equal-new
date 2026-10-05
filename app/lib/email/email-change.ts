@@ -56,6 +56,7 @@ async function mailEmailChange(admin: Admin, email: string, actionLink: string):
     buttonLabel: translate(lang, "auth.email_change.mail_button"),
     actionLink,
     footerHint: translate(lang, "admin.email.footer"),
+    tagline: brand.slogans[lang] ?? "",
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;

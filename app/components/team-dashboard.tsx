@@ -57,6 +57,9 @@ import { eventHref, routeFromPathname, teamHref, type AdminSection, type Dashboa
 import { historySince } from "@/app/lib/history-window";
 import { softPush, softReplace } from "@/app/lib/soft-nav";
 import { eventAudienceIncludes, eventHasEnded, eventVotingDeadline } from "@/app/lib/event-voting";
+import { GuestRoster } from "@/app/components/guest-roster";
+import { GuestSignups } from "@/app/components/guest-signups";
+import { removeTrainingGuest, setTrainingGuestsAllowed, type GuestSignup } from "@/app/lib/training-guests";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 const AdminCronPage = dynamic(() => import("@/app/components/admin-cron-page").then((mod) => mod.AdminCronPage));
@@ -89,7 +92,7 @@ function preferredTeam(teams: IssuedTeam[], activeTeamId: string | null | undefi
 
 type TypeFilter = "all" | EventType;
 
-type DashboardView = "home" | "team" | "subteams" | "venues";
+type DashboardView = "home" | "team" | "guests" | "subteams" | "venues";
 
 function eventCost(event: TeamEvent, pricePerHour: number): number | null {
   if (event.expense != null) return event.expense;
@@ -197,8 +200,9 @@ type HomeView = "calendar" | "poll";
 function sectionRank(name: string) {
   if (name === "home") return 0;
   if (name === "team") return 1;
-  if (name === "subteams") return 2;
-  if (name === "venues") return 3;
+  if (name === "guests") return 2;
+  if (name === "subteams") return 3;
+  if (name === "venues") return 4;
   return null;
 }
 
@@ -211,6 +215,7 @@ export function TeamDashboard({
   enabledModules = null,
   individualModuleKeys = [],
   sports = [],
+  guestSignups: initialGuestSignups = [],
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
@@ -220,6 +225,7 @@ export function TeamDashboard({
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
   sports?: Sport[];
+  guestSignups?: GuestSignup[];
 }) {
   const [admin, setAdmin] = useState(initialAdmin);
   const [seenAdmin, setSeenAdmin] = useState(initialAdmin);
@@ -233,8 +239,9 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? preferredTeam(initialTeams, account.activeTeamId) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}:${item.allowGuests ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}:${(team.guests ?? []).map((guest) => `${guest.eventId}:${guest.userId}:${guest.date}:${guest.email}:${guest.phone}:${guest.note}`).join(",")}`).join("|");
   const [profile, setProfile] = useState(account);
+  const [guestSignups, setGuestSignups] = useState(initialGuestSignups);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
   const [demoBundle, setDemoBundle] = useState<DemoBundle | null>(null);
@@ -325,7 +332,7 @@ export function TeamDashboard({
     setSectionSlide(prev != null && next != null && prev !== next ? (next > prev ? "left" : "right") : null);
   }
   const sectionMotion = sectionSlide === "left" ? "section-slide-left" : sectionSlide === "right" ? "section-slide-right" : "";
-  const showStart = needsTeam && (view === "home" || view === "team" || view === "subteams" || view === "venues");
+  const showStart = needsTeam && (view === "home" || view === "team" || view === "guests" || view === "subteams" || view === "venues");
 
   async function createTeam(input: CreateTeamInput) {
     if (creating.current) return;
@@ -520,6 +527,7 @@ export function TeamDashboard({
   const [editingEvent, setEditingEvent] = useState<TeamEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TeamEvent | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
   const [lineupPendingId, setLineupPendingId] = useState<string | null>(null);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
   const [pendingPath, setPendingPath] = useState(pathname);
@@ -779,6 +787,51 @@ export function TeamDashboard({
     setTeams(listMyTeams());
   }
 
+  function rememberOwned(next: IssuedTeam) {
+    setCurrentTeam(next);
+    setOwnedTeam(next);
+    setTeams(listMyTeams());
+  }
+
+  async function setGuestsAllowed(allowed: boolean) {
+    if (!openEventId || !ownedTeam?.id || guestBusy) return;
+    setGuestBusy(true);
+    const result = await setTrainingGuestsAllowed({ teamId: ownedTeam.id, eventId: openEventId, allowed });
+    setGuestBusy(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    const events = (ownedTeam.events ?? []).map((item) => (item.id === openEventId ? { ...item, allowGuests: allowed } : item));
+    rememberOwned({ ...ownedTeam, events });
+    showFeedback({ message: t("pond.saved"), variant: "success" });
+  }
+
+  async function removeGuest(userId: string) {
+    if (!openEventId || !ownedTeam?.id || guestBusy) return;
+    setGuestBusy(true);
+    const result = await removeTrainingGuest({ teamId: ownedTeam.id, eventId: openEventId, userId });
+    setGuestBusy(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    rememberOwned({
+      ...ownedTeam,
+      guests: (ownedTeam.guests ?? []).filter((guest) => !(guest.eventId === openEventId && guest.userId === userId)),
+    });
+    showFeedback({ message: t("pond.removed"), variant: "success" });
+  }
+
+  function copyGuestLink() {
+    if (!openEventId) return;
+    const url = `${window.location.origin}/training/${openEventId}`;
+    void navigator.clipboard.writeText(url).then(
+      () => showFeedback({ message: t("pond.copied"), variant: "success" }),
+      () => showFeedback({ message: t("pond.copy_failed"), variant: "error" }),
+    );
+  }
+
   function toggleVenue(id: string) {
     setVenueId((current) => (current === id ? null : id));
   }
@@ -801,6 +854,7 @@ export function TeamDashboard({
       venueId: input.venueId,
       expense: input.expense,
       withCoach: input.withCoach,
+      allowGuests: input.type === "training" && !input.withCoach ? previous?.allowGuests : false,
       lineupSlots: previous?.lineupSlots,
       lineupSides: previous?.lineupSides,
       lineupLoaded: previous?.lineupLoaded,
@@ -1012,7 +1066,7 @@ export function TeamDashboard({
   function moduleOn(key: string) {
     if (!enabledModules) return true;
     if (!enabledModules.includes(key)) return false;
-    if (individualModuleKeys.includes(key) && !(activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key))) return false;
+    if (individualModuleKeys.includes(key)) return Boolean(activeTeam && !activeTeam.demo && (activeTeam.moduleKeys ?? []).includes(key));
     const sportId = activeTeam && !activeTeam.demo ? activeTeam.sportId : null;
     if (!sportId) return true;
     const sport = sports.find((item) => item.id === sportId);
@@ -1225,13 +1279,19 @@ export function TeamDashboard({
     profile && activeTeam && !activeTeam.demo && (ghostLeader || activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
   );
   const canManageTeam = basePath === "/demo" || managesTeam;
+  const pondOn = moduleOn(FRONTEND_MODULE_KEYS.pond) && basePath !== "/demo";
+  const pondEvent = Boolean(openEvent && pondOn && openEvent.type === "training" && !openEvent.withCoach);
+  const eventGuests = pondEvent ? (ownedTeam?.guests ?? []).filter((guest) => guest.eventId === openEvent?.id) : [];
+  const guestCount = new Set((ownedTeam?.guests ?? []).map((guest) => guest.userId)).size;
+  const showGuests = pondOn && managesTeam;
   const canEditLineup = managesTeam;
-  if (!canManageTeam && (view === "venues" || view === "subteams")) setClientPath(basePath);
+  if ((!canManageTeam && (view === "venues" || view === "subteams" || view === "guests")) || (view === "guests" && !pondOn)) setClientPath(basePath);
   useEffect(() => {
-    if (canManageTeam) return;
     const path = window.location.pathname;
-    if (path === `${basePath}/venues` || path === `${basePath}/subteams`) softReplace(basePath);
-  }, [basePath, canManageTeam, view]);
+    const managePath = path === `${basePath}/venues` || path === `${basePath}/subteams` || path === `${basePath}/guests`;
+    if (!managePath) return;
+    if (!canManageTeam || (path === `${basePath}/guests` && !pondOn)) softReplace(basePath);
+  }, [basePath, canManageTeam, pondOn, view]);
 
   return (
     <EntuziastiProvider enabled={entuziastiOn}>
@@ -1273,9 +1333,15 @@ export function TeamDashboard({
         >
           <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
           <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
+          {showGuests ? <SideItem label={t("pond.guests")} count={guestCount} icon={<IconGuest />} active={view === "guests"} busy={pendingNav === "guests"} compact={sidebarCollapsed} onClick={() => showView("guests")} /> : null}
           {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} busy={pendingNav === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
           {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
         </nav>
+        {needsTeam && guestSignups.length > 0 && !sidebarCollapsed ? (
+          <div className="hidden max-h-72 shrink-0 overflow-y-auto border-t border-white/15 py-3 pr-4 pl-2.5 min-[600px]:block">
+            <GuestSignups tone="navy" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
+          </div>
+        ) : null}
         {account ? (
           <nav
             aria-label={t("nav.help")}
@@ -1293,21 +1359,25 @@ export function TeamDashboard({
         homeLabel={t("nav.home")}
         teamLabel={t("nav.members")}
         moreLabel={t("nav.more")}
+        guestsLabel={t("pond.guests")}
         subteamsLabel={t("nav.subteams")}
         venuesLabel={t("nav.venues")}
         addLabel={t("event.add")}
         closeLabel={t("event.close")}
         view={view}
         canManage={canManageTeam && !showStart}
+        showGuests={showGuests && !showStart}
         showSubteams={canManageTeam && !showStart && moduleOn(FRONTEND_MODULE_KEYS.subteams)}
         showVenues={canManageTeam && !showStart}
         canAdd={Boolean(canManageTeam && !showStart)}
         homeBusy={pendingNav === "home"}
         teamBusy={pendingNav === "team"}
+        guestsBusy={pendingNav === "guests"}
         subteamsBusy={pendingNav === "subteams"}
         venuesBusy={pendingNav === "venues"}
         onHome={() => showHome("kalendars")}
         onTeam={() => showView("team")}
+        onGuests={() => showView("guests")}
         onSubteams={() => showView("subteams")}
         onVenues={() => showView("venues")}
         onAdd={() => {
@@ -1383,6 +1453,11 @@ export function TeamDashboard({
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {showStart && guestSignups.length > 0 ? (
+          <div className={sidebarCollapsed ? "mb-4" : "mb-4 min-[600px]:hidden"}>
+            <GuestSignups tone="paper" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
           </div>
         ) : null}
         {showStart ? <NoTeamStart sports={sports} enabledModules={teamModules} individualModuleKeys={individualModuleKeys} onCreate={createTeam} onJoin={joinTeam} /> : null}
@@ -1482,6 +1557,21 @@ export function TeamDashboard({
           />
           </div>
         ) : null}
+        {view === "guests" && !showStart && !teamPending && showGuests ? (
+          <div className={sectionMotion || undefined}>
+            <GuestRoster
+              guests={ownedTeam?.guests ?? []}
+              teamId={ownedTeam?.id ?? null}
+              onNote={(userId, note) => {
+                if (!ownedTeam) return;
+                const next = { ...ownedTeam, guests: (ownedTeam.guests ?? []).map((guest) => guest.userId === userId ? { ...guest, note } : guest) };
+                setCurrentTeam(next);
+                setOwnedTeam(next);
+                setTeams(listMyTeams());
+              }}
+            />
+          </div>
+        ) : null}
         {view === "subteams" && !showStart && !teamPending && moduleVisible && canManageTeam ? (
           <div className={sectionMotion || undefined}>
           <SubteamAdmin
@@ -1540,7 +1630,7 @@ export function TeamDashboard({
             {route.section === "integrations" && admin ? (
               <AdminIntegrationsPage integrations={admin.integrations} googleRedirectUrl={admin.googleRedirectUrl} />
             ) : null}
-            {route.section === "settings" && admin ? <AdminSettingsForm initial={admin.brand} /> : null}
+            {route.section === "settings" && admin ? <AdminSettingsForm initial={admin.brand} languages={admin.languages} /> : null}
             {route.section === "languages" && admin ? <AdminLanguagesForm initialLanguages={admin.languages} /> : null}
             {route.section === "translations" && admin && !admin.translationsLoaded ? <AdminSectionPending label={t("admin.loading")} /> : null}
             {route.section === "translations" && admin?.translationsLoaded ? (
@@ -1894,6 +1984,14 @@ export function TeamDashboard({
             onEdit={basePath === "/demo" || managesTeam ? () => setEditingEvent(openEvent) : undefined}
             onDelete={basePath === "/demo" || managesTeam ? () => setDeleteTarget(openEvent) : undefined}
             onClose={() => softGo(basePath)}
+            guestControls={pondEvent && managesTeam}
+            guestHint={openEvent && managesTeam && openEvent.type === "training" && !openEvent.withCoach && !pondOn && basePath !== "/demo" ? (individualModuleKeys.includes(FRONTEND_MODULE_KEYS.pond) ? "team" : "sport") : null}
+            allowGuests={Boolean(openEvent.allowGuests)}
+            guests={pondEvent ? eventGuests.map((guest) => ({ userId: guest.userId, name: guest.name, email: guest.email, phone: guest.phone })) : undefined}
+            guestBusy={guestBusy}
+            onAllowGuests={(allowed) => void setGuestsAllowed(allowed)}
+            onCopyGuestLink={copyGuestLink}
+            onRemoveGuest={managesTeam ? (userId) => void removeGuest(userId) : undefined}
           />
         ) : null}
         {leaveRun ? (
@@ -2010,21 +2108,25 @@ function MobileDock({
   homeLabel,
   teamLabel,
   moreLabel,
+  guestsLabel,
   subteamsLabel,
   venuesLabel,
   addLabel,
   closeLabel,
   view,
   canManage,
+  showGuests,
   showSubteams,
   showVenues,
   canAdd,
   homeBusy,
   teamBusy,
+  guestsBusy,
   subteamsBusy,
   venuesBusy,
   onHome,
   onTeam,
+  onGuests,
   onSubteams,
   onVenues,
   onAdd,
@@ -2033,21 +2135,25 @@ function MobileDock({
   homeLabel: string;
   teamLabel: string;
   moreLabel: string;
+  guestsLabel: string;
   subteamsLabel: string;
   venuesLabel: string;
   addLabel: string;
   closeLabel: string;
-  view: "home" | "team" | "subteams" | "venues" | "admin";
+  view: "home" | "team" | "guests" | "subteams" | "venues" | "admin";
   canManage: boolean;
+  showGuests: boolean;
   showSubteams: boolean;
   showVenues: boolean;
   canAdd: boolean;
   homeBusy: boolean;
   teamBusy: boolean;
+  guestsBusy: boolean;
   subteamsBusy: boolean;
   venuesBusy: boolean;
   onHome: () => void;
   onTeam: () => void;
+  onGuests: () => void;
   onSubteams: () => void;
   onVenues: () => void;
   onAdd: () => void;
@@ -2056,8 +2162,8 @@ function MobileDock({
   const measureRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [inlineExtras, setInlineExtras] = useState(false);
-  const hasExtras = canManage && (showSubteams || showVenues);
-  const moreActive = !inlineExtras && (view === "subteams" || view === "venues");
+  const hasExtras = canManage && (showGuests || showSubteams || showVenues);
+  const moreActive = !inlineExtras && (view === "guests" || view === "subteams" || view === "venues");
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -2078,7 +2184,7 @@ function MobileDock({
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [hasExtras, canAdd, homeLabel, teamLabel, subteamsLabel, venuesLabel, showSubteams, showVenues]);
+  }, [hasExtras, canAdd, homeLabel, teamLabel, guestsLabel, subteamsLabel, venuesLabel, showGuests, showSubteams, showVenues]);
 
   function pick(run: () => void) {
     setMoreOpen(false);
@@ -2088,6 +2194,7 @@ function MobileDock({
   function extraItems() {
     return (
       <>
+        {showGuests ? <DockItem label={guestsLabel} icon={<IconGuest />} active={view === "guests"} busy={guestsBusy} onClick={() => pick(onGuests)} /> : null}
         {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} active={view === "subteams"} busy={subteamsBusy} onClick={() => pick(onSubteams)} /> : null}
         {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} active={view === "venues"} busy={venuesBusy} onClick={() => pick(onVenues)} /> : null}
       </>
@@ -2101,6 +2208,7 @@ function MobileDock({
         <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex h-14 gap-1.5 p-[7px]">
           <DockItem label={homeLabel} icon={<IconCalendar />} onClick={() => undefined} />
           <DockItem label={teamLabel} icon={<IconUsers />} onClick={() => undefined} />
+          {showGuests ? <DockItem label={guestsLabel} icon={<IconGuest />} onClick={() => undefined} /> : null}
           {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} onClick={() => undefined} /> : null}
           {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} onClick={() => undefined} /> : null}
         </div>
@@ -2108,6 +2216,12 @@ function MobileDock({
       {moreOpen ? <button type="button" aria-label={closeLabel} className="pointer-events-auto fixed inset-0" onClick={() => setMoreOpen(false)} /> : null}
       {moreOpen ? (
         <div className="pointer-events-auto absolute right-4 bottom-full left-4 z-10 mb-3 rounded-2xl bg-paper p-1.5 text-ink shadow-lg ring-1 ring-line">
+          {showGuests ? (
+            <button type="button" aria-busy={guestsBusy || undefined} onClick={() => pick(onGuests)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "guests" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
+              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{guestsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconGuest />}</span>
+              {guestsLabel}
+            </button>
+          ) : null}
           {showSubteams ? (
             <button type="button" aria-busy={subteamsBusy || undefined} onClick={() => pick(onSubteams)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "subteams" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
               <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{subteamsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconLayers />}</span>
@@ -2386,6 +2500,15 @@ function IconCalendar() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <rect x="3" y="5" width="18" height="16" rx="2" />
       <path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+
+function IconGuest() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="8" r="3" />
+      <path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
     </svg>
   );
 }

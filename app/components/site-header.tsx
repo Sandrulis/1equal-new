@@ -8,6 +8,7 @@ import { LanguageMenu } from "@/app/components/language-menu";
 import { useLanguage } from "@/app/lib/language";
 import { landingSlug, scrollToLandingSection, type LandingSection } from "@/app/lib/landing-sections";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
+import { signOut } from "@/app/lib/auth/actions";
 import type { MessageKey } from "@/app/lib/messages";
 
 const NAV: { section: LandingSection; label: MessageKey }[] = [
@@ -18,7 +19,7 @@ const NAV: { section: LandingSection; label: MessageKey }[] = [
   { section: "contact", label: "landing.nav.contact" },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ account = null }: { account?: { name: string; email: string } | null }) {
   const { t, formatLang } = useLanguage();
   const brand = useSiteBrand();
   const pathname = usePathname();
@@ -56,14 +57,28 @@ export function SiteHeader() {
             })}
           </nav>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <LanguageMenu />
-          <Link href="/login" className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium hover:bg-ice">
-            {t("auth.login.title")}
-          </Link>
-          <Link href="/signup" className="cursor-pointer rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy/90">
-            {t("auth.signup.nav")}
-          </Link>
+          {account ? (
+            <>
+              <span className="min-w-0 text-right">
+                <span className="block truncate text-sm font-medium">{account.name}</span>
+                <span className="block truncate text-xs text-muted">{account.email}</span>
+              </span>
+              <button type="button" onClick={() => void signOut()} className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium hover:bg-ice">
+                {t("user.logout")}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium hover:bg-ice">
+                {t("auth.login.title")}
+              </Link>
+              <Link href="/signup" className="cursor-pointer rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                {t("auth.signup.nav")}
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

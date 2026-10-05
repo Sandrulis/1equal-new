@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { parseRememberSession, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
+import { safeTrainingPath } from "@/app/lib/safe-next";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
 function contentSecurityPolicy(): { nonce: string; policy: string } {
@@ -73,6 +74,27 @@ export async function updateSession(request: NextRequest) {
   const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const isHome = pathname === "/";
   const isAuthForm = pathname === "/login" || pathname === "/signup";
+  const signInPost = request.method === "POST" && (isAuthForm || pathname.startsWith("/auth/"));
+
+  if (user && !signInPost) {
+    const marked = await supabase.from("users").select("deletion_due_at").eq("id", user.id).maybeSingle();
+    const dueAt = marked.data?.deletion_due_at;
+    if (!marked.error && typeof dueAt === "string" && dueAt) {
+      await supabase.auth.signOut();
+      if (isAuthForm) {
+        supabaseResponse.headers.set("Content-Security-Policy", policy);
+        return supabaseResponse;
+      }
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+      const redirect = NextResponse.redirect(loginUrl);
+      redirect.headers.set("Content-Security-Policy", policy);
+      const setCookies = supabaseResponse.headers.getSetCookie();
+      for (const cookie of setCookies) redirect.headers.append("set-cookie", cookie);
+      return redirect;
+    }
+  }
 
   if (!user && isDashboard) {
     const loginUrl = request.nextUrl.clone();
@@ -85,7 +107,8 @@ export async function updateSession(request: NextRequest) {
 
   if (user && (isAuthForm || isHome)) {
     const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = "/dashboard";
+    const next = isAuthForm ? safeTrainingPath(request.nextUrl.searchParams.get("next")) : null;
+    homeUrl.pathname = next ?? "/dashboard";
     homeUrl.search = "";
     const redirect = NextResponse.redirect(homeUrl);
     redirect.headers.set("Content-Security-Policy", policy);

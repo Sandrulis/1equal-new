@@ -72,40 +72,14 @@ export function loadFaCatalog(): Promise<Map<string, CatalogEntry>> {
   return catalogPromise;
 }
 
-function iconFile(name: string): string {
-  const pascal = name
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-  return `fa${pascal}`;
-}
-
 const iconPromises = new Map<string, Promise<IconDefinition | null>>();
-
-async function importOneIcon(prefix: IconPrefix, file: string): Promise<IconDefinition | null> {
-  try {
-    const loaded =
-      prefix === "far"
-        ? await import(`@fortawesome/free-regular-svg-icons/${file}.js`)
-        : prefix === "fab"
-          ? await import(`@fortawesome/free-brands-svg-icons/${file}.js`)
-          : await import(`@fortawesome/free-solid-svg-icons/${file}.js`);
-    const definition = (loaded as { definition?: IconDefinition }).definition ?? null;
-    return definition && isIconDefinition(definition) ? definition : null;
-  } catch {
-    return null;
-  }
-}
 
 export function faIconDefinition(name: string): Promise<IconDefinition | null> {
   const resolved = sportIconName(name);
   if (!resolved) return Promise.resolve(null);
   const cached = iconPromises.get(resolved);
   if (cached) return cached;
-  const prefix: IconPrefix = resolved.startsWith("far:") ? "far" : resolved.startsWith("fab:") ? "fab" : "fas";
-  const iconName = resolved.includes(":") ? resolved.slice(resolved.indexOf(":") + 1) : resolved;
-  const promise = importOneIcon(prefix, iconFile(iconName));
+  const promise = loadFaCatalog().then((catalog) => catalog.get(resolved)?.icon ?? null);
   iconPromises.set(resolved, promise);
   return promise;
 }

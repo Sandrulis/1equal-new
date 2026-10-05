@@ -6,7 +6,7 @@ import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/a
 import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
-import type { IssuedTeam, TeamLedgerLine } from "@/app/lib/invite-code";
+import type { IssuedTeam, TeamLedgerLine, TrainingGuest } from "@/app/lib/invite-code";
 import type { Subteam } from "@/app/lib/demo-data";
 import { displayPosition, parseExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
@@ -60,11 +60,12 @@ type EventRow = {
   subteam_id: string | null;
   expense: number | string | null;
   with_coach: boolean;
+  allow_guests?: boolean;
   settled_at?: string | null;
   lineup?: unknown;
 };
 
-export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, settled_at";
+export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, allow_guests, settled_at";
 
 export function eventFromRow(row: EventRow): TeamEvent {
   const includesLineup = Object.prototype.hasOwnProperty.call(row, "lineup");
@@ -79,6 +80,7 @@ export function eventFromRow(row: EventRow): TeamEvent {
     venueId: row.venue_id,
     expense: row.expense == null ? null : Number(row.expense),
     withCoach: row.with_coach === true,
+    allowGuests: row.allow_guests === true,
     settled: Boolean(row.settled_at),
     ...(includesLineup ? { ...lineupFromJson(row.lineup), lineupLoaded: true } : { lineupLoaded: false }),
   };
@@ -183,6 +185,49 @@ function pickDetailTeamId(rows: { id: string }[], activeTeamId: string | null | 
   return rows.find((row) => !watchOnly.has(row.id))?.id ?? rows[0]?.id ?? null;
 }
 
+async function listTrainingGuests(admin: NonNullable<ReturnType<typeof createAdminClient>>, teamId: string): Promise<TrainingGuest[]> {
+  const rows = await admin.from("team_event_rsvps").select("event_id, user_id").eq("team_id", teamId).eq("is_guest", true).eq("status", "going").limit(1000);
+  if (rows.error || !rows.data?.length) return [];
+  const eventIds = [...new Set(rows.data.map((row) => row.event_id as string))];
+  const userIds = [...new Set(rows.data.map((row) => row.user_id as string))];
+  const [events, people, notes] = await Promise.all([
+    admin.from("team_events").select("id, event_date, start_time, venue_id").in("id", eventIds),
+    admin.from("users").select("id, name, first_name, last_name, email, phone").in("id", userIds),
+    admin.from("team_guest_notes").select("user_id, note").eq("team_id", teamId).in("user_id", userIds),
+  ]);
+  const eventById = new Map((events.data ?? []).map((row) => [row.id as string, row]));
+  const venueIds = [...new Set((events.data ?? []).map((row) => row.venue_id as string).filter(Boolean))];
+  const venues = venueIds.length ? await admin.from("venues").select("id, name").in("id", venueIds) : { data: [] };
+  const venueById = new Map((venues.data ?? []).map((row) => [row.id as string, String(row.name ?? "").trim()]));
+  const personById = new Map((people.data ?? []).map((row) => [row.id as string, { name: displayName(row), email: String(row.email ?? "").trim(), phone: String(row.phone ?? "").trim() }]));
+  const noteById = new Map((notes.data ?? []).map((row) => [row.user_id as string, String(row.note ?? "").trim()]));
+  return rows.data
+    .map((row) => {
+      const event = eventById.get(row.event_id as string);
+      if (!event) return null;
+      const person = personById.get(row.user_id as string);
+      return {
+        eventId: row.event_id as string,
+        userId: row.user_id as string,
+        name: person?.name ?? "",
+        email: person?.email ?? "",
+        phone: person?.phone ?? "",
+        note: noteById.get(row.user_id as string) ?? "",
+        date: String(event.event_date).slice(0, 10),
+        start: String(event.start_time).slice(0, 5),
+        venue: venueById.get(event.venue_id as string) ?? "",
+      };
+    })
+    .filter((row): row is TrainingGuest => row !== null)
+    .sort((left, right) => `${right.date} ${right.start}`.localeCompare(`${left.date} ${left.start}`));
+}
+
+function displayName(row: { name?: string | null; first_name?: string | null; last_name?: string | null }): string {
+  const parts = [row.first_name, row.last_name].map((part) => (part ?? "").trim()).filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  return (row.name ?? "").trim();
+}
+
 export async function listOwnedTeams(userId: string, activeTeamId?: string | null): Promise<IssuedTeam[]> {
   const admin = createAdminClient();
   if (!admin) return [];
@@ -233,7 +278,8 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   if (members.error || !members.data) return [];
   const splitRsvps = members.data.length * (events.data ?? []).length > RSVP_SPLIT_CELLS;
   const rsvpSince = splitRsvps ? rsvpHotSince() : since;
-  const rsvps = await admin.from("team_event_rsvps").select("team_id, event_id, user_id, status, team_events!inner(event_date)").eq("team_id", detailId).gte("team_events.event_date", rsvpSince);
+  const rsvps = await admin.from("team_event_rsvps").select("team_id, event_id, user_id, status, is_guest, team_events!inner(event_date)").eq("team_id", detailId).gte("team_events.event_date", rsvpSince);
+  const guests = await listTrainingGuests(admin, detailId);
   const idsByMember = new Map<string, string[]>();
   for (const link of (links.data ?? []) as { team_id: string; user_id: string; subteam_id: string }[]) {
     const key = `${link.team_id}:${link.user_id}`;
@@ -329,8 +375,9 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
         ...(detail
           ? {
               moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
-              rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string }[])
-                .filter((row) => row.status === "going" || row.status === "absent")
+              guests,
+              rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string; is_guest?: boolean }[])
+                .filter((row) => row.is_guest !== true && (row.status === "going" || row.status === "absent"))
                 .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
               members: byTeam.get(team.id) ?? [],
               subteams: subteamsByTeam.get(team.id) ?? [],
@@ -425,12 +472,12 @@ export async function listTeamHistory(teamId: string, from: string, to: string):
   if (!admin) return { events: [], rsvps: [] };
   const [events, rsvps] = await Promise.all([
     admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", teamId).gte("event_date", from).lte("event_date", to).order("event_date").order("start_time"),
-    admin.from("team_event_rsvps").select("event_id, user_id, status, team_events!inner(event_date)").eq("team_id", teamId).gte("team_events.event_date", from).lte("team_events.event_date", to),
+    admin.from("team_event_rsvps").select("event_id, user_id, status, is_guest, team_events!inner(event_date)").eq("team_id", teamId).gte("team_events.event_date", from).lte("team_events.event_date", to),
   ]);
   return {
     events: ((events.data ?? []) as EventRow[]).map((row) => eventFromRow(row)),
-    rsvps: ((rsvps.data ?? []) as { event_id: string; user_id: string; status: string }[])
-      .filter((row) => row.status === "going" || row.status === "absent")
+    rsvps: ((rsvps.data ?? []) as { event_id: string; user_id: string; status: string; is_guest?: boolean }[])
+      .filter((row) => row.is_guest !== true && (row.status === "going" || row.status === "absent"))
       .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
   };
 }

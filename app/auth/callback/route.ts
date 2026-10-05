@@ -7,6 +7,7 @@ import {
   googleOAuthStatesMatch,
   parseGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
+import { settleAccountDeletionOnSignIn, withAccountRestoredCookie } from "@/app/lib/auth/account-deletion";
 import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
@@ -36,9 +37,16 @@ export async function GET(request: Request) {
         const admin = createAdminClient();
         if (admin) await admin.from("users").update({ email }).eq("id", data.user.id);
       }
+      const settlement = data.user ? await settleAccountDeletionOnSignIn(data.user.id) : "none";
+      if (settlement === "deleted") {
+        await supabase.auth.signOut();
+        return NextResponse.redirect(`${origin}/login?error=deleted`);
+      }
       const next = searchParams.get("next");
       const destination = next === "/reset-password" ? "/reset-password" : "/dashboard";
-      return NextResponse.redirect(`${origin}${destination}`);
+      const response = NextResponse.redirect(`${origin}${destination}`);
+      if (settlement === "restored") withAccountRestoredCookie(response);
+      return response;
     }
   }
   return NextResponse.redirect(`${origin}/login`);

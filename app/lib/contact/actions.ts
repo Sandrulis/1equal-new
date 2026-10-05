@@ -55,6 +55,7 @@ export async function sendContactMessage(formData: FormData): Promise<{ ok: true
     buttonLabel: translate(lang, "landing.contact.reply"),
     actionLink: `mailto:${encodeURIComponent(email)}`,
     footerHint: brand.name,
+    tagline: brand.slogans[lang] ?? "",
     language: lang,
   });
 

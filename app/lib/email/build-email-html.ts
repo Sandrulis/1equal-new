@@ -48,6 +48,7 @@ export function buildEmailHtml(options: {
   buttonLabel: string;
   actionLink: string;
   footerHint: string;
+  tagline?: string;
   language?: Lang;
   eyebrow?: string;
   card?: { label: string; title: string; detail?: string };
@@ -98,7 +99,10 @@ export function buildEmailHtml(options: {
   const noteHtml = note && note !== systemName
     ? `<div style="margin-top:24px;font-size:13px;line-height:1.5;color:#89938e;">${escapeHtml(note)}</div>`
     : "";
-  const tagline = escapeHtml(translate(lang, "email.footer.tagline"));
+  const taglineText = (options.tagline !== undefined ? options.tagline : translate(lang, "email.footer.tagline")).trim();
+  const tagline = taglineText
+    ? `<div style="margin-top:8px;font-size:12px;line-height:1.5;color:#9aa39e;">${escapeHtml(taglineText)}</div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -140,7 +144,7 @@ export function buildEmailHtml(options: {
             <td class="email-footer" style="padding:24px 40px 32px;text-align:center;">
               <div style="height:1px;background-color:#e8ece9;margin-bottom:22px;font-size:0;line-height:0;">&nbsp;</div>
               <div style="font-size:15px;font-weight:800;color:${INK};">${mark}</div>
-              <div style="margin-top:8px;font-size:12px;line-height:1.5;color:#9aa39e;">${tagline}</div>
+              ${tagline}
             </td>
           </tr>
         </table>

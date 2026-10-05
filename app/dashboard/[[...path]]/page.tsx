@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { DashboardApp } from "@/app/components/dashboard-app";
+import { ACCOUNT_RESTORED_COOKIE, purgeDueAccounts } from "@/app/lib/auth/account-deletion";
 import { MfaLoginGate } from "@/app/components/mfa-login-gate";
 import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
@@ -9,6 +11,7 @@ import { parseDashboardPath } from "@/app/lib/dashboard-path";
 import { captureRequestAddress, recordMissingTeamOrigins, recordUserOrigin } from "@/app/lib/admin-origin";
 import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
 import { listOwnedTeams, settleFinishedEvents } from "@/app/lib/team-membership";
+import { listMyGuestSignups } from "@/app/lib/training-guests";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,8 @@ export default async function DashboardPage({
   if (await sessionNeedsMfaVerify()) return <MfaLoginGate />;
   const account = await getAccountProfile();
   if (!account) redirect("/login");
+  const cookieStore = await cookies();
+  const accountRestored = cookieStore.get(ACCOUNT_RESTORED_COOKIE)?.value === "1";
   const { path } = await params;
   const query = await searchParams;
   const route = parseDashboardPath(path, { demoEvents: false });
@@ -40,6 +45,7 @@ export default async function DashboardPage({
   const clientAddress = await captureRequestAddress();
   after(async () => {
     await Promise.all([
+      purgeDueAccounts(),
       touchUserLastSeen(account.id),
       (async () => {
         await recordUserOrigin(account.id, clientAddress);
@@ -55,5 +61,6 @@ export default async function DashboardPage({
     sportsPromise,
   ]);
   const teamId = route.view === "admin" && route.section === "teams" ? route.teamId ?? query.team ?? null : null;
-  return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={teamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} />;
+  const guestSignups = initialTeams.length === 0 ? await listMyGuestSignups() : [];
+  return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={teamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} accountRestored={accountRestored} guestSignups={guestSignups} />;
 }

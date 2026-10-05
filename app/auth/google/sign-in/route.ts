@@ -8,6 +8,7 @@ import {
   serializeGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
 import { publicRequestOrigin } from "@/app/lib/public-origin";
+import { safeTrainingPath } from "@/app/lib/safe-next";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
 
 export async function GET(request: Request) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${back}?error=${error}`);
   }
 
-  const state = createGoogleOAuthState(searchParams.get("remember") === "1", from);
+  const state = createGoogleOAuthState(searchParams.get("remember") === "1", from, safeTrainingPath(searchParams.get("next")));
   const url = await buildGoogleAuthorizeUrl(origin, state.nonce);
   if (!url) return NextResponse.redirect(`${origin}${back}?error=google`);
 

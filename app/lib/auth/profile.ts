@@ -4,12 +4,14 @@ import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 export type AccountProfile = {
   id: string;
   email: string;
+  phone: string;
   firstName: string;
   lastName: string;
   isAdmin: boolean;
   ehlPlayers: Record<string, EhlPlayerProfile>;
   avatarUrl: string | null;
   eventEmails: boolean;
+  hasPassword: boolean;
   display: UserDisplayPreferences;
   activeTeamId: string | null;
 };

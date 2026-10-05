@@ -10,6 +10,7 @@ import { SiteHeader } from "@/app/components/site-header";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/app/components/turnstile-widget";
 import { resetPassword, signIn, signUp } from "@/app/lib/auth/actions";
 import { useLanguage } from "@/app/lib/language";
+import { safeTrainingPath } from "@/app/lib/safe-next";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -21,19 +22,29 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
   const [pending, setPending] = useState(false);
   const [googlePending, setGooglePending] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [trainingNext, setTrainingNext] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const turnstileRequired = Boolean(turnstileSiteKey);
   const showGoogle = googleEnabled && mode !== "forgot";
 
   useEffect(() => {
-    const error = new URLSearchParams(window.location.search).get("error");
+    const params = new URLSearchParams(window.location.search);
+    setTrainingNext(safeTrainingPath(params.get("next")));
+    const error = params.get("error");
+    const notice = params.get("notice");
     if (error === "google") showFeedback({ message: t("auth.google.failed"), variant: "error" });
+    if (error === "deleted") showFeedback({ message: t("user.delete.gone"), variant: "error" });
+    if (error === "delete_link") showFeedback({ message: t("user.delete.link_invalid"), variant: "error" });
+    if (error === "delete_failed") showFeedback({ message: t("user.delete.email_failed"), variant: "error" });
+    if (error === "last_admin") showFeedback({ message: t("user.delete.last_admin"), variant: "error" });
+    if (notice === "deactivated") showFeedback({ message: t("user.delete.scheduled"), variant: "success" });
     if (error === "turnstile" || error === "turnstile_required") {
       showFeedback({ message: t(error === "turnstile_required" ? "auth.turnstile.required" : "auth.turnstile.failed"), variant: "error" });
     }
-    if (!error) return;
+    if (!error && !notice) return;
     const url = new URL(window.location.href);
     url.searchParams.delete("error");
+    url.searchParams.delete("notice");
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }, [showFeedback, t]);
 
@@ -45,6 +56,8 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     setGooglePending(true);
     const url = new URL("/auth/google/sign-in", window.location.origin);
     url.searchParams.set("from", mode === "signup" ? "signup" : "login");
+    const next = safeTrainingPath(new URLSearchParams(window.location.search).get("next"));
+    if (next) url.searchParams.set("next", next);
     const remember = formRef.current?.elements.namedItem("remember");
     if (remember instanceof HTMLInputElement && remember.checked) url.searchParams.set("remember", "1");
     if (turnstileToken) url.searchParams.set("turnstile", turnstileToken);
@@ -80,8 +93,9 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
       return;
     }
     const doneKey = mode === "signup" ? "auth.signup.done" : mode === "forgot" ? "auth.forgot.done" : "auth.login.done";
-    showFeedback({ message: t(doneKey), variant: "success" });
-    router.push("/dashboard");
+    showFeedback({ message: t("restored" in result && result.restored ? "user.delete.restored" : doneKey), variant: "success" });
+    const next = safeTrainingPath(new URLSearchParams(window.location.search).get("next"));
+    router.push(next ?? "/dashboard");
     router.refresh();
   }
 
@@ -134,11 +148,11 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                 {mode === "login" ? t("auth.login.title") : mode === "signup" ? t("auth.signup.title") : t("auth.forgot.submit")}
               </button>
               {mode === "login" ? (
-                <Link href="/signup" className="cursor-pointer text-sm font-medium text-train hover:underline">
+                <Link href={trainingNext ? `/signup?next=${encodeURIComponent(trainingNext)}` : "/signup"} className="cursor-pointer text-sm font-medium text-train hover:underline">
                   {t("auth.toSignup")}
                 </Link>
               ) : (
-                <Link href="/login" className="cursor-pointer text-sm font-medium text-train hover:underline">
+                <Link href={trainingNext ? `/login?next=${encodeURIComponent(trainingNext)}` : "/login"} className="cursor-pointer text-sm font-medium text-train hover:underline">
                   {mode === "signup" ? t("auth.toLogin") : t("auth.backLogin")}
                 </Link>
               )}

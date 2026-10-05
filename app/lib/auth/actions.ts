@@ -3,24 +3,28 @@
 import { cookies } from "next/headers";
 import { removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { redirect } from "next/navigation";
+import { deletionBlockedReason, scheduleAccountDeletion, sendAccountDeletionConfirmation, settleAccountDeletionOnSignIn } from "@/app/lib/auth/account-deletion";
 import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
+import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
+import { isEmailAddress } from "@/app/lib/email/email-address";
 import { asLang, translate, type MessageKey } from "@/app/lib/messages";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
+import { writeAudit } from "@/app/lib/security/audit";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
 import { createClient } from "@/app/lib/supabase/server";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
 
-export type AuthResult = { error: MessageKey } | { confirm: true } | { sent: true } | { ok: true; needsMfa?: boolean; ehlPlayer?: EhlPlayerProfile | null; teamCode?: string; display?: UserDisplayPreferences };
+export type AuthResult = { error: MessageKey } | { confirm: true } | { sent: true } | { ok: true; needsMfa?: boolean; restored?: boolean; ehlPlayer?: EhlPlayerProfile | null; teamCode?: string; display?: UserDisplayPreferences; emailSent?: boolean };
 
 const MIN_PASSWORD = 8;
 
@@ -69,12 +73,17 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
   const cookieStore = await cookies();
   cookieStore.set(REMEMBER_SESSION_COOKIE, remember ? "1" : "", rememberPreferenceOptions(remember));
   const supabase = await createClient(remember);
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: mapAuthError(error.code, error.message) };
+  const settlement = data.user ? await settleAccountDeletionOnSignIn(data.user.id) : "none";
+  if (settlement === "deleted") {
+    await supabase.auth.signOut();
+    return { error: "user.delete.gone" };
+  }
   const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const needsMfa = !assurance.error && assurance.data?.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2";
 
-  return { ok: true, needsMfa };
+  return { ok: true, needsMfa, restored: settlement === "restored" };
 }
 
 export async function signUp(formData: FormData): Promise<AuthResult> {
@@ -152,9 +161,14 @@ async function signInAfterSignup(email: string, password: string): Promise<AuthR
   const supabase = await createClient();
   const signedIn = await supabase.auth.signInWithPassword({ email, password });
   if (signedIn.error) return { error: mapAuthError(signedIn.error.code, signedIn.error.message) };
+  const settlement = signedIn.data.user ? await settleAccountDeletionOnSignIn(signedIn.data.user.id) : "none";
+  if (settlement === "deleted") {
+    await supabase.auth.signOut();
+    return { error: "user.delete.gone" };
+  }
   const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const needsMfa = !assurance.error && assurance.data?.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2";
-  return { ok: true, needsMfa };
+  return { ok: true, needsMfa, restored: settlement === "restored" };
 }
 
 export async function changePassword(formData: FormData): Promise<AuthResult> {
@@ -179,6 +193,7 @@ export async function changePassword(formData: FormData): Promise<AuthResult> {
 
   const updated = await supabase.auth.updateUser({ password: next });
   if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+  if (data.user) await markPasswordSet(data.user.id, data.user.app_metadata);
 
   return { ok: true };
 }
@@ -206,7 +221,15 @@ export async function setNewPassword(formData: FormData): Promise<AuthResult> {
   if (!user.data.user) return { error: "auth.error.generic" };
   const updated = await supabase.auth.updateUser({ password });
   if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+  await markPasswordSet(user.data.user.id, user.data.user.app_metadata);
   return { ok: true };
+}
+
+async function markPasswordSet(userId: string, appMetadata: Record<string, unknown> | undefined) {
+  if (appMetadata?.password_set !== false) return;
+  const admin = createAdminClient();
+  if (!admin) return;
+  await admin.auth.admin.updateUserById(userId, { app_metadata: { ...appMetadata, password_set: true } });
 }
 
 async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminClient>>, email: string, kind: "signup" | "recovery"): Promise<boolean> {
@@ -237,6 +260,7 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
     buttonLabel: translate(lang, buttonKey),
     actionLink,
     footerHint: translate(lang, "admin.email.footer"),
+    tagline: brand.slogans[lang] ?? "",
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;
@@ -254,6 +278,8 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
 
   const firstName = readField(formData, "firstName");
   const lastName = readField(formData, "lastName");
+  const phone = readField(formData, "phone").slice(0, 40);
+  const email = readField(formData, "email").toLowerCase();
   if (!firstName || !lastName) return { error: "auth.error.generic" };
 
   const supabase = await createClient();
@@ -261,6 +287,16 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   if (!data.user) return { error: "auth.error.generic" };
   const admin = createAdminClient();
   if (!admin) return { error: "auth.error.config" };
+
+  const currentEmail = data.user.email?.trim().toLowerCase() ?? "";
+  const emailChanged = email !== "" && email !== currentEmail;
+  if (emailChanged) {
+    if (!isEmailAddress(email)) return { error: "roster.error.email" };
+    if (await rateLimit(`email-change:${data.user.id}`, 5, 15 * 60 * 1000)) return { error: "auth.error.rate" };
+    const taken = await emailTakenByOther(admin, email, data.user.id);
+    if (taken === null) return { error: "auth.error.generic" };
+    if (taken) return { error: "auth.error.exists" };
+  }
 
   const includePlayer = formData.has("playerUrl");
   const teamCode = readField(formData, "teamCode").toUpperCase();
@@ -289,6 +325,7 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     first_name: string;
     last_name: string;
     name: string;
+    phone: string;
     ehl_player?: Record<string, EhlPlayerProfile>;
     week_start_day?: UserDisplayPreferences["weekStartDay"];
     date_format?: UserDisplayPreferences["dateFormat"];
@@ -299,6 +336,7 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     first_name: firstName,
     last_name: lastName,
     name: `${firstName} ${lastName}`.trim(),
+    phone,
   };
   if (savePlayer) {
     const current = await admin.from("users").select("ehl_player").eq("id", data.user.id).maybeSingle();
@@ -314,9 +352,16 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   }
   const saved = await admin.from("users").update(profile).eq("id", data.user.id);
   if (saved.error) return { error: "auth.error.generic" };
+  await admin.from("team_members").update({ phone, updated_at: new Date().toISOString() }).eq("user_id", data.user.id);
 
   await supabase.auth.updateUser({ data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}` } });
-  return includePlayer ? { ok: true, ehlPlayer: player, teamCode, display: display ?? undefined } : { ok: true, display: display ?? undefined };
+  let emailSent = false;
+  if (emailChanged) {
+    emailSent = await requestEmailChange(admin, data.user.id, email);
+    if (!emailSent) return { error: "auth.email.unavailable" };
+    await writeAudit("user.email_request", "users", data.user.id, {});
+  }
+  return includePlayer ? { ok: true, ehlPlayer: player, teamCode, display: display ?? undefined, emailSent } : { ok: true, display: display ?? undefined, emailSent };
 }
 
 function readDisplayForm(formData: FormData): UserDisplayPreferences | null {
@@ -393,6 +438,33 @@ export async function saveEventEmails(enabled: boolean): Promise<{ ok: true } | 
   if (!admin) return { ok: false, error: "auth.error.config" };
   const saved = await admin.from("users").update({ event_emails: enabled }).eq("id", data.user.id);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
+  return { ok: true };
+}
+
+export async function requestAccountDeletion(formData: FormData): Promise<AuthResult> {
+  if (!isSupabaseConfigured()) return { error: "auth.error.config" };
+  if (await sessionNeedsMfaVerify()) return { error: "auth.error.generic" };
+
+  const password = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
+  const email = user?.email?.trim().toLowerCase() ?? "";
+  if (!user || !email) return { error: "auth.error.generic" };
+  if (await rateLimit(`delete-account:${user.id}`, 5, 15 * 60 * 1000)) return { error: "auth.error.rate" };
+
+  const blocked = await deletionBlockedReason(user.id);
+  if (blocked) return { error: blocked };
+
+  if (user.app_metadata?.password_set === false) return sendAccountDeletionConfirmation(user.id, email);
+  if (!password) return { error: "user.password.wrong" };
+
+  const checked = await supabase.auth.signInWithPassword({ email, password });
+  if (checked.error) return { error: "user.password.wrong" };
+
+  const scheduled = await scheduleAccountDeletion(user.id, email);
+  if ("error" in scheduled) return scheduled;
+  await supabase.auth.signOut();
   return { ok: true };
 }
 

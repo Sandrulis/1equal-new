@@ -21,9 +21,9 @@ function cachedPublic<T>(key: string, load: () => Promise<T>) {
 }
 
 const FALLBACK_LANGUAGES: SiteLanguage[] = [
-  { code: "lv", name: "Latviešu", isActive: true, isDefault: true, sortOrder: 0 },
-  { code: "en", name: "English", isActive: true, isDefault: false, sortOrder: 1 },
-  { code: "ru", name: "Русский", isActive: true, isDefault: false, sortOrder: 2 },
+  { code: "lv", name: "Latviešu", isActive: true, isDefault: true, sortOrder: 0, slogan: "Komandas vadība vienuviet." },
+  { code: "en", name: "English", isActive: true, isDefault: false, sortOrder: 1, slogan: "Team management in one place." },
+  { code: "ru", name: "Русский", isActive: true, isDefault: false, sortOrder: 2, slogan: "Управление командой в одном месте." },
 ];
 
 function publicAssetUrl(path: string | null): string | null {
@@ -39,6 +39,7 @@ function mapLanguage(row: {
   is_active: boolean;
   is_default: boolean;
   sort_order: number;
+  slogan?: string | null;
 }): SiteLanguage {
   return {
     code: row.code,
@@ -46,13 +47,23 @@ function mapLanguage(row: {
     isActive: row.is_active,
     isDefault: row.is_default,
     sortOrder: row.sort_order,
+    slogan: row.slogan?.trim() ?? "",
   };
+}
+
+function sloganMap(languages: { code: string; slogan?: string | null }[]): Record<string, string> {
+  const slogans: Record<string, string> = {};
+  for (const language of languages) slogans[language.code] = language.slogan?.trim() ?? "";
+  return slogans;
 }
 
 export const getSiteBrand = cachedPublic("site-brand", async (): Promise<SiteBrand> => {
   const admin = createAdminClient();
-  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null, display: normalizeSiteDisplay(null), currency: normalizeCurrency(null), trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS, gameVotingHours: DEFAULT_GAME_VOTING_HOURS, contactEmail: "" };
-  const { data } = await admin.from("site_settings").select("name, logo_path, favicon_path, week_start_day, date_format, date_separator, time_format, timezone, currency, training_voting_hours, game_voting_hours, contact_email").eq("id", 1).maybeSingle();
+  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null, display: normalizeSiteDisplay(null), currency: normalizeCurrency(null), trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS, gameVotingHours: DEFAULT_GAME_VOTING_HOURS, contactEmail: "", slogans: sloganMap(FALLBACK_LANGUAGES) };
+  const [{ data }, slogans] = await Promise.all([
+    admin.from("site_settings").select("name, logo_path, favicon_path, week_start_day, date_format, date_separator, time_format, timezone, currency, training_voting_hours, game_voting_hours, contact_email").eq("id", 1).maybeSingle(),
+    admin.from("site_languages").select("code, slogan").then((result) => sloganMap(result.data ?? [])),
+  ]);
   return {
     name: data?.name?.trim() || DEFAULT_SITE_NAME,
     logoUrl: publicAssetUrl(data?.logo_path ?? null),
@@ -68,13 +79,14 @@ export const getSiteBrand = cachedPublic("site-brand", async (): Promise<SiteBra
     trainingVotingHours: votingHours(data?.training_voting_hours) ?? DEFAULT_TRAINING_VOTING_HOURS,
     gameVotingHours: votingHours(data?.game_voting_hours) ?? DEFAULT_GAME_VOTING_HOURS,
     contactEmail: data?.contact_email?.trim() ?? "",
+    slogans,
   };
 });
 
 export const listSiteLanguages = cachedPublic("site-languages", async (): Promise<SiteLanguage[]> => {
   const admin = createAdminClient();
   if (!admin) return FALLBACK_LANGUAGES;
-  const { data, error } = await admin.from("site_languages").select("code, name, is_active, is_default, sort_order").order("sort_order").order("code");
+  const { data, error } = await admin.from("site_languages").select("code, name, is_active, is_default, sort_order, slogan").order("sort_order").order("code");
   if (error || !data?.length) return FALLBACK_LANGUAGES;
   return data.map(mapLanguage);
 });

@@ -41,13 +41,15 @@ export { eventVotingOpen };
 
 export function VoteCountdown({ deadline, align = "start", compact = false, className = "" }: { deadline: number | null; align?: "start" | "end"; compact?: boolean; className?: string }) {
   const { t } = useLanguage();
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (deadline == null) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    const tick = () => setNow(Date.now());
+    tick();
+    const timer = window.setInterval(tick, 1_000);
     return () => window.clearInterval(timer);
   }, [deadline]);
-  if (deadline == null || now >= deadline) return null;
+  if (now == null || deadline == null || now >= deadline) return null;
   const left = voteRemainingParts(deadline - now);
   const bits = [
     ...(left.days > 0 ? [{ value: String(left.days), unit: t("event.vote.unit.d") }] : []),
@@ -90,6 +92,14 @@ export function EventDetails({
   onEdit,
   onDelete,
   onClose,
+  guestControls = false,
+  guestHint = null,
+  allowGuests = false,
+  guests,
+  guestBusy = false,
+  onAllowGuests,
+  onCopyGuestLink,
+  onRemoveGuest,
 }: {
   event: TeamEvent;
   members: Member[];
@@ -109,6 +119,14 @@ export function EventDetails({
   onEdit?: () => void;
   onDelete?: () => void;
   onClose: () => void;
+  guestControls?: boolean;
+  guestHint?: "sport" | "team" | null;
+  allowGuests?: boolean;
+  guests?: { userId: string; name: string; email: string; phone: string }[];
+  guestBusy?: boolean;
+  onAllowGuests?: (allowed: boolean) => void;
+  onCopyGuestLink?: () => void;
+  onRemoveGuest?: (userId: string) => void;
 }) {
   const { formatLang, t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -159,11 +177,33 @@ export function EventDetails({
           <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)}`} />
           <Detail label={t("event.time")} value={event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)} />
           <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
+          {event.type === "training" ? <Detail label={t("event.coach")} value={event.withCoach ? t("event.add.coach") : t("event.add.coach.off")} /> : null}
           <Detail label={t("event.venue")} value={venueName} />
           <Detail label={t("event.price")} value={formatMoney(fee)} />
         </dl>
         <VoteCountdown deadline={voteDeadline} align="end" className="order-1 shrink-0 min-[600px]:order-2" />
       </div>
+      {guestControls ? (
+        <div className="mx-4 mb-4 flex flex-wrap items-center gap-2 sm:mx-5">
+          <button
+            type="button"
+            disabled={guestBusy}
+            onClick={() => onAllowGuests?.(!allowGuests)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${allowGuests ? "bg-train text-white" : "bg-ice text-ink ring-1 ring-line"}`}
+          >
+            {allowGuests ? <IconGuestOff /> : <IconGuestOn />}
+            {allowGuests ? t("pond.disallow") : t("pond.allow")}
+          </button>
+          {allowGuests ? (
+            <button type="button" disabled={guestBusy} onClick={onCopyGuestLink} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:cursor-not-allowed disabled:opacity-40">
+              <IconCopy />
+              {t("pond.link")}
+            </button>
+          ) : null}
+        </div>
+      ) : guestHint ? (
+        <p className="mx-4 mb-4 text-sm text-muted sm:mx-5">{t(guestHint === "team" ? "pond.need_team" : "pond.need_sport")}</p>
+      ) : null}
       {teamReserved > 0 ? <p className="px-4 pb-1 text-sm text-muted sm:px-5">{t("finance.reserved.team", { amount: formatMoney(teamReserved) })}</p> : null}
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
@@ -190,6 +230,23 @@ export function EventDetails({
       <div className="border-t border-line px-4 py-4 sm:px-5">
         <h3 className="mb-3 text-sm font-semibold text-train">{t("event.attendance")}</h3>
         <div className="space-y-3">
+          {guests ? (
+            <AttendanceGroup title={t("pond.guests")} count={guests.length} tone="pending" empty={t("pond.empty")}>
+              {guests.map((guest) => (
+                <li key={guest.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{guest.name || t("pond.guest")}</span>
+                    {[guest.email, guest.phone].filter(Boolean).length ? <span className="block truncate text-xs text-muted">{[guest.email, guest.phone].filter(Boolean).join(" • ")}</span> : null}
+                  </span>
+                  {onRemoveGuest ? (
+                    <button type="button" disabled={guestBusy} onClick={() => onRemoveGuest(guest.userId)} className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-game hover:bg-game-soft disabled:cursor-not-allowed disabled:opacity-40">
+                      {t("pond.remove")}
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </AttendanceGroup>
+          ) : null}
           <AttendanceGroup title={t("event.going")} count={going.length} extra={exemptGoing} tone="going" empty={t("event.none")}>
             {going.map((member) => (
               <PersonRow
@@ -345,6 +402,35 @@ function PersonName({ member, reserved = null }: { member: Member; reserved?: st
         {reserved ? <span className="block truncate text-xs text-muted">{reserved}</span> : null}
       </span>
     </span>
+  );
+}
+
+function IconGuestOn() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20v-1a5 5 0 0 1 5-5h2" />
+      <path d="M16 11v6M19 14h-6" />
+    </svg>
+  );
+}
+
+function IconGuestOff() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20v-1a5 5 0 0 1 5-5h2" />
+      <path d="M17 11l4 4M21 11l-4 4" />
+    </svg>
+  );
+}
+
+function IconCopy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+    </svg>
   );
 }
 

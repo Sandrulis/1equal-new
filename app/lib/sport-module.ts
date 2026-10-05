@@ -13,7 +13,7 @@ export async function moduleEnabledForSport(client: SupabaseClient, sportId: str
   if (found?.isIndividual) {
     if (!teamId) return false;
     const teamLink = await client.from("team_modules").select("module_key").eq("team_id", teamId).eq("module_key", key).maybeSingle();
-    if (teamLink.error || !teamLink.data) return false;
+    return !teamLink.error && Boolean(teamLink.data);
   }
   if (!sportId) return true;
   const link = await client.from("sport_modules").select("module_key").eq("sport_id", sportId).eq("module_key", key).maybeSingle();

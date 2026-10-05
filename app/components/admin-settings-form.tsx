@@ -9,8 +9,12 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { displaySettingsEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
 import { saveSiteSettings } from "@/app/lib/site-admin/actions";
-import type { SiteBrand } from "@/app/lib/site-admin/types";
+import type { SiteBrand, SiteLanguage } from "@/app/lib/site-admin/types";
 import { useLanguage } from "@/app/lib/language";
+
+function sloganDraft(languages: SiteLanguage[]): Record<string, string> {
+  return Object.fromEntries(languages.map((language) => [language.code, language.slogan]));
+}
 
 function displayDraft(initial: SiteBrand): UserDisplayPreferences {
   return {
@@ -22,7 +26,7 @@ function displayDraft(initial: SiteBrand): UserDisplayPreferences {
   };
 }
 
-export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
+export function AdminSettingsForm({ initial, languages }: { initial: SiteBrand; languages: SiteLanguage[] }) {
   const { t } = useLanguage();
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
@@ -36,8 +40,10 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
   const [trainingHours, setTrainingHours] = useState(String(initial.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(initial.gameVotingHours));
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
+  const [slogans, setSlogans] = useState(() => sloganDraft(languages));
   const [pending, setPending] = useState(false);
   const [seenInitial, setSeenInitial] = useState(initial);
+  const [seenLanguages, setSeenLanguages] = useState(languages);
   if (initial !== seenInitial) {
     setSeenInitial(initial);
     setName(initial.name);
@@ -50,6 +56,10 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
     setTrainingHours(String(initial.trainingVotingHours));
     setGameHours(String(initial.gameVotingHours));
     setContactEmail(initial.contactEmail);
+  }
+  if (languages !== seenLanguages) {
+    setSeenLanguages(languages);
+    setSlogans(sloganDraft(languages));
   }
 
   const displayDirty = !displaySettingsEqual(
@@ -65,7 +75,8 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
   const trainingValue = votingHours(trainingHours);
   const gameValue = votingHours(gameHours);
   const defaultsDirty = currency !== initial.currency || trainingValue !== initial.trainingVotingHours || gameValue !== initial.gameVotingHours;
-  const dirty = name !== initial.name || contactEmail !== initial.contactEmail || logoFile !== null || faviconFile !== null || removeLogo || removeFavicon || displayDirty || defaultsDirty;
+  const slogansDirty = languages.some((language) => (slogans[language.code] ?? "") !== language.slogan);
+  const dirty = name !== initial.name || contactEmail !== initial.contactEmail || logoFile !== null || faviconFile !== null || removeLogo || removeFavicon || displayDirty || defaultsDirty || slogansDirty;
   const canSave = dirty && name.trim() !== "" && trainingValue != null && gameValue != null && !pending;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -100,6 +111,24 @@ export function AdminSettingsForm({ initial }: { initial: SiteBrand }) {
           className="mt-2 w-full rounded-xl bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy"
         />
       </label>
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold">{t("site_settings.form.slogans")}</h2>
+          <p className="mt-1 text-xs leading-5 text-muted">{t("site_settings.form.slogans_hint")}</p>
+        </div>
+        {languages.map((language) => (
+          <label key={language.code} className="block text-sm font-medium">
+            {language.name}
+            <input
+              name={`slogan:${language.code}`}
+              value={slogans[language.code] ?? ""}
+              maxLength={200}
+              onChange={(event) => setSlogans((current) => ({ ...current, [language.code]: event.target.value }))}
+              className="mt-2 w-full rounded-xl bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy"
+            />
+          </label>
+        ))}
+      </div>
       <label className="block text-sm font-medium">
         {t("site_settings.form.contact_email")}
         <input

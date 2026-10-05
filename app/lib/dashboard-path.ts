@@ -7,6 +7,7 @@ export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 export type DashboardRoute =
   | { view: "home"; eventId: string | null; lineup: boolean }
   | { view: "team"; memberId: string | null }
+  | { view: "guests" }
   | { view: "subteams" }
   | { view: "venues" }
   | { view: "admin"; section: AdminSection; teamId: string | null };
@@ -22,6 +23,7 @@ export function parseDashboardPath(path: string[] | undefined, options?: { demoE
   if (parts[0] === "team" && parts.length === 2 && /^[A-Za-z0-9-]+$/.test(parts[1])) {
     return { view: "team", memberId: parts[1] };
   }
+  if (parts[0] === "guests" && parts.length === 1) return { view: "guests" };
   if (parts[0] === "subteams" && parts.length === 1) return { view: "subteams" };
   if (parts[0] === "venues" && parts.length === 1) return { view: "venues" };
   if (parts[0] === "admin" && parts[1] === "teams" && parts.length === 3 && /^[A-Za-z0-9-]+$/.test(parts[2])) {

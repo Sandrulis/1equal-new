@@ -63,6 +63,7 @@ export type TeamEvent = {
   venueId: string;
   expense?: number | null;
   withCoach?: boolean;
+  allowGuests?: boolean;
   lineupSlots?: Record<number, string>;
   lineupSides?: Record<string, "black" | "white">;
   lineupLoaded?: boolean;

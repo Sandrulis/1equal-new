@@ -126,6 +126,17 @@ export async function saveSiteSettings(formData: FormData): Promise<ActionResult
     isTimeZone(timeZone);
   if (!displayOk) return { ok: false, error: "site_settings.error.display" };
 
+  const { data: languageRows, error: languageError } = await gate.client.from("site_languages").select("code");
+  if (languageError) return { ok: false, error: "auth.error.generic" };
+  const sloganUpdates: { code: string; slogan: string }[] = [];
+  for (const row of languageRows ?? []) {
+    const raw = formData.get(`slogan:${row.code}`);
+    if (raw == null) continue;
+    const slogan = String(raw).trim();
+    if (slogan.length > 200) return { ok: false, error: "site_settings.error.slogan" };
+    sloganUpdates.push({ code: row.code, slogan });
+  }
+
   const { error } = await gate.client.from("site_settings").upsert({
     id: 1,
     name,
@@ -143,6 +154,10 @@ export async function saveSiteSettings(formData: FormData): Promise<ActionResult
     updated_at: new Date().toISOString(),
   });
   if (error) return { ok: false, error: "auth.error.generic" };
+  for (const item of sloganUpdates) {
+    const updated = await gate.client.from("site_languages").update({ slogan: item.slogan }).eq("code", item.code);
+    if (updated.error) return { ok: false, error: "auth.error.generic" };
+  }
   await writeAudit("site_settings.save", "site_settings", "1");
   refresh();
   return { ok: true };

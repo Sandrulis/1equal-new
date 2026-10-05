@@ -723,6 +723,7 @@ export async function updateOwnedEvent(input: {
       subteam_id: subteamId,
       expense,
       with_coach: input.type === "training" && input.withCoach,
+      ...(input.type !== "training" || input.withCoach ? { allow_guests: false } : {}),
     })
     .eq("id", input.eventId)
     .eq("team_id", input.teamId)

@@ -101,6 +101,7 @@ export async function sendUserFeedback(input: {
     buttonLabel: translate(lang, "landing.contact.reply"),
     actionLink: `mailto:${encodeURIComponent(account.email)}`,
     footerHint: brand.name,
+    tagline: brand.slogans[lang] ?? "",
     language: lang,
   });
 

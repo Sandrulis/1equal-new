@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDisplayFormat } from "@/app/components/display-preferences";
+import { LetterFilter } from "@/app/components/letter-filter";
 import { PlayerContact } from "@/app/components/player-contact";
 import { originLabel } from "@/app/lib/country-name";
+import { nameLetter } from "@/app/lib/name-letter";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
 import type { SystemUser } from "@/app/lib/site-admin/types";
@@ -29,24 +31,25 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
   const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [letter, setLetter] = useState<string | null>(null);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const matched = needle
-      ? users.filter((user) => {
-          const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
-          const teams = user.teams
-            .map((team) => {
-              const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
-              return [team.name, sport ? sportLabel(sport, lang, fallbackLang) : ""].filter(Boolean).join(" ");
-            })
-            .join(" ");
-          const origin = originLabel(user.originIp, user.originCountry, lang);
-          return [user.name, user.email, user.phone, origin, user.originIp, role, teams].join(" ").toLowerCase().includes(needle);
+    const matched = users.filter((user) => {
+      if (letter && nameLetter(user.name) !== letter) return false;
+      if (!needle) return true;
+      const role = t(user.isAdmin ? "roles.admin" : "roles.user").toLowerCase();
+      const teams = user.teams
+        .map((team) => {
+          const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
+          return [team.name, sport ? sportLabel(sport, lang, fallbackLang) : ""].filter(Boolean).join(" ");
         })
-      : users;
+        .join(" ");
+      const origin = originLabel(user.originIp, user.originCountry, lang);
+      return [user.name, user.email, user.phone, origin, user.originIp, role, teams].join(" ").toLowerCase().includes(needle);
+    });
     return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
-  }, [fallbackLang, lang, query, sports, t, users]);
+  }, [fallbackLang, lang, letter, query, sports, t, users]);
 
   return (
     <div>
@@ -66,6 +69,8 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
         />
       </label>
 
+      <LetterFilter value={letter} names={users.map((user) => user.name)} onChange={setLetter} />
+
       <div className="overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
@@ -82,7 +87,7 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-muted">
-                    {query.trim() ? t("admin.users.noMatch") : t("admin.users.empty")}
+                    {query.trim() || letter ? t("admin.users.noMatch") : t("admin.users.empty")}
                   </td>
                 </tr>
               ) : (

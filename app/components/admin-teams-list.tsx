@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ContentImage } from "@/app/components/content-image";
+import { LetterFilter } from "@/app/components/letter-filter";
 import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
@@ -15,6 +16,7 @@ import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
 import type { MessageKey } from "@/app/lib/messages";
 import { adminTeamHref } from "@/app/lib/dashboard-path";
+import { nameLetter } from "@/app/lib/name-letter";
 import { queueTeamSwitch } from "@/app/lib/pending-team-switch";
 import { sportLabel, type Sport } from "@/app/lib/sports";
 
@@ -24,6 +26,7 @@ const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.finance]: "frontend_modules.finance",
   [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
   [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
+  [FRONTEND_MODULE_KEYS.pond]: "frontend_modules.pond",
 };
 
 export function AdminTeamsList({
@@ -55,6 +58,7 @@ export function AdminTeamsList({
   const router = useRouter();
   const { showFeedback } = useFeedbackToast();
   const [query, setQuery] = useState("");
+  const [letter, setLetter] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [savedName, setSavedName] = useState("");
@@ -194,13 +198,14 @@ export function AdminTeamsList({
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return teams;
     return teams.filter((team) => {
+      if (letter && nameLetter(team.name) !== letter) return false;
+      if (!needle) return true;
       const sport = team.sportId ? sports.find((item) => item.id === team.sportId) : null;
       const label = sport ? sportLabel(sport, lang, fallbackLang) : "";
       return [team.name, label].join(" ").toLowerCase().includes(needle);
     });
-  }, [fallbackLang, lang, query, sports, teams]);
+  }, [fallbackLang, lang, letter, query, sports, teams]);
 
   return (
     <div>
@@ -218,6 +223,8 @@ export function AdminTeamsList({
           className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         />
       </label>
+
+      <LetterFilter value={letter} names={teams.map((team) => team.name)} onChange={setLetter} />
 
       {editingId ? (
         <form
@@ -264,7 +271,7 @@ export function AdminTeamsList({
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-muted">
-                    {query.trim() ? t("admin.teams.noMatch") : t("admin.teams.empty")}
+                    {query.trim() || letter ? t("admin.teams.noMatch") : t("admin.teams.empty")}
                   </td>
                 </tr>
               ) : (

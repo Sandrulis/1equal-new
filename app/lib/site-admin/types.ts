@@ -11,6 +11,7 @@ export type SiteBrand = {
   trainingVotingHours: number;
   gameVotingHours: number;
   contactEmail: string;
+  slogans: Record<string, string>;
 };
 
 export type SiteLanguage = {
@@ -19,6 +20,7 @@ export type SiteLanguage = {
   isActive: boolean;
   isDefault: boolean;
   sortOrder: number;
+  slogan: string;
 };
 
 export type SiteTranslationRow = {
@@ -97,7 +99,7 @@ export type PublicSentry = {
   environment: string;
 };
 
-export const EMAIL_KINDS = ["signup", "password_reset", "invite", "event"] as const;
+export const EMAIL_KINDS = ["signup", "password_reset", "invite", "event", "delete_confirm", "delete_started", "delete_done"] as const;
 
 export type EmailKind = (typeof EMAIL_KINDS)[number];
 

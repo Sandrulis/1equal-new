@@ -19,6 +19,18 @@ export type FinanceHold = {
   amount: number;
 };
 
+export type TrainingGuest = {
+  eventId: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string;
+  note: string;
+  date: string;
+  start: string;
+  venue: string;
+};
+
 export type IssuedTeam = {
   id?: string;
   name: string;
@@ -42,6 +54,7 @@ export type IssuedTeam = {
   reservations?: FinanceHold[];
   sportId?: string | null;
   moduleKeys?: string[];
+  guests?: TrainingGuest[];
   loaded?: boolean;
   rsvpSince?: string;
 };

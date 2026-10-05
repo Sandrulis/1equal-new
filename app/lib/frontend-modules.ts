@@ -4,6 +4,7 @@ export const FRONTEND_MODULE_KEYS = {
   finance: "module_finance",
   calendar: "module_calendar",
   entuziasti: "module_entuziasti",
+  pond: "module_pond",
 } as const;
 
 export const KNOWN_FRONTEND_MODULE_KEYS = Object.values(FRONTEND_MODULE_KEYS);

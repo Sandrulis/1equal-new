@@ -14,6 +14,9 @@ const KIND_LABEL: Record<EmailKind, MessageKey> = {
   password_reset: "admin.email.kind.password_reset",
   invite: "admin.email.kind.invite",
   event: "admin.email.kind.event",
+  delete_confirm: "admin.email.kind.delete_confirm",
+  delete_started: "admin.email.kind.delete_started",
+  delete_done: "admin.email.kind.delete_done",
 };
 
 const PREVIEW_LINK = "https://example.com/join";
@@ -93,7 +96,8 @@ export function AdminEmailDesign({
         bodyText: body,
         buttonLabel: button,
         actionLink: params.link,
-        footerHint: translate(mailLang, "admin.email.footer"),
+        footerHint: translate(mailLang, kind.startsWith("delete_") ? "user.delete.mail_footer" : "admin.email.footer"),
+        tagline: language.slogan,
         language: mailLang,
         card,
         vote: kind === "event"
@@ -175,6 +179,7 @@ export function AdminEmailDesign({
             ))}
           </div>
           {kind === "event" ? <p className="text-sm leading-6 text-muted">{t("admin.email.event_note")}</p> : null}
+          {kind.startsWith("delete_") ? <p className="text-sm leading-6 text-muted">{t("admin.email.delete_note")}</p> : null}
           {active && language ? (
             <div className="space-y-4">
               <label className="block text-sm font-medium">
