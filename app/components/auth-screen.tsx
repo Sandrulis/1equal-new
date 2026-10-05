@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AuthNoticeModal } from "@/app/components/auth-notice-modal";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
 import { SiteFooter } from "@/app/components/site-footer";
@@ -21,6 +22,9 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
   const [googlePending, setGooglePending] = useState(false);
+  const [notice, setNotice] = useState<"signup" | "forgot" | null>(null);
+  const [noticeEmail, setNoticeEmail] = useState("");
+  const [remember, setRemember] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const turnstileRequired = Boolean(turnstileSiteKey);
@@ -57,8 +61,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     url.searchParams.set("from", mode === "signup" ? "signup" : "login");
     const next = safeTrainingPath(new URLSearchParams(window.location.search).get("next"));
     if (next) url.searchParams.set("next", next);
-    const remember = formRef.current?.elements.namedItem("remember");
-    if (remember instanceof HTMLInputElement && remember.checked) url.searchParams.set("remember", "1");
+    if (remember) url.searchParams.set("remember", "1");
     if (turnstileToken) url.searchParams.set("turnstile", turnstileToken);
     window.location.assign(url.href);
   }
@@ -79,11 +82,13 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
       return;
     }
     if ("confirm" in result) {
-      showFeedback({ message: t("auth.signup.confirm"), variant: "info" });
+      setNoticeEmail(String(formData.get("email") ?? "").trim());
+      setNotice("signup");
       return;
     }
     if ("sent" in result) {
-      showFeedback({ message: t("auth.forgot.sent"), variant: "success" });
+      setNoticeEmail(String(formData.get("email") ?? "").trim());
+      setNotice("forgot");
       return;
     }
     if ("needsMfa" in result && result.needsMfa) {
@@ -129,7 +134,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
               {mode === "login" ? (
                 <div className="flex items-center justify-between gap-3">
                   <label className="flex cursor-pointer items-center gap-2 text-sm font-normal">
-                    <input type="checkbox" name="remember" className="size-4 cursor-pointer accent-navy" />
+                    <input type="checkbox" name="remember" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="size-4 cursor-pointer accent-navy" />
                     {t("auth.login.remember")}
                   </label>
                   <Link href="/forgot-password" className="cursor-pointer text-sm text-train hover:underline">
@@ -162,20 +167,41 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                     <span className="text-xs font-medium uppercase tracking-wide text-muted">{t("auth.google.or")}</span>
                     <div className="h-px flex-1 bg-line" />
                   </div>
-                  <button
-                    type="button"
-                    disabled={pending || googlePending}
-                    onClick={startGoogle}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-paper px-4 py-2.5 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:opacity-60"
-                  >
-                    <GoogleIcon />
-                    {googlePending ? t("auth.google.signing_in") : t("auth.google.continue")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <label className="group relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-ice">
+                      <input
+                        type="checkbox"
+                        checked={remember}
+                        onChange={(event) => setRemember(event.target.checked)}
+                        aria-label={t("auth.login.remember")}
+                        className="size-4 cursor-pointer accent-navy"
+                      />
+                      <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-1 rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                        {t("auth.login.remember")}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={pending || googlePending}
+                      onClick={startGoogle}
+                      className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg bg-paper px-4 py-2.5 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:opacity-60"
+                    >
+                      <GoogleIcon />
+                      {googlePending ? t("auth.google.signing_in") : t("auth.google.continue")}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </form>
         </div>
       </main>
+      <AuthNoticeModal
+        open={notice !== null}
+        title={t(notice === "forgot" ? "auth.forgot.sent_modal.title" : "auth.signup.confirm_modal.title")}
+        description={t(notice === "forgot" ? "auth.forgot.sent_modal.description" : "auth.signup.confirm_modal.description")}
+        body={t(notice === "forgot" ? "auth.forgot.sent_modal.body" : "auth.signup.confirm_modal.body", { email: noticeEmail })}
+        onLeave={() => router.replace("/")}
+      />
       <SiteFooter />
     </div>
   );

@@ -14,7 +14,7 @@ export function AdminDialog({
   children,
   wide = false,
   closeButton = true,
-  blur = false,
+  blur = true,
   size,
 }: {
   open: boolean;

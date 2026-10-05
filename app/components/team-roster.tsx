@@ -254,12 +254,12 @@ export function TeamRoster({
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <TeamMark name={teamName} logoUrl={teamLogoUrl(logoUrl, entuziasti)} textClassName="text-lg" className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl" />
+      <div className="mb-5 flex flex-col gap-3 min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-between min-[600px]:gap-4">
+        <div className="flex min-w-0 items-center gap-3 min-[600px]:gap-4">
+          <TeamMark name={teamName} logoUrl={teamLogoUrl(logoUrl, entuziasti)} textClassName="text-lg" className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl min-[600px]:h-14 min-[600px]:w-14" />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-1">
-              <h1 className="truncate text-2xl font-semibold tracking-tight">{teamName}</h1>
+              <h1 className="truncate text-xl font-semibold tracking-tight min-[600px]:text-2xl">{teamName}</h1>
               {canAdjust && teamId ? (
                 <IconTipButton label={t("actions.edit")} tone="muted" onClick={() => setSettingsOpen(true)}>
                   <IconPencil />
@@ -278,7 +278,7 @@ export function TeamRoster({
           </div>
         </div>
         {finance ? (
-          <div className="flex shrink-0 items-start gap-2">
+          <div className="flex items-center justify-between gap-2 min-[600px]:shrink-0 min-[600px]:items-start min-[600px]:justify-end">
             <div className="text-right">
               <button type="button" onClick={() => setStatementOpen(true)} className="rounded-lg px-2 py-1 text-right hover:bg-paper">
                 <span className="block text-xs text-muted">{t("roster.balance.team")}</span>
@@ -394,8 +394,11 @@ export function TeamRoster({
                       onClick={() => openPlayer(member.id)}
                       className="cursor-pointer border-b border-line last:border-b-0 hover:bg-ice"
                     >
-                      <td className="w-full max-w-0 px-4 py-3">
+                      <td className="w-full max-w-0 px-3 py-3 min-[600px]:px-4">
                         <MemberIdentity member={member} leader={member.id === leaderId} />
+                        <div className="mt-2 empty:hidden min-[768px]:hidden">
+                          <MemberMark member={member} groups={groupList} row />
+                        </div>
                       </td>
                       <td className="hidden px-4 py-3 text-center whitespace-nowrap min-[768px]:table-cell">
                         <MemberMark member={member} groups={groupList} />
@@ -986,7 +989,7 @@ function MemberIdentity({ member, leader = false }: { member: Member; leader?: b
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
       )}
       <span className="min-w-0 leading-5">
-        <span className="flex min-w-0 items-center gap-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-1">
           <span className="truncate font-medium">{member.name}</span>
           {leader ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("team.leader")}</span> : null}
           {member.teamAdmin ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("roles.admin")}</span> : null}
@@ -1038,7 +1041,7 @@ function PositionChip({ code }: { code: string }) {
   );
 }
 
-function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
+function MemberMark({ member, groups, row = false }: { member: Member; groups: Subteam[]; row?: boolean }) {
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const marks = ids.map((id) => groups?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
@@ -1046,7 +1049,7 @@ function MemberMark({ member, groups }: { member: Member; groups: Subteam[] }) {
   const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
   if (!jersey && positions.length === 0 && marks.length === 0) return null;
   return (
-    <span className="inline-flex w-max flex-col items-center gap-1.5">
+    <span className={row ? "flex flex-wrap items-center gap-1.5" : "inline-flex w-max flex-col items-center gap-1.5"}>
       {jersey ? <span className="text-sm font-semibold tabular-nums">{jersey}</span> : null}
       {positions.length ? (
         <span className="inline-flex w-max flex-nowrap items-center justify-center gap-1">

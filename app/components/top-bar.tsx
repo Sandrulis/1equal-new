@@ -15,7 +15,6 @@ import type { BalanceHold } from "@/app/components/team-roster";
 import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
-import type { FeedbackKind } from "@/app/lib/feedback/actions";
 import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import type { Member } from "@/app/lib/demo-data";
 import { CURRENT_USER_ID } from "@/app/lib/demo-constants";
@@ -23,6 +22,8 @@ import { useFormatMoney } from "@/app/components/currency-provider";
 import type { CreateTeamInput } from "@/app/lib/team-defaults";
 import type { Sport } from "@/app/lib/sports";
 import { useLanguage } from "@/app/lib/language";
+import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
+import { useHeaderBottom, useNarrow, usePresence } from "@/app/lib/use-presence";
 
 const HoldDialog = dynamic(() => import("@/app/components/team-roster").then((mod) => mod.HoldDialog));
 
@@ -46,10 +47,10 @@ export function TopBar({
   settingsOpen = false,
   onSettingsOpenChange,
   onAccountChange,
-  onOpenFeedback,
-  onOpenContact,
   onOpenMenu,
+  menuOpen = false,
   onOpenAdmin,
+  adminOpen = false,
   balanceMember = null,
   reservedHolds = [],
   calendarIntegration = false,
@@ -68,10 +69,10 @@ export function TopBar({
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
   onAccountChange?: (account: AccountProfile) => void;
-  onOpenFeedback?: (kind: FeedbackKind) => void;
-  onOpenContact?: () => void;
   onOpenMenu?: () => void;
+  menuOpen?: boolean;
   onOpenAdmin?: () => void;
+  adminOpen?: boolean;
   balanceMember?: Member | null;
   reservedHolds?: BalanceHold[];
   calendarIntegration?: boolean;
@@ -110,11 +111,11 @@ export function TopBar({
   }
 
   return (
-    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 sm:px-6 lg:order-none lg:px-8">
+    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 max-[599px]:z-[60] sm:px-6 lg:order-none lg:px-8">
       <div className="flex min-w-0 items-center gap-2">
         {onOpenMenu ? (
-          <button type="button" aria-label={t("nav.sections")} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
-            <IconMenu />
+          <button type="button" aria-label={t("nav.sections")} aria-expanded={menuOpen} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
+            {menuOpen ? <IconClose /> : <IconMenu />}
           </button>
         ) : null}
         <TeamSwitcher
@@ -165,15 +166,13 @@ export function TopBar({
           onSaved={saveAccount}
           calendarIntegration={calendarIntegration}
           entuziasti={entuziasti}
-          onOpenFeedback={onOpenFeedback}
-          onOpenContact={onOpenContact}
         />
         <IconTipButton label={t("user.logout")} tone="game" onClick={() => void signOut()}>
           <IconLogout />
         </IconTipButton>
         {onOpenAdmin ? (
-          <button type="button" aria-label={t("nav.admin")} onClick={onOpenAdmin} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
-            <IconMenu />
+          <button type="button" aria-label={t("nav.admin")} aria-expanded={adminOpen} onClick={onOpenAdmin} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
+            {adminOpen ? <IconClose /> : <IconMenu />}
           </button>
         ) : null}
       </div>
@@ -194,8 +193,6 @@ function UserMenu({
   onSaved,
   calendarIntegration = false,
   entuziasti = true,
-  onOpenFeedback,
-  onOpenContact,
 }: {
   name: string;
   account: AccountProfile | null;
@@ -207,8 +204,6 @@ function UserMenu({
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) => void;
   calendarIntegration?: boolean;
   entuziasti?: boolean;
-  onOpenFeedback?: (kind: FeedbackKind) => void;
-  onOpenContact?: () => void;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -217,6 +212,10 @@ function UserMenu({
   const [noticesOpen, setNoticesOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow();
+  const sheet = usePresence(open && narrow);
+  const sheetTop = useHeaderBottom(sheet.mounted, rootRef);
+  useExclusiveMobileMenu("user", open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
@@ -234,13 +233,65 @@ function UserMenu({
     };
   }, [open]);
 
+  const menuItems = (
+    <div className="p-1.5">
+      <MenuItem
+        icon={<IconKey />}
+        label={t("user.password")}
+        onClick={() => {
+          setOpen(false);
+          if (account) setPasswordOpen(true);
+        }}
+      />
+      <MenuItem
+        icon={<IconSettings />}
+        label={t("user.settings")}
+        onClick={() => {
+          setOpen(false);
+          if (account) onSettingsOpenChange?.(true);
+        }}
+      />
+      <MenuItem
+        icon={<IconBell />}
+        label={t("user.notices")}
+        onClick={() => {
+          setOpen(false);
+          if (account) setNoticesOpen(true);
+        }}
+      />
+      <MenuItem
+        icon={<IconShield />}
+        label={t("user.twoFactor")}
+        onClick={() => {
+          setOpen(false);
+          if (account) setMfaOpen(true);
+        }}
+      />
+      {calendarIntegration ? (
+        <MenuItem
+          icon={<IconCalendarLink />}
+          label={t("frontend_modules.calendar")}
+          onClick={() => {
+            setOpen(false);
+            if (account) setCalendarOpen(true);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const next = !open;
+          if (next) claimMobileMenu("user");
+          else releaseMobileMenu("user");
+          setOpen(next);
+        }}
         className="inline-flex items-center gap-2 rounded-lg hover:bg-ice min-[600px]:py-1 min-[600px]:pr-2 min-[600px]:pl-1"
       >
         {photoUrl ? (
@@ -250,93 +301,22 @@ function UserMenu({
         )}
         <span className="hidden max-w-36 truncate text-sm font-medium min-[700px]:inline">{name}</span>
       </button>
-      {open ? (
+      {open && !narrow ? (
         <div role="menu" className="absolute right-0 z-40 mt-1 w-64 rounded-xl bg-paper ring-1 ring-line">
-          <p className="truncate px-4 py-2.5 text-sm font-medium min-[700px]:hidden">{name}</p>
-          <div className="border-b border-line min-[700px]:hidden" />
-          <div className="p-1.5">
-            <MenuItem
-              icon={<IconKey />}
-              label={t("user.password")}
-              onClick={() => {
-                setOpen(false);
-                if (account) setPasswordOpen(true);
-              }}
-            />
-            <MenuItem
-              icon={<IconSettings />}
-              label={t("user.settings")}
-              onClick={() => {
-                setOpen(false);
-                if (account) onSettingsOpenChange?.(true);
-              }}
-            />
-            <MenuItem
-              icon={<IconBell />}
-              label={t("user.notices")}
-              onClick={() => {
-                setOpen(false);
-                if (account) setNoticesOpen(true);
-              }}
-            />
-            <MenuItem
-              icon={<IconShield />}
-              label={t("user.twoFactor")}
-              onClick={() => {
-                setOpen(false);
-                if (account) setMfaOpen(true);
-              }}
-            />
-            {calendarIntegration ? (
-              <MenuItem
-                icon={<IconCalendarLink />}
-                label={t("frontend_modules.calendar")}
-                onClick={() => {
-                  setOpen(false);
-                  if (account) setCalendarOpen(true);
-                }}
-              />
-            ) : null}
-            {onOpenFeedback ? (
-              <div className="min-[600px]:hidden">
-                <MenuItem
-                  icon={<IconBug />}
-                  label={t("nav.report_bug")}
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenFeedback("bug");
-                  }}
-                />
-                <MenuItem
-                  icon={<IconBulb />}
-                  label={t("nav.suggestions")}
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenFeedback("suggestion");
-                  }}
-                />
-                <MenuItem
-                  icon={<IconComment />}
-                  label={t("nav.feedback")}
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenFeedback("feedback");
-                  }}
-                />
-                {onOpenContact ? (
-                  <MenuItem
-                    icon={<IconMail />}
-                    label={t("landing.nav.contact")}
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenContact();
-                    }}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+          {menuItems}
         </div>
+      ) : null}
+      {sheet.mounted ? (
+        <>
+          <button type="button" aria-label={t("event.close")} onClick={() => setOpen(false)} style={{ top: sheetTop }} className={`fixed inset-x-0 bottom-0 z-30 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${sheet.shown ? "opacity-100" : "pointer-events-none opacity-0"}`} />
+          <div style={{ top: sheetTop }} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 overflow-hidden">
+            <div role="menu" className={`pointer-events-auto bg-paper shadow-lg transition-transform duration-200 ${sheet.shown ? "translate-y-0" : "-translate-y-full"}`}>
+              <p className="truncate px-4 py-2.5 text-sm font-medium">{name}</p>
+              <div className="border-b border-line" />
+              {menuItems}
+            </div>
+          </div>
+        </>
       ) : null}
       {settingsOpen && account ? (
         <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
@@ -409,45 +389,18 @@ function IconShield() {
   );
 }
 
-function IconBug() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M8 8a4 4 0 1 1 8 0v2a4 4 0 0 1-8 0V8z" />
-      <path d="M12 14v6M5 10H3M21 10h-2M6 18l-2 2M18 18l2 2M7 7 5 5M17 7l2-2" />
-    </svg>
-  );
-}
-
-function IconBulb() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M9 18h6M10 21h4" />
-      <path d="M8 14a6 6 0 1 1 8 0c-.8.8-1.5 1.6-1.7 2.5h-4.6C9.5 15.6 8.8 14.8 8 14z" />
-    </svg>
-  );
-}
-
-function IconComment() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M5 6h14v10H8l-3 3V6z" />
-    </svg>
-  );
-}
-
-function IconMail() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 7l9 7 9-7" />
-    </svg>
-  );
-}
-
 function IconMenu() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
 }

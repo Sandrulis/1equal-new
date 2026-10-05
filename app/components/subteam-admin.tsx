@@ -11,6 +11,26 @@ import { deleteOwnedSubteam, saveOwnedSubteam } from "@/app/lib/team-actions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { Subteam } from "@/app/lib/demo-data";
 
+function randomSubteamColor() {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 0.68;
+  const lightness = 0.46;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const match = lightness - chroma / 2;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  if (hue < 60) [red, green, blue] = [chroma, x, 0];
+  else if (hue < 120) [red, green, blue] = [x, chroma, 0];
+  else if (hue < 180) [red, green, blue] = [0, chroma, x];
+  else if (hue < 240) [red, green, blue] = [0, x, chroma];
+  else if (hue < 300) [red, green, blue] = [x, 0, chroma];
+  else [red, green, blue] = [chroma, 0, x];
+  const channel = (value: number) => Math.round((value + match) * 255).toString(16).padStart(2, "0");
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
+}
+
 export function SubteamAdmin({
   teamId = null,
   subteams: ownedSubteams,
@@ -31,12 +51,12 @@ export function SubteamAdmin({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Subteam | null>(null);
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#0f6e82");
+  const [color, setColor] = useState(randomSubteamColor);
 
   function openNew() {
     setEditingId("new");
     setName("");
-    setColor("#0f6e82");
+    setColor(randomSubteamColor());
   }
 
   function openEdit(subteam: Subteam) {

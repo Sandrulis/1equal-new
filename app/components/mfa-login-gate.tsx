@@ -101,7 +101,7 @@ export function MfaLoginGate() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-50 p-4">
-      <div className="absolute inset-0 bg-zinc-900/40" aria-hidden />
+      <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm" aria-hidden />
       <div role="dialog" aria-modal="true" className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>

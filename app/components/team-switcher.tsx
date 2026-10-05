@@ -18,6 +18,7 @@ import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { useLanguage } from "@/app/lib/language";
+import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import type { MessageKey } from "@/app/lib/messages";
 import { readPlayerHintDismissed, subscribePlayerHint, writePlayerHintDismissed } from "@/app/lib/player-hint-cookie";
 
@@ -52,6 +53,7 @@ export function TeamSwitcher({
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  useExclusiveMobileMenu("team", open, () => setOpen(false));
   const [creating, setCreating] = useState(false);
   const [unwatchingId, setUnwatchingId] = useState<string | null>(null);
   const [wide, setWide] = useState(false);
@@ -68,7 +70,6 @@ export function TeamSwitcher({
     const query = window.matchMedia("(min-width: 600px)");
     function sync() {
       setWide(query.matches);
-      if (!query.matches) setOpen(false);
     }
     sync();
     query.addEventListener("change", sync);
@@ -103,19 +104,38 @@ export function TeamSwitcher({
 
   return (
     <div ref={rootRef} className="relative min-w-0">
-      <button
-        type="button"
-        aria-label={team.name}
-        aria-expanded={canSwitch && wide ? open : undefined}
-        aria-haspopup={canSwitch && wide ? "menu" : undefined}
-        onClick={activate}
-        className="flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"
-      >
-        <TeamMark name={team.name} logoUrl={logoOf(team)} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
-        <span className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{team.name}</span>
-      </button>
-      {open && canSwitch && wide ? (
-        <div role="menu" aria-label={t("team.switch.label")} className="absolute top-full left-0 z-40 mt-1 w-72 rounded-xl bg-paper p-1.5 ring-1 ring-line">
+      <div className="flex min-w-0 items-center">
+        <button
+          type="button"
+          aria-label={team.name}
+          aria-expanded={canSwitch && wide ? open : undefined}
+          aria-haspopup={canSwitch && wide ? "menu" : undefined}
+          onClick={activate}
+          className="flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"
+        >
+          <TeamMark name={team.name} logoUrl={logoOf(team)} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
+          <span className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{team.name}</span>
+        </button>
+        {canSwitch && !wide ? (
+          <button
+            type="button"
+            aria-label={t("team.switch.label")}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            onClick={() => {
+              const next = !open;
+              if (next) claimMobileMenu("team");
+              else releaseMobileMenu("team");
+              setOpen(next);
+            }}
+            className="grid h-9 w-8 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice"
+          >
+            <IconChevronDown open={open} />
+          </button>
+        ) : null}
+      </div>
+      {open && canSwitch ? (
+        <div role="menu" aria-label={t("team.switch.label")} className="absolute top-full left-0 z-40 mt-1 rounded-xl bg-paper p-1.5 ring-1 ring-line max-[599px]:fixed max-[599px]:inset-x-0 max-[599px]:top-14 max-[599px]:rounded-none min-[600px]:w-72">
           {teams.map((item) => (
             <div key={item.code} className={`flex items-center rounded-lg ${item.code === team.code ? "bg-ice" : ""}`}>
               <button
@@ -379,5 +399,13 @@ function CreateTeamDialog({
         </div>
       </AdminDialog>
     </>
+  );
+}
+
+function IconChevronDown({ open }: { open: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={open ? "rotate-180" : ""}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
   );
 }

@@ -160,7 +160,7 @@ function CookieSettings() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
-      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={closeSettings} />
+      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={closeSettings} />
       <div className="relative max-h-[calc(100%-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-paper p-6 ring-1 ring-line">
         <div className="flex items-start justify-between gap-4">
           <div>

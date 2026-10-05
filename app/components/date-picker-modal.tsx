@@ -40,7 +40,7 @@ export function DatePickerModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl bg-paper p-4 ring-1 ring-line">
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>

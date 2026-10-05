@@ -1,6 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { AuthNoticeModal } from "@/app/components/auth-notice-modal";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
 import { setNewPassword } from "@/app/lib/auth/actions";
@@ -8,6 +10,7 @@ import { useLanguage } from "@/app/lib/language";
 
 export function ResetPasswordForm() {
   const { t } = useLanguage();
+  const router = useRouter();
   const { showFeedback } = useFeedbackToast();
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
@@ -23,7 +26,6 @@ export function ResetPasswordForm() {
       return;
     }
     setDone(true);
-    showFeedback({ message: t("auth.forgot.done"), variant: "success" });
   }
 
   return (
@@ -38,6 +40,13 @@ export function ResetPasswordForm() {
       <button type="submit" disabled={pending || done} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:opacity-60">
         {t("auth.reset.submit")}
       </button>
+      <AuthNoticeModal
+        open={done}
+        title={t("auth.reset.done_modal.title")}
+        description={t("auth.reset.done_modal.description")}
+        body={t("auth.reset.done_modal.body")}
+        onLeave={() => router.replace("/")}
+      />
     </form>
   );
 }

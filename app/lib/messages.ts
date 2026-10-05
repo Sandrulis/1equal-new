@@ -890,6 +890,7 @@ export const messages = {
   "venues.none": { lv: "Šomēnes nav rezervāciju", en: "No bookings this month", ru: "В этом месяце броней нет" },
   "venues.hours": { lv: "{duration} šomēnes", en: "{duration} this month", ru: "{duration} в этом месяце" },
   "language.label": { lv: "Valoda", en: "Language", ru: "Язык" },
+  "lang.switching": { lv: "Ielādē valodu…", en: "Loading language…", ru: "Загрузка языка…" },
   "subteam.virsliga.name": { lv: "Virslīga", en: "First team", ru: "Основа" },
   "subteam.rezerve.name": { lv: "Rezerve", en: "Reserve", ru: "Резерв" },
   "subteam.u18.name": { lv: "U18", en: "U18", ru: "U18" },
@@ -1154,6 +1155,41 @@ export const messages = {
     en: "A confirmation link was sent to your email. You can log in after that.",
     ru: "Ссылка подтверждения отправлена на e-mail. После этого можно войти."
   },
+  "auth.signup.confirm_modal.title": { lv: "Reģistrācija izdevās", en: "Registration successful", ru: "Регистрация прошла успешно" },
+  "auth.signup.confirm_modal.description": {
+    lv: "Konts ir izveidots. Atlicis apstiprināt e-pastu.",
+    en: "Your account is created. Confirm your email next.",
+    ru: "Аккаунт создан. Осталось подтвердить e-mail."
+  },
+  "auth.signup.confirm_modal.body": {
+    lv: "Uz {email} nosūtīts apstiprinājuma e-pasts. Atver to un apstiprini adresi, lai varētu ienākt un lietot sistēmu.",
+    en: "A confirmation email was sent to {email}. Open it and confirm your address so you can sign in and keep using the system.",
+    ru: "На {email} отправлено письмо с подтверждением. Открой его и подтверди адрес, чтобы войти и пользоваться системой."
+  },
+  "auth.forgot.sent_modal.title": { lv: "Saite nosūtīta", en: "Link sent", ru: "Ссылка отправлена" },
+  "auth.forgot.sent_modal.description": {
+    lv: "Ja konts pastāv, paroles atjaunošanas saite ir ceļā.",
+    en: "If the account exists, a password reset link is on its way.",
+    ru: "Если аккаунт есть, ссылка для сброса пароля уже отправлена."
+  },
+  "auth.forgot.sent_modal.body": {
+    lv: "Pārbaudi {email}. Atver saiti un uzliec jaunu paroli. Ja vēstules nav, paskaties arī mēstuļu mapē.",
+    en: "Check {email}. Open the link and set a new password. If the message is missing, look in spam as well.",
+    ru: "Проверь {email}. Открой ссылку и задай новый пароль. Если письма нет, загляни и в спам."
+  },
+  "auth.reset.done_modal.title": { lv: "Parole ir nomainīta", en: "Password changed", ru: "Пароль изменён" },
+  "auth.reset.done_modal.description": {
+    lv: "Jaunā parole ir saglabāta.",
+    en: "The new password is saved.",
+    ru: "Новый пароль сохранён."
+  },
+  "auth.reset.done_modal.body": {
+    lv: "Tagad vari ienākt ar jauno paroli.",
+    en: "You can now log in with the new password.",
+    ru: "Теперь можно войти с новым паролем."
+  },
+  "auth.notice.redirect_in": { lv: "Pāriešana uz sākumu pēc {seconds} s.", en: "Going to the home page in {seconds} s.", ru: "Переход на главную через {seconds} с." },
+  "auth.notice.home": { lv: "Uz sākumu", en: "Home", ru: "На главную" },
   "auth.signup.done": { lv: "Konts ir izveidots.", en: "Account created.", ru: "Аккаунт создан." },
   "auth.login.done": { lv: "Ienāci.", en: "You are logged in.", ru: "Ты вошёл." },
   "auth.error.invalid": { lv: "Nepareizs e-pasts vai parole.", en: "Wrong email or password.", ru: "Неверный e-mail или пароль." },

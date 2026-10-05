@@ -37,6 +37,8 @@ import {
   weekdayHeaders,
 } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
+import { usePresence } from "@/app/lib/use-presence";
+import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import type { MessageKey } from "@/app/lib/messages";
 import type { Sport } from "@/app/lib/sports";
 import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
@@ -566,6 +568,11 @@ export function TeamDashboard({
       railQuery.removeEventListener("change", sync);
     };
   }, []);
+
+  useExclusiveMobileMenu("sidebar", menuOpen, () => setMenuOpen(false));
+  useExclusiveMobileMenu("admin", adminOpen, () => setAdminOpen(false));
+  const menuPresence = usePresence(menuOpen);
+  const adminPresence = usePresence(adminOpen);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1385,11 +1392,11 @@ export function TeamDashboard({
           setAddingEvent(true);
         }}
       />
-      {account && menuOpen ? (
-        <div className="fixed top-14 right-0 bottom-0 left-0 z-40 min-[600px]:hidden">
-          <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={() => setMenuOpen(false)} />
-          <aside className="absolute top-0 right-auto bottom-0 left-0 z-10 flex w-64 flex-col bg-navy text-white shadow-xl">
-            <nav aria-label={t("nav.help")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pt-3 pr-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+      {account && menuPresence.mounted ? (
+        <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] min-[600px]:hidden">
+          <button type="button" aria-label={t("event.close")} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${menuPresence.shown ? "opacity-100" : "opacity-0"}`} onClick={() => setMenuOpen(false)} />
+          <aside className={`absolute top-0 right-auto bottom-0 left-0 z-10 flex w-64 flex-col bg-navy text-white shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
+            <nav aria-label={t("nav.help")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pt-3 pr-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               <SideItem label={t("nav.report_bug")} icon={<IconBug />} row onClick={() => { setMenuOpen(false); setFeedbackKind("bug"); }} />
               <SideItem label={t("nav.suggestions")} icon={<IconBulb />} row onClick={() => { setMenuOpen(false); setFeedbackKind("suggestion"); }} />
               <SideItem label={t("nav.feedback")} icon={<IconComment />} row onClick={() => { setMenuOpen(false); setFeedbackKind("feedback"); }} />
@@ -1415,10 +1422,20 @@ export function TeamDashboard({
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
         onAccountChange={setProfile}
-        onOpenFeedback={account ? setFeedbackKind : undefined}
-        onOpenContact={account ? () => setContactOpen(true) : undefined}
-        onOpenMenu={account ? () => { setAdminOpen(false); setMenuOpen((value) => !value); } : undefined}
-        onOpenAdmin={account?.isAdmin ? () => { setMenuOpen(false); setAdminOpen((value) => !value); } : undefined}
+        menuOpen={menuOpen}
+        adminOpen={adminOpen}
+        onOpenMenu={account ? () => {
+          const next = !menuOpen;
+          if (next) claimMobileMenu("sidebar");
+          else releaseMobileMenu("sidebar");
+          setMenuOpen(next);
+        } : undefined}
+        onOpenAdmin={account?.isAdmin ? () => {
+          const next = !adminOpen;
+          if (next) claimMobileMenu("admin");
+          else releaseMobileMenu("admin");
+          setAdminOpen(next);
+        } : undefined}
         balanceMember={financeAllowed ? selfMember : null}
         reservedHolds={selfMember ? (memberHolds[selfMember.id] ?? []) : []}
         calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
@@ -2031,20 +2048,41 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
-      <div className="order-4 bg-paper max-[599px]:pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+      <div className="order-4 bg-paper max-[599px]:pb-[calc(5rem+env(safe-area-inset-bottom))]">
         <SiteFooter />
       </div>
       </div>
-      {account?.isAdmin && adminOpen ? (
-        <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className="fixed top-14 right-0 bottom-0 left-0 z-20 bg-ink/40 min-[600px]:hidden" />
+      {account?.isAdmin && adminPresence.mounted ? (
+        <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] min-[600px]:hidden">
+          <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${adminPresence.shown ? "opacity-100" : "opacity-0"}`} />
+          <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col bg-navy text-white shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
+            <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {ADMIN_NAV.map((item) => (
+                <SideItem
+                  key={item.section}
+                  label={t(item.label)}
+                  count={adminCounts[item.section]}
+                  icon={item.icon}
+                  active={route.view === "admin" && route.section === item.section}
+                  busy={pendingNav === `admin:${item.section}`}
+                  flush
+                  onClick={() => {
+                    setAdminOpen(false);
+                    showAdmin(item.section);
+                  }}
+                />
+              ))}
+            </nav>
+          </aside>
+        </div>
       ) : null}
       {account?.isAdmin ? (
         <div className="max-[599px]:contents min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-40 min-[600px]:h-screen min-[600px]:self-start min-[600px]:overflow-visible">
         <aside
           aria-label={t("nav.admin")}
-          className={`group/admin z-40 flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 max-[599px]:fixed max-[599px]:top-14 max-[599px]:right-0 max-[599px]:bottom-0 max-[599px]:h-auto max-[599px]:w-72 max-[599px]:shadow-xl min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60 ${adminOpen ? "max-[599px]:flex" : "max-[599px]:hidden"}`}
+          className="group/admin z-40 hidden flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60"
         >
-          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(6.5rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(1rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
             {ADMIN_NAV.map((item) => (
               <SideItem
                 key={item.section}
@@ -2161,6 +2199,7 @@ function MobileDock({
   const shellRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  useExclusiveMobileMenu("more", moreOpen, () => setMoreOpen(false));
   const [inlineExtras, setInlineExtras] = useState(false);
   const hasExtras = canManage && (showGuests || showSubteams || showVenues);
   const moreActive = !inlineExtras && (view === "guests" || view === "subteams" || view === "venues");
@@ -2203,7 +2242,7 @@ function MobileDock({
 
   return (
     <>
-    <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 flex items-end justify-center gap-3 px-4 min-[600px]:hidden">
+    <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-end justify-center gap-3 px-4 min-[600px]:hidden">
       {hasExtras ? (
         <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex h-14 gap-1.5 p-[7px]">
           <DockItem label={homeLabel} icon={<IconCalendar />} onClick={() => undefined} />
@@ -2241,7 +2280,12 @@ function MobileDock({
         <DockItem label={teamLabel} icon={<IconUsers />} active={view === "team"} busy={teamBusy} onClick={() => pick(onTeam)} />
         {inlineExtras ? extraItems() : null}
         {hasExtras && !inlineExtras ? (
-          <DockItem label="..." ariaLabel={moreLabel} active={moreActive || moreOpen} onClick={() => setMoreOpen((open) => !open)} />
+          <DockItem label="..." ariaLabel={moreLabel} active={moreActive || moreOpen} onClick={() => {
+            const next = !moreOpen;
+            if (next) claimMobileMenu("more");
+            else releaseMobileMenu("more");
+            setMoreOpen(next);
+          }} />
         ) : null}
       </nav>
       {canAdd ? (

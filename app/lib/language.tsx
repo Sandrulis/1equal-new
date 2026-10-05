@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { saveUserLanguage } from "@/app/lib/auth/actions";
 import type { Lang, MessageKey } from "@/app/lib/messages";
 import { applyBrandName } from "@/app/lib/site-brand";
@@ -88,6 +89,7 @@ export function LanguageProvider({
   );
   const [packs, setPacks] = useState<Partial<Record<Lang, Record<string, string>>>>(() => ({ [initialLang]: initialPack }));
   const [extraOverrides, setExtraOverrides] = useState<PublicI18n["overrides"]>({});
+  const [reloading, setReloading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -111,13 +113,13 @@ export function LanguageProvider({
   }, [lang]);
 
   useEffect(() => {
-    if (syncedLanguage === lang) return;
+    if (reloading || syncedLanguage === lang) return;
     if (!document.cookie.split("; ").some((part) => part.includes("-auth-token"))) return;
     syncedLanguage = lang;
     void saveUserLanguage(lang).then((saved) => {
       if (!saved) syncedLanguage = "";
     });
-  }, [lang]);
+  }, [lang, reloading]);
 
   useEffect(() => {
     const code = builtinLang(lang, i18n.defaultCode);
@@ -132,6 +134,26 @@ export function LanguageProvider({
     };
   }, [i18n.defaultCode, lang, packs]);
 
+  useEffect(() => {
+    if (!reloading) return;
+    let active = true;
+    const code = builtinLang(lang, i18n.defaultCode);
+    void (async () => {
+      const pack = await loadPack(code);
+      if (!active) return;
+      setPacks((current) => (current[code] ? current : { ...current, [code]: pack }));
+      if (document.cookie.split("; ").some((part) => part.includes("-auth-token"))) {
+        syncedLanguage = lang;
+        const saved = await saveUserLanguage(lang);
+        if (!saved) syncedLanguage = "";
+      }
+      if (active) setReloading(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [i18n.defaultCode, lang, reloading]);
+
   const value = useMemo<LanguageValue>(() => {
     const formatLang = builtinLang(lang, i18n.defaultCode);
     const pack = packs[formatLang] ?? packs[initialLang] ?? initialPack;
@@ -140,9 +162,10 @@ export function LanguageProvider({
       formatLang,
       languages: i18n.languages,
       setLang(next) {
-        if (!i18n.languages.some((language) => language.code === next)) return;
+        if (!i18n.languages.some((language) => language.code === next) || next === lang) return;
         window.localStorage.setItem(STORAGE_KEY, next);
         document.documentElement.lang = next;
+        setReloading(true);
         emitStoredLang();
       },
       t(key, params) {
@@ -155,7 +178,26 @@ export function LanguageProvider({
     };
   }, [brandName, extraOverrides, i18n.defaultCode, i18n.languages, i18n.overrides, initialLang, initialPack, lang, packs]);
 
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>
+      {children}
+      <LanguageReload open={reloading} />
+    </LanguageContext.Provider>
+  );
+}
+
+function LanguageReload({ open }: { open: boolean }) {
+  const { t } = useLanguage();
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm" role="alertdialog" aria-busy="true" aria-live="assertive" aria-label={t("lang.switching")}>
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper px-8 py-6 ring-1 ring-line">
+        <span className="size-8 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
+        <p className="text-sm font-medium">{t("lang.switching")}</p>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 export function useLanguage(): LanguageValue {

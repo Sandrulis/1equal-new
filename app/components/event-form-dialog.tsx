@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { DatePickerModal } from "@/app/components/date-picker-modal";
 import type { EventType, Subteam, TeamEvent, Venue } from "@/app/lib/demo-data";
-import { useCurrencySymbol } from "@/app/components/currency-provider";
+import { useCurrencySymbol, useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 
@@ -48,6 +48,17 @@ export function EventFormDialog({
   const { t } = useLanguage();
   const { formatDate, formatTime, display } = useDisplayFormat();
   const currency = useCurrencySymbol();
+  const formatMoney = useFormatMoney();
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 599px)");
+    function sync() {
+      setNarrow(query.matches);
+    }
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
   const initialClock = clockParts(event?.start ?? "");
   const [dateIso, setDateIso] = useState(event?.date || initialDate || "");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -185,7 +196,7 @@ export function EventFormDialog({
                 <option value="">{t("event.add.place")}</option>
                 {venues.map((venue) => (
                   <option key={venue.id} value={venue.id}>
-                    {venue.name}
+                    {narrow ? `${venue.name} (${formatMoney(venue.pricePerHour)})` : venue.name}
                   </option>
                 ))}
               </select>
@@ -264,7 +275,7 @@ function EventTimePicker({
   const { t } = useLanguage();
   const panelRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef(onCancel);
-  const [place, setPlace] = useState<{ top: number; left: number } | null>(null);
+  const [place, setPlace] = useState<{ top: number; left: number } | "center" | null>(null);
   useEffect(() => {
     cancelRef.current = onCancel;
   });
@@ -272,6 +283,10 @@ function EventTimePicker({
 
   useLayoutEffect(() => {
     function placePanel() {
+      if (window.innerWidth < 600) {
+        setPlace("center");
+        return;
+      }
       const anchor = anchorRef.current;
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
@@ -341,8 +356,12 @@ function EventTimePicker({
 
   if (!place) return null;
 
+  const centered = place === "center";
+
   return (
-    <div ref={panelRef} style={{ top: place.top, left: place.left }} className="fixed z-[90] w-fit rounded-2xl bg-paper p-3 shadow-lg ring-1 ring-line">
+    <>
+    {centered ? <button type="button" aria-label={t("event.close")} className="fixed inset-0 z-[90] bg-ink/40 backdrop-blur-sm" onClick={onCancel} /> : null}
+    <div ref={panelRef} style={centered ? undefined : { top: place.top, left: place.left }} className={`fixed z-[91] w-fit rounded-2xl bg-paper p-3 shadow-lg ring-1 ring-line ${centered ? "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" : ""}`}>
       <p className="text-center text-sm font-medium">{t("event.add.time")}</p>
       <div className="relative mt-1">
         <div className="pointer-events-none absolute inset-x-1 top-1/2 z-10 h-9 -translate-y-1/2 rounded-xl ring-1 ring-line" />
@@ -364,6 +383,7 @@ function EventTimePicker({
         </button>
       </div>
     </div>
+    </>
   );
 }
 

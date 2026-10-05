@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.34
+
+- Mobilajā kreisā un labā izvēlne ieslīd no malas, un valodu un lietotāja izvēlne iznāk zem augšējās joslas. Vienlaikus paliek atvērta tikai viena
+- Pēc reģistrācijas, paroles saites un jaunās paroles rādās paziņojums, kas pēc 10 sekundēm aizved uz sākumu
+- Google sesija paliek 30 dienas tikai tad, ja atzīmēts Atcerēties mani
+
 ## v0.1.33
 
 - Viesu saite un saraksts rādās tikai tad, ja ir vismaz viens viesis. Laukumus var meklēt pēc nosaukuma

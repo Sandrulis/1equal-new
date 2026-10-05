@@ -46,7 +46,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
       <form onSubmit={(event) => void onSubmit(event)} className="relative w-full max-w-lg rounded-2xl bg-paper p-6 ring-1 ring-line">
         <div className="flex items-start justify-between gap-4">
           <div>
