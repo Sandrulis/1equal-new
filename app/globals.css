@@ -102,6 +102,23 @@ button.list-drag-handle:active {
   cursor: grabbing;
 }
 
+@keyframes position-gap-in {
+  from { transform: translateY(-50%) scaleX(0.35); }
+  to { transform: translateY(-50%) scaleX(1); }
+}
+
+.position-gap-line {
+  transform: translateY(-50%);
+  transform-origin: center;
+  animation: position-gap-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .position-gap-line {
+    animation: none;
+  }
+}
+
 .lineup-drag {
   cursor: grab;
   user-select: none;

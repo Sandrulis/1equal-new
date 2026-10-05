@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.1
+
+- Velkot pozīciju, spraugā parādās līnija un kaimiņu rindas atvirzās
+
 ## v0.2.0
 
 - Jauna pozīcija atveras savā logā. Kļūda un saglabāšana rādās kā paziņojums

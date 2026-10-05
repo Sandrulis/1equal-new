@@ -32,10 +32,11 @@ export function AdminSportPositions({
   const [deleteTarget, setDeleteTarget] = useState<SportPosition | null>(null);
   const [positions, setPositions] = useState(sport.positions);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [gap, setGap] = useState<number | null>(null);
+  const [lineTop, setLineTop] = useState<number | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dragId = useRef<string | null>(null);
-  const overRef = useRef<string | null>(null);
+  const gapRef = useRef<number | null>(null);
   const pendingOrder = useRef<string | null>(null);
   const saveQueue = useRef(Promise.resolve());
   const formOpen = creating || editing !== null;
@@ -74,21 +75,38 @@ export function AdminSportPositions({
     }
   }
 
-  function pointOver(clientY: number) {
-    const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-position-id]") ?? [];
-    for (const row of rows) {
-      const box = row.getBoundingClientRect();
-      if (clientY >= box.top && clientY <= box.bottom) return row.dataset.positionId ?? null;
+  function gapAt(clientY: number) {
+    const list = listRef.current;
+    if (!list) return null;
+    const rows = [...list.querySelectorAll<HTMLElement>("[data-position-id]")];
+    if (rows.length === 0) return null;
+    const listTop = list.getBoundingClientRect().top;
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const top = row.offsetTop;
+      const mid = listTop + top + row.offsetHeight / 2;
+      if (clientY < mid) return { index, top };
     }
-    return null;
+    const last = rows[rows.length - 1];
+    return { index: rows.length, top: last.offsetTop + last.offsetHeight };
   }
 
-  function movePosition(fromId: string, toId: string) {
-    if (fromId === toId || pending || formOpen) return;
+  function trackGap(clientY: number) {
+    const next = gapAt(clientY);
+    if (!next || next.index === gapRef.current) return;
+    const list = listRef.current;
+    const limit = list ? Math.max(list.clientHeight - 2, 0) : next.top;
+    gapRef.current = next.index;
+    setGap(next.index);
+    setLineTop(Math.min(Math.max(next.top, 1), limit));
+  }
+
+  function moveToGap(fromId: string, insertAt: number) {
+    if (pending || formOpen) return;
     setPositions((current) => {
       const from = current.findIndex((position) => position.id === fromId);
-      const to = current.findIndex((position) => position.id === toId);
-      if (from < 0 || to < 0) return current;
+      const to = insertAt > from ? insertAt - 1 : insertAt;
+      if (from < 0 || to < 0 || to === from || to >= current.length) return current;
       const next = [...current];
       const [item] = next.splice(from, 1);
       next.splice(to, 0, item);
@@ -110,14 +128,19 @@ export function AdminSportPositions({
     });
   }
 
+  function clearDrag() {
+    dragId.current = null;
+    gapRef.current = null;
+    setDraggingId(null);
+    setGap(null);
+    setLineTop(null);
+  }
+
   function finishDrag() {
     const fromId = dragId.current;
-    const toId = overRef.current;
-    dragId.current = null;
-    overRef.current = null;
-    setDraggingId(null);
-    setOverId(null);
-    if (fromId && toId) movePosition(fromId, toId);
+    const insertAt = gapRef.current;
+    clearDrag();
+    if (fromId && insertAt !== null) moveToGap(fromId, insertAt);
   }
 
   return (
@@ -137,12 +160,26 @@ export function AdminSportPositions({
           {positions.length === 0 ? (
             <p className="rounded-xl bg-ice px-3 py-4 text-sm text-muted">{t("sports.positions.empty")}</p>
           ) : (
-            <ul ref={listRef} className="divide-y divide-line overflow-hidden rounded-xl ring-1 ring-line">
-              {positions.map((position) => {
+            <ul ref={listRef} className="relative overflow-hidden rounded-xl ring-1 ring-line">
+              {draggingId !== null && lineTop !== null ? (
+                <span
+                  aria-hidden="true"
+                  className="position-gap-line pointer-events-none absolute right-3 left-3 z-10 h-0.5 rounded-full bg-navy motion-safe:transition-[top] motion-safe:duration-200 motion-safe:ease-out"
+                  style={{ top: lineTop }}
+                />
+              ) : null}
+              {positions.map((position, index) => {
                 const name = position.names[lang]?.trim() || position.names[fallback]?.trim() || "";
                 const dragging = draggingId === position.id;
+                const fromIndex = draggingId ? positions.findIndex((item) => item.id === draggingId) : -1;
+                const nudge = rowNudge(index, fromIndex, gap);
                 return (
-                  <li key={position.id} data-position-id={position.id} className={`flex items-center gap-2 px-2 py-2 ${dragging ? "opacity-50" : ""} ${overId === position.id && draggingId && draggingId !== position.id ? "bg-ice" : ""}`}>
+                  <li
+                    key={position.id}
+                    data-position-id={position.id}
+                    className={`relative flex items-center gap-2 border-b border-line px-2 py-2 last:border-b-0 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out ${dragging ? "opacity-40" : ""}`}
+                    style={nudge ? { transform: `translateY(${nudge}px)` } : undefined}
+                  >
                     <button
                       type="button"
                       className="list-drag-handle grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted"
@@ -152,27 +189,19 @@ export function AdminSportPositions({
                         if (pending || formOpen || event.button !== 0) return;
                         event.preventDefault();
                         dragId.current = position.id;
-                        overRef.current = position.id;
                         setDraggingId(position.id);
-                        setOverId(position.id);
                         event.currentTarget.setPointerCapture(event.pointerId);
+                        trackGap(event.clientY);
                       }}
                       onPointerMove={(event) => {
                         if (dragId.current !== position.id) return;
-                        const next = pointOver(event.clientY);
-                        if (!next || next === overRef.current) return;
-                        overRef.current = next;
-                        setOverId(next);
+                        trackGap(event.clientY);
                       }}
                       onPointerUp={() => {
                         if (dragId.current === position.id) finishDrag();
                       }}
                       onPointerCancel={() => {
-                        if (dragId.current !== position.id) return;
-                        dragId.current = null;
-                        overRef.current = null;
-                        setDraggingId(null);
-                        setOverId(null);
+                        if (dragId.current === position.id) clearDrag();
                       }}
                     >
                       <GripIcon />
@@ -242,6 +271,13 @@ export function AdminSportPositions({
       </AdminDialog>
     </>
   );
+}
+
+function rowNudge(index: number, fromIndex: number, gap: number | null): number {
+  if (gap === null || fromIndex < 0 || index === fromIndex) return 0;
+  if (gap <= fromIndex && index >= gap && index < fromIndex) return 8;
+  if (gap > fromIndex + 1 && index > fromIndex && index < gap) return -8;
+  return 0;
 }
 
 function GripIcon() {
