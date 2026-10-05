@@ -7,7 +7,9 @@ import { ContentImage } from "@/app/components/content-image";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { useLanguage } from "@/app/lib/language";
 import { landingSlug, scrollToLandingSection, type LandingSection } from "@/app/lib/landing-sections";
+import { localeFromPathname, publicPath } from "@/app/lib/seo-slugs";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
+import { displayBrandName } from "@/app/lib/site-brand";
 import { signOut } from "@/app/lib/auth/actions";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -23,7 +25,9 @@ export function SiteHeader({ account = null }: { account?: { name: string; email
   const { t, formatLang } = useLanguage();
   const brand = useSiteBrand();
   const pathname = usePathname();
-  const onHome = pathname === "/";
+  const locale = localeFromPathname(pathname);
+  const homePath = publicPath(locale ?? formatLang, "/");
+  const onHome = pathname === homePath;
 
   function openSection(event: MouseEvent<HTMLAnchorElement>, slug: string) {
     if (!onHome) return;
@@ -39,7 +43,7 @@ export function SiteHeader({ account = null }: { account?: { name: string; email
         <div className="flex min-w-0 items-center gap-8">
           <Link href="/" className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-lg font-semibold tracking-tight">
             {brand.logoUrl ? <ContentImage src={brand.logoUrl} className="h-8 w-auto" /> : null}
-            {brand.name}
+            {displayBrandName(brand.name)}
           </Link>
           <nav aria-label={t("nav.sections")} className="hidden items-center gap-6 text-sm text-muted md:flex">
             {NAV.map((item) => {
@@ -47,7 +51,7 @@ export function SiteHeader({ account = null }: { account?: { name: string; email
               return (
                 <a
                   key={item.section}
-                  href={onHome ? `#${slug}` : `/#${slug}`}
+                  href={onHome ? `#${slug}` : `${homePath}#${slug}`}
                   onClick={(event) => openSection(event, slug)}
                   className="cursor-pointer hover:text-ink"
                 >

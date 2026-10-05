@@ -1,10 +1,10 @@
 # Drošība
 
-Pārbaudīts atkārtoti 2026-10-03, 1equal-new, pēc MFA un izcelsmes IP labojuma. Nav penetrācijas testa pret produkciju.
+Pārbaudīts atkārtoti 2026-10-06, 1equal-new, pret kodu. Nav penetrācijas testa pret produkciju.
 
 **Atzīme šobrīd: 9/10**
 
-Rīta pārbaudē bija 8.5/10, jo divu faktoru sesija aptvēra tikai paneļa lapu un izcelsmes IP ņēma pirmo `x-forwarded-for`. Abi ir salaboti. Atzīme nav 10 to pašu iemeslu dēļ, kas bija 27.09.
+03.10. bija 9/10, jo divu faktoru sesija aptver datu ceļus un izcelsmes IP vairs nenāk no klienta `x-forwarded-for`. 06.10. pārbaude to apstiprina. Jaunais apmeklētības ceļš neatdod skaitļus parastam spēlētājam. Atzīme nav 10 to pašu iemeslu dēļ, kas bija 27.09.
 
 ## Kas šajā kārtā salabots
 
@@ -32,7 +32,8 @@ Ja nav ne Vercel, ne Cloudflare galvenes, adrese netiek saglabāta.
 
 ## Kas pārbaudīts un turas
 
-- `GET /api/teams/[teamId]`, `history`, `ledger`, `lineup` un `GET /api/admin/console` iet caur `getAccountProfile()`. Bez sesijas vai bez pabeigta otrā faktora profils ir tukšs un atbilde ir 401. Sveša komanda ir 403. Vēsture ir visvairāk 62 dienas. Admina konsole prasa `is_admin`.
+- `GET /api/teams/[teamId]`, `history`, `ledger`, `lineup`, `attendance` un `GET /api/admin/console` iet caur `getAccountProfile()`. Bez sesijas vai bez pabeigta otrā faktora profils ir tukšs un atbilde ir 401. Sveša komanda ir 403. Vēsture ir visvairāk 62 dienas. Admina konsole prasa `is_admin`.
+- Apmeklētība (`GET /api/teams/[teamId]/attendance`) papildus prasa komandas vadītāju, komandas administratoru vai sistēmas administratoru, un ieslēgtu moduli. Pārējiem atbilde ir tukša, bez skaitļiem. Admina lietotāju saraksts ar apmeklētību nāk tikai no admina konsoles.
 - `member_balance_totals` ir tikai `service_role`. Izcelsmes tabulas pārlūkam ir liegtas. IP panelī nonāk tikai admina lasījumā.
 - Komandas administrators pats sev karogu nevar uzlikt. Sastāvu, bilanci un dzēšanu raksta vadītājs vai komandas administrators.
 - Aizmirstā parole sūta saiti. Callback `next` ir tikai `/reset-password`. E-pasta balss ir POST ar SHA-256 un derīguma termiņu.

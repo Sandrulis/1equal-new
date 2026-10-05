@@ -8,6 +8,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { requestAccountDeletion, saveUserAvatar, signOut, updateProfile } from "@/app/lib/auth/actions";
 import { isEmailAddress } from "@/app/lib/email/email-address";
+import { emphasize } from "@/app/lib/emphasize";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { ContentImage } from "@/app/components/content-image";
@@ -108,9 +109,11 @@ export function AccountSettingsDialog({
 
   async function onDelete(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (deletePending || deletePassword.length === 0) return;
+    if (deletePending) return;
+    if (account.hasPassword && deletePassword.length === 0) return;
+    const form = event.currentTarget;
     setDeletePending(true);
-    const result = await requestAccountDeletion(new FormData(event.currentTarget));
+    const result = await requestAccountDeletion(new FormData(form));
     if ("error" in result) {
       setDeletePending(false);
       showFeedback({ message: t(result.error), variant: "error" });
@@ -148,7 +151,7 @@ export function AccountSettingsDialog({
           <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" onChange={setFirstName} />
           <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" onChange={setLastName} />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-2 items-start gap-3">
           <label className="grid gap-1.5 text-sm font-medium">
             {t("common.email")}
             <input
@@ -238,13 +241,14 @@ export function AccountSettingsDialog({
                   </label>
                 </>
               ) : (
-                <p className="text-sm text-muted">{t("user.delete.email_lead", { email: account.email })}</p>
+                <p className="text-sm text-muted">{emphasize(t("user.delete.email_lead", { email: account.email }), account.email)}</p>
               )}
               <div className="flex justify-end gap-2">
                 <button type="button" disabled={deletePending} onClick={() => { setDeleteArmed(false); setDeletePassword(""); }} className="rounded-lg bg-paper px-4 py-2.5 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:opacity-60">
                   {t("actions.cancel")}
                 </button>
-                <button type="submit" disabled={deletePending || (account.hasPassword && deletePassword.length === 0)} className="rounded-lg bg-game px-4 py-2.5 text-sm font-medium text-white hover:bg-game/90 disabled:opacity-60">
+                <button type="submit" disabled={deletePending || (account.hasPassword && deletePassword.length === 0)} className="inline-flex items-center gap-2 rounded-lg bg-game px-4 py-2.5 text-sm font-medium text-white hover:bg-game/90 disabled:opacity-60">
+                  {deletePending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
                   {account.hasPassword ? t("user.delete.confirm") : t("user.delete.email_button")}
                 </button>
               </div>

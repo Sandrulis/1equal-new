@@ -1,3 +1,4 @@
+import type { AttendanceStats } from "@/app/lib/attendance-stats";
 import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { CURRENT_USER_ID, TEAM_NAME } from "@/app/lib/demo-constants";
 import { DEMO_EHL } from "@/app/lib/demo-ehl";
@@ -50,6 +51,7 @@ export type Member = {
   originIp?: string;
   originCountry?: string;
   ehl?: EhlPlayerProfile | null;
+  attendance?: AttendanceStats;
 };
 
 export type TeamEvent = {

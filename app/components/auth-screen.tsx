@@ -34,7 +34,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     const params = new URLSearchParams(window.location.search);
     const error = params.get("error");
     const notice = params.get("notice");
-    if (error === "google") showFeedback({ message: t("auth.google.failed"), variant: "error" });
+    if (error === "confirm") showFeedback({ message: t("auth.confirm.failed"), variant: "error" });
     if (error === "maintenance") showFeedback({ message: t("auth.error.maintenance"), variant: "error" });
     if (error === "deleted") showFeedback({ message: t("user.delete.gone"), variant: "error" });
     if (error === "delete_link") showFeedback({ message: t("user.delete.link_invalid"), variant: "error" });
@@ -200,6 +200,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
         title={t(notice === "forgot" ? "auth.forgot.sent_modal.title" : "auth.signup.confirm_modal.title")}
         description={t(notice === "forgot" ? "auth.forgot.sent_modal.description" : "auth.signup.confirm_modal.description")}
         body={t(notice === "forgot" ? "auth.forgot.sent_modal.body" : "auth.signup.confirm_modal.body", { email: noticeEmail })}
+        highlight={noticeEmail}
         onLeave={() => router.replace("/")}
       />
       <SiteFooter />

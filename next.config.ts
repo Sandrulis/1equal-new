@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { canonicalHostRedirectRules, robotsNoIndexHeaderSources } from "./app/lib/seo";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 
@@ -15,7 +16,7 @@ if (process.env.NODE_ENV === "production") {
     local = true;
   }
   if (local) {
-    console.warn("NEXT_PUBLIC_SITE_URL is missing, local, or not https. Production metadata uses https://1equal.com.");
+    console.error("NEXT_PUBLIC_SITE_URL is missing, local, or not https. Production metadata uses https://1equal.com.");
   }
 }
 
@@ -47,7 +48,21 @@ const nextConfig: NextConfig = {
             : []),
         ],
       },
+      {
+        source: "/llms.txt",
+        headers: [
+          { key: "Content-Type", value: "text/markdown; charset=utf-8" },
+          { key: "Cache-Control", value: "public, max-age=86400" },
+        ],
+      },
+      ...robotsNoIndexHeaderSources().map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      })),
     ];
+  },
+  async redirects() {
+    return canonicalHostRedirectRules();
   },
 };
 

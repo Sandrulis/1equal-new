@@ -2,8 +2,10 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter } from "next/navigation";
 import { saveUserLanguage } from "@/app/lib/auth/actions";
 import type { Lang, MessageKey } from "@/app/lib/messages";
+import { isPublicLocale, localeFromPathname, swapLocalePath } from "@/app/lib/seo-slugs";
 import { applyBrandName } from "@/app/lib/site-brand";
 import type { PublicI18n } from "@/app/lib/site-admin/types";
 
@@ -82,10 +84,13 @@ export function LanguageProvider({
   initialLang: Lang;
   initialPack: Record<string, string>;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const urlLang = localeFromPathname(pathname);
   const lang = useSyncExternalStore(
     subscribeStoredLang,
-    () => readStoredLang(i18n.languages, i18n.defaultCode),
-    () => i18n.defaultCode,
+    () => urlLang ?? readStoredLang(i18n.languages, i18n.defaultCode),
+    () => urlLang ?? i18n.defaultCode,
   );
   const [packs, setPacks] = useState<Partial<Record<Lang, Record<string, string>>>>(() => ({ [initialLang]: initialPack }));
   const [extraOverrides, setExtraOverrides] = useState<PublicI18n["overrides"]>({});
@@ -110,7 +115,13 @@ export function LanguageProvider({
 
   useEffect(() => {
     document.documentElement.lang = lang;
-  }, [lang]);
+    if (!urlLang) return;
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) !== urlLang) window.localStorage.setItem(STORAGE_KEY, urlLang);
+    } catch {
+      return;
+    }
+  }, [lang, urlLang]);
 
   useEffect(() => {
     if (reloading || syncedLanguage === lang) return;
@@ -164,6 +175,17 @@ export function LanguageProvider({
       setLang(next) {
         if (!i18n.languages.some((language) => language.code === next) || next === lang) return;
         window.localStorage.setItem(STORAGE_KEY, next);
+        if (urlLang && isPublicLocale(next)) {
+          const target = swapLocalePath(pathname, next);
+          if (target && target !== pathname) {
+            const code = builtinLang(next, i18n.defaultCode);
+            void loadPack(code).then((pack) => {
+              setPacks((current) => ({ ...current, [code]: pack }));
+              router.push(target);
+            });
+            return;
+          }
+        }
         document.documentElement.lang = next;
         setReloading(true);
         emitStoredLang();
@@ -176,7 +198,7 @@ export function LanguageProvider({
         return applyBrandName(value, brandName);
       },
     };
-  }, [brandName, extraOverrides, i18n.defaultCode, i18n.languages, i18n.overrides, initialLang, initialPack, lang, packs]);
+  }, [brandName, extraOverrides, i18n.defaultCode, i18n.languages, i18n.overrides, initialLang, initialPack, lang, packs, pathname, router, urlLang]);
 
   return (
     <LanguageContext.Provider value={value}>

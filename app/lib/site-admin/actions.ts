@@ -1,6 +1,7 @@
 "use server";
 
 import { writeAudit } from "@/app/lib/security/audit";
+import { removeAvatar } from "@/app/lib/avatar-storage";
 import { refreshSitePublic } from "@/app/lib/cache-tags";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { BUILTIN_NAV_KEYS, MODULE_KEY_PATTERN, normalizeModuleKey, type FrontendModule } from "@/app/lib/frontend-modules";
@@ -707,4 +708,29 @@ export async function deleteSport(id: string): Promise<{ ok: true; sports: Sport
   if (removed.error) return { ok: false, error: sportWriteError(removed.error) };
   refresh();
   return { ok: true, sports: await listSports() };
+}
+
+export async function deleteSystemUser(userId: string): Promise<ActionResult> {
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return { ok: false, error: "auth.error.generic" };
+  const account = await getAccountProfile();
+  if (!account?.isAdmin) return { ok: false, error: "admin.error.forbidden" };
+  if (userId === account.id) return { ok: false, error: "admin.users.delete.self" };
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+
+  const target = await gate.client.from("users").select("id, is_admin").eq("id", userId).maybeSingle();
+  if (target.error || !target.data) return { ok: false, error: "auth.error.generic" };
+  if (target.data.is_admin === true) {
+    const admins = await gate.client.from("users").select("id", { count: "exact", head: true }).eq("is_admin", true);
+    if (admins.error) return { ok: false, error: "auth.error.generic" };
+    if ((admins.count ?? 0) <= 1) return { ok: false, error: "user.delete.last_admin" };
+  }
+
+  const released = await gate.client.rpc("release_user_for_deletion", { target: userId });
+  if (released.error) return { ok: false, error: "auth.error.generic" };
+  const removed = await gate.client.auth.admin.deleteUser(userId);
+  if (removed.error) return { ok: false, error: "auth.error.generic" };
+  await removeAvatar(`users/${userId}.jpg`);
+  await writeAudit("users.delete", "users", userId);
+  return { ok: true };
 }

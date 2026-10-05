@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { AdminDialog } from "@/app/components/admin-dialog";
+import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { InviteEmailFields, listedEmails } from "@/app/components/invite-email-fields";
 import { ContentImage } from "@/app/components/content-image";
 import { IconCheck, IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import type { Member, TeamEvent } from "@/app/lib/demo-data";
@@ -12,6 +15,7 @@ import { formatWeekday, hoursBetween } from "@/app/lib/format";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
+import { inviteTrainingGuests } from "@/app/lib/training-guests";
 
 export type Rsvp = "going" | "absent" | "pending";
 
@@ -100,6 +104,7 @@ export function EventDetails({
   onAllowGuests,
   onCopyGuestLink,
   onRemoveGuest,
+  teamId = null,
 }: {
   event: TeamEvent;
   members: Member[];
@@ -127,8 +132,11 @@ export function EventDetails({
   onAllowGuests?: (allowed: boolean) => void;
   onCopyGuestLink?: () => void;
   onRemoveGuest?: (userId: string) => void;
+  teamId?: string | null;
 }) {
   const { formatLang, t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
+  const [inviting, setInviting] = useState(false);
   const formatMoney = useFormatMoney();
   const { formatDate, formatTime } = useDisplayFormat();
   const fee = feeProp ?? eventPlayerFee(event.type);
@@ -200,10 +208,23 @@ export function EventDetails({
               {t("pond.link")}
             </button>
           ) : null}
+          {allowGuests ? (
+            <button type="button" disabled={guestBusy} onClick={() => setInviting(true)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:cursor-not-allowed disabled:opacity-40">
+              <IconMail />
+              {t("pond.invite")}
+            </button>
+          ) : null}
         </div>
       ) : guestHint ? (
         <p className="mx-4 mb-4 text-sm text-muted sm:mx-5">{t(guestHint === "team" ? "pond.need_team" : "pond.need_sport")}</p>
       ) : null}
+      <GuestInviteDialog
+        open={inviting}
+        teamId={teamId}
+        eventId={event.id}
+        onClose={() => setInviting(false)}
+        onDone={(count) => showFeedback({ message: t(count > 1 ? "pond.invite.saved.many" : "pond.invite.saved"), variant: "success" })}
+      />
       {teamReserved > 0 ? <p className="px-4 pb-1 text-sm text-muted sm:px-5">{t("finance.reserved.team", { amount: formatMoney(teamReserved) })}</p> : null}
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
@@ -230,7 +251,7 @@ export function EventDetails({
       <div className="border-t border-line px-4 py-4 sm:px-5">
         <h3 className="mb-3 text-sm font-semibold text-train">{t("event.attendance")}</h3>
         <div className="space-y-3">
-          {guests ? (
+          {guests && guests.length > 0 ? (
             <AttendanceGroup title={t("pond.guests")} count={guests.length} tone="pending" empty={t("pond.empty")}>
               {guests.map((guest) => (
                 <li key={guest.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
@@ -422,6 +443,79 @@ function IconGuestOff() {
       <path d="M3 20v-1a5 5 0 0 1 5-5h2" />
       <path d="M17 11l4 4M21 11l-4 4" />
     </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 7 9-7" />
+    </svg>
+  );
+}
+
+function GuestInviteDialog({
+  open,
+  teamId,
+  eventId,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  teamId: string | null;
+  eventId: string;
+  onClose: () => void;
+  onDone: (count: number) => void;
+}) {
+  const { t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
+  const [emails, setEmails] = useState<string[]>([""]);
+  const [pending, setPending] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setEmails([""]);
+      setPending(false);
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const values = listedEmails(emails);
+    if (!values.length || pending) return;
+    if (!teamId) {
+      onDone(values.length);
+      onClose();
+      return;
+    }
+    setPending(true);
+    const result = await inviteTrainingGuests({ teamId, eventId, emails: values });
+    setPending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    onDone(result.count);
+    onClose();
+  }
+
+  return (
+    <AdminDialog open={open} closeButton title={t("pond.invite.title")} lead={t("pond.invite.lead")} onClose={() => { if (!pending) onClose(); }}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-3">
+        <InviteEmailFields emails={emails} disabled={pending} onChange={setEmails} />
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" disabled={pending} onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="submit" disabled={pending} className="inline-flex items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+            {t("pond.invite")}
+          </button>
+        </div>
+      </form>
+    </AdminDialog>
   );
 }
 

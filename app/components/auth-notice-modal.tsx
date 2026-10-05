@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { emphasize } from "@/app/lib/emphasize";
 import { useLanguage } from "@/app/lib/language";
 
 const REDIRECT_SECONDS = 10;
@@ -11,12 +12,14 @@ export function AuthNoticeModal({
   title,
   description,
   body,
+  highlight = "",
   onLeave,
 }: {
   open: boolean;
   title: string;
   description: string;
   body: string;
+  highlight?: string;
   onLeave: () => void;
 }) {
   const { t } = useLanguage();
@@ -58,7 +61,7 @@ export function AuthNoticeModal({
 
   return (
     <AdminDialog open={open} title={title} lead={description} onClose={leave}>
-      <p className="text-sm leading-6 text-muted">{body}</p>
+      <p className="text-sm leading-6 text-muted">{emphasize(body, highlight)}</p>
       <p className="mt-4 text-sm text-muted">{t("auth.notice.redirect_in", { seconds })}</p>
       <div className="mt-6 flex justify-end">
         <button type="button" onClick={leave} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90">

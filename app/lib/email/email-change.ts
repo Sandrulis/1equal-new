@@ -5,6 +5,7 @@ import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { getSiteUrl } from "@/app/lib/site";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { createAdminClient } from "@/app/lib/supabase/admin";
+import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
@@ -13,16 +14,32 @@ export function hashEmailToken(token: string): string {
 }
 
 export async function emailTakenByOther(admin: Admin, email: string, userId: string): Promise<boolean | null> {
-  const listed = await admin.from("users").select("id").ilike("email", email.replaceAll("%", "\\%").replaceAll("_", "\\_")).neq("id", userId).limit(1);
+  const normalized = email.trim().toLowerCase();
+  const listed = await admin.from("users").select("id").ilike("email", normalized.replaceAll("%", "\\%").replaceAll("_", "\\_")).neq("id", userId).limit(1);
   if (listed.error) return null;
   if ((listed.data?.length ?? 0) > 0) return true;
 
-  const probe = await admin.auth.admin.generateLink({ type: "magiclink", email });
-  if (!probe.error && probe.data.user && probe.data.user.id !== userId) return true;
-  if (!probe.error) return false;
-  const text = probe.error.message.toLowerCase();
-  if (probe.error.code === "user_not_found" || text.includes("not found") || text.includes("user not found")) return false;
-  return null;
+  const authId = await authUserIdByEmail(normalized);
+  if (authId === "error") return null;
+  return authId !== null && authId !== userId;
+}
+
+async function authUserIdByEmail(email: string): Promise<string | null | "error"> {
+  const env = getSupabasePublicEnv();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!env || !key) return "error";
+  const url = new URL(`${env.url}/auth/v1/admin/users`);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("per_page", "50");
+  url.searchParams.set("filter", email);
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${key}`, apikey: key },
+    cache: "no-store",
+  });
+  if (!response.ok) return "error";
+  const body = (await response.json()) as { users?: { id?: string; email?: string | null }[] };
+  const match = (body.users ?? []).find((user) => user.email?.trim().toLowerCase() === email && user.id);
+  return match?.id ?? null;
 }
 
 export async function requestEmailChange(admin: Admin, userId: string, newEmail: string): Promise<boolean> {
@@ -40,7 +57,7 @@ export async function requestEmailChange(admin: Admin, userId: string, newEmail:
 }
 
 async function mailEmailChange(admin: Admin, email: string, actionLink: string): Promise<boolean> {
-  const integration = await admin.from("site_integrations").select("client_id, client_secret, is_configured, is_enabled").eq("integration_key", "resend").maybeSingle();
+  const integration = await admin.from("site_integrations").select("client_id, client_secret, configured_account_email, is_configured, is_enabled").eq("integration_key", "resend").maybeSingle();
   const fromEmail = integration.data?.client_id?.trim() ?? "";
   const apiKey = openIntegrationSecret(integration.data?.client_secret);
   if (!integration.data?.is_enabled || !integration.data.is_configured || !fromEmail || !apiKey) return false;
@@ -60,10 +77,11 @@ async function mailEmailChange(admin: Admin, email: string, actionLink: string):
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;
+  const replyTo = integration.data?.configured_account_email?.trim() || undefined;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: [email], subject: translate(lang, "auth.email_change.mail_subject"), html }),
+    body: JSON.stringify({ from, to: [email], subject: translate(lang, "auth.email_change.mail_subject"), html, reply_to: replyTo }),
   });
   return response.ok;
 }

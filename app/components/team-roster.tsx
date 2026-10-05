@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { BalanceHistory, BalanceRangeFields, useBalanceRange } from "@/app/components/balance-history";
+import { AttendanceLegend, AttendanceLines, AttendanceMark } from "@/app/components/attendance-lines";
 import { ContentImage } from "@/app/components/content-image";
 import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
@@ -13,7 +14,8 @@ import { TeamMark } from "@/app/components/team-mark";
 import type { Member, Subteam } from "@/app/lib/demo-data";
 import type { TeamLedgerLine } from "@/app/lib/invite-code";
 import { formatJersey } from "@/app/lib/format-jersey";
-import { adjustMemberBalance, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
+import { InviteEmailFields, listedEmails } from "@/app/components/invite-email-fields";
+import { adjustMemberBalance, inviteTeamPlayer, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useDisplayFormat } from "@/app/components/display-preferences";
@@ -92,6 +94,7 @@ export function TeamRoster({
   persistedEntries = [],
   teamHolds = [],
   memberHolds = {},
+  attendanceOn = false,
 }: {
   teamName: string;
   inviteCode: string;
@@ -120,6 +123,7 @@ export function TeamRoster({
   persistedEntries?: TeamEntry[];
   teamHolds?: BalanceHold[];
   memberHolds?: Record<string, BalanceHold[]>;
+  attendanceOn?: boolean;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -151,6 +155,7 @@ export function TeamRoster({
   const [appointing, setAppointing] = useState(false);
   const isLeader = Boolean(teamId && accountId && (asLeader || (leaderId && leaderId === accountId)));
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
+  const showAttendance = attendanceOn && (canAdjust || members.some((member) => member.attendance));
   const sportKeys = sportId ? (sports.find((item) => item.id === sportId)?.moduleKeys ?? null) : null;
   const entuziasti = entuziastiForSport(enabledModules, sportKeys);
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
@@ -267,7 +272,7 @@ export function TeamRoster({
               ) : null}
             </div>
             {entuziasti && sourceUrl ? (
-              <a href={sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block max-w-full truncate text-sm text-train">
+              <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block max-w-full truncate text-sm text-train">
                 {sourceUrl}
               </a>
             ) : null}
@@ -375,6 +380,12 @@ export function TeamRoster({
               <tr className="border-b border-line bg-ice text-xs tracking-wide text-muted uppercase">
                 <th className="px-4 py-3 font-medium">{t("roster.member")}</th>
                 <th className="hidden px-4 py-3 text-center font-medium min-[768px]:table-cell">{t("roster.details")}</th>
+                {showAttendance ? (
+                  <th className="px-4 py-3 font-medium" aria-describedby="attendance-legend">
+                    {t("roster.attendance")}
+                    <AttendanceMark />
+                  </th>
+                ) : null}
                 {finance ? <th className="px-4 py-3 font-medium">{t("roster.balance")}</th> : null}
                 <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("roster.joined")}</th>
                 <th className="px-4 py-3 font-medium">{t("roster.actions")}</th>
@@ -383,7 +394,7 @@ export function TeamRoster({
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={finance ? 5 : 4} className="px-4 py-8 text-muted">
+                  <td colSpan={4 + (finance ? 1 : 0) + (showAttendance ? 1 : 0)} className="px-4 py-8 text-muted">
                     {members.length === 0 && !query.trim() ? t("roster.none") : t("roster.empty")}
                   </td>
                 </tr>
@@ -403,6 +414,11 @@ export function TeamRoster({
                       <td className="hidden px-4 py-3 text-center whitespace-nowrap min-[768px]:table-cell">
                         <MemberMark member={member} groups={groupList} />
                       </td>
+                      {showAttendance ? (
+                        <td className="px-4 py-3">
+                          {member.attendance ? <AttendanceLines stats={member.attendance} /> : <span className="text-muted">—</span>}
+                        </td>
+                      ) : null}
                       {finance ? (
                         <td className="px-4 py-3 whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                           <MemberBalance
@@ -428,6 +444,7 @@ export function TeamRoster({
             </tbody>
           </table>
         </div>
+        {showAttendance ? <AttendanceLegend always /> : null}
       </div>
       {editing ? (
         <MemberEditDialog
@@ -443,7 +460,7 @@ export function TeamRoster({
           onClose={() => setEditing(null)}
           onSaved={(member, teamCode) => {
             const previous = members.find((item) => item.id === member.id);
-            const saved = previous ? { ...member, balance: previous.balance, ledger: previous.ledger } : member;
+            const saved = previous ? { ...member, balance: previous.balance, ledger: previous.ledger, attendance: previous.attendance } : member;
             setMembers((current) => current.map((item) => (item.id === saved.id ? saved : item)));
             if (teamCode) onMemberSaved?.(saved, teamCode);
           }}
@@ -464,8 +481,9 @@ export function TeamRoster({
       ) : null}
       <InvitePlayerDialog
         open={inviting}
+        teamId={teamId}
         onClose={() => setInviting(false)}
-        onDone={() => showFeedback({ message: t("roster.invite.saved"), variant: "success" })}
+        onDone={(count) => showFeedback({ message: t(count > 1 ? "roster.invite.saved.many" : "roster.invite.saved"), variant: "success" })}
       />
       {teamId ? (
         <TeamSettingsDialog
@@ -555,35 +573,52 @@ export function TeamRoster({
 
 const fieldClass = "mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring-line outline-none focus:ring-train";
 
-function InvitePlayerDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+function InvitePlayerDialog({ open, teamId, onClose, onDone }: { open: boolean; teamId?: string | null; onClose: () => void; onDone: (count: number) => void }) {
   const { t } = useLanguage();
-  const [email, setEmail] = useState("");
+  const { showFeedback } = useFeedbackToast();
+  const [emails, setEmails] = useState<string[]>([""]);
+  const [pending, setPending] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setEmail("");
+    if (open) {
+      setEmails([""]);
+      setPending(false);
+    }
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!email.trim()) return;
-    setEmail("");
-    onDone();
+    const values = listedEmails(emails);
+    if (!values.length || pending) return;
+    if (!teamId) {
+      setEmails([""]);
+      onDone(values.length);
+      onClose();
+      return;
+    }
+    setPending(true);
+    const result = await inviteTeamPlayer(teamId, values);
+    setPending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    setEmails([""]);
+    onDone(result.count);
     onClose();
   }
 
   return (
-    <AdminDialog open={open} closeButton title={t("roster.invite.title")} lead={t("roster.invite.lead")} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <label className="block text-sm">
-          <span className="text-muted">{t("common.email")}</span>
-          <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" className={fieldClass} />
-        </label>
+    <AdminDialog open={open} closeButton title={t("roster.invite.title")} lead={t("roster.invite.lead")} onClose={() => { if (!pending) onClose(); }}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-3">
+        <InviteEmailFields emails={emails} disabled={pending} onChange={setEmails} />
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice">
+          <button type="button" disabled={pending} onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
             {t("actions.cancel")}
           </button>
-          <button type="submit" className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white">
+          <button type="submit" disabled={pending} className="inline-flex items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
             {t("roster.invite")}
           </button>
         </div>

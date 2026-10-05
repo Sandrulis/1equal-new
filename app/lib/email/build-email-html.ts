@@ -27,6 +27,42 @@ function paragraphsToHtml(value: string): string {
     .join("");
 }
 
+function initials(name: string): string {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return letters || "?";
+}
+
+function safeImageUrl(value: string | null | undefined): string | null {
+  const raw = value?.trim() ?? "";
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function markCell(name: string, imageUrl: string | null | undefined, fit: "cover" | "contain", size = 40): string {
+  const image = safeImageUrl(imageUrl);
+  const radius = size >= 64 ? 16 : 10;
+  if (image) {
+    return `<img src="${escapeHtml(image)}" alt="" width="${size}" height="${size}" style="display:block;width:${size}px;height:${size}px;border:0;border-radius:${radius}px;object-fit:${fit};background-color:#ffffff;" />`;
+  }
+  return `<div style="width:${size}px;height:${size}px;border-radius:${radius}px;background-color:#102433;color:#ffffff;font-size:${size >= 64 ? 18 : 13}px;font-weight:700;line-height:${size}px;text-align:center;">${escapeHtml(initials(name))}</div>`;
+}
+
+function identityRow(label: string, name: string, imageUrl: string | null | undefined, fit: "cover" | "contain"): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="middle" width="40">${markCell(name, imageUrl, fit)}</td><td valign="middle" style="padding-left:10px;"><div style="font-size:11px;font-weight:700;color:#7a857f;text-transform:uppercase;letter-spacing:0.4px;">${escapeHtml(label)}</div><div style="margin-top:2px;font-size:15px;line-height:1.3;font-weight:700;color:${INK};">${escapeHtml(name)}</div></td></tr></table>`;
+}
+
 function brandMark(name: string): string {
   const match = /equal/i.exec(name);
   if (!match) return escapeHtml(name);
@@ -38,7 +74,7 @@ function brandMark(name: string): string {
 function actionButton(label: string, href: string, color: string): string {
   const safeHref = escapeHtml(href);
   const safeLabel = escapeHtml(label);
-  return `<a href="${safeHref}" class="email-button" target="_blank" style="display:inline-block;padding:15px 28px;background-color:${color};color:#ffffff;border-radius:9px;font-size:15px;font-weight:700;line-height:1;text-decoration:none;">${safeLabel}</a>`;
+  return `<a href="${safeHref}" class="email-button" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 28px;background-color:${color};color:#ffffff;border-radius:9px;font-size:15px;font-weight:700;line-height:1;text-decoration:none;">${safeLabel}</a>`;
 }
 
 export function buildEmailHtml(options: {
@@ -51,7 +87,14 @@ export function buildEmailHtml(options: {
   tagline?: string;
   language?: Lang;
   eyebrow?: string;
-  card?: { label: string; title: string; detail?: string };
+  card?: {
+    label: string;
+    title: string;
+    detail?: string;
+    imageUrl?: string | null;
+    imageFit?: "cover" | "contain";
+    aside?: { label: string; name: string; imageUrl?: string | null };
+  };
   vote?: {
     hint: string;
     goingLabel: string;
@@ -69,12 +112,20 @@ export function buildEmailHtml(options: {
     ? `<div style="margin-top:40px;margin-bottom:12px;font-size:13px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(options.eyebrow.trim())}</div>`
     : "";
   const titleMargin = eyebrow ? "0" : "40px 0 0";
-  const card = options.card?.title.trim()
-    ? `<div style="margin-top:28px;padding:20px;background-color:${PAGE};border-radius:12px;">
-        <div style="font-size:12px;font-weight:600;color:#7a857f;text-transform:uppercase;letter-spacing:0.4px;">${escapeHtml(options.card.label)}</div>
-        <div style="margin-top:6px;font-size:20px;line-height:1.3;font-weight:700;color:${INK};">${escapeHtml(options.card.title.trim())}</div>
-        ${options.card.detail?.trim() ? `<div style="margin-top:8px;font-size:14px;line-height:1.5;color:#68736d;">${escapeHtml(options.card.detail.trim()).replaceAll("\n", "<br />")}</div>` : ""}
-      </div>`
+  const cardTitle = options.card?.title.trim() ?? "";
+  const cardText = cardTitle
+    ? `<div style="font-size:12px;font-weight:600;color:#7a857f;text-transform:uppercase;letter-spacing:0.4px;">${escapeHtml(options.card?.label ?? "")}</div>
+        <div style="margin-top:6px;font-size:20px;line-height:1.3;font-weight:700;color:${INK};">${escapeHtml(cardTitle)}</div>
+        ${options.card?.detail?.trim() ? `<div style="margin-top:8px;font-size:14px;line-height:1.5;color:#68736d;">${escapeHtml(options.card.detail.trim()).replaceAll("\n", "<br />")}</div>` : ""}`
+    : "";
+  const cardImage = safeImageUrl(options.card?.imageUrl);
+  const cardBody = options.card?.aside && cardTitle
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="email-card-side" valign="middle" width="50%" style="padding-right:8px;">${identityRow(options.card.aside.label, options.card.aside.name, options.card.aside.imageUrl, "cover")}</td><td class="email-card-side" valign="middle" width="50%" style="padding-left:8px;">${identityRow(options.card.label, cardTitle, options.card.imageUrl, "contain")}</td></tr></table>`
+    : cardImage && cardText
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="bottom" width="72" style="width:72px;padding:0 14px 0 0;font-size:0;line-height:0;">${markCell(cardTitle, cardImage, options.card?.imageFit ?? "cover", 72)}</td><td valign="bottom">${cardText}</td></tr></table>`
+      : cardText;
+  const card = cardBody
+    ? `<div style="margin-top:28px;padding:${options.card?.aside ? "16px" : "20px"};background-color:${PAGE};border-radius:12px;">${cardBody}</div>`
     : "";
   const buttonHtml = options.buttonLabel.trim()
     ? `<div style="padding-top:28px;text-align:center;">${actionButton(options.buttonLabel.trim(), options.actionLink, GREEN)}</div>`
@@ -92,7 +143,7 @@ export function buildEmailHtml(options: {
   const fallbackHtml = showLink
     ? `<div style="margin-top:28px;padding-top:24px;border-top:1px solid #e8ece9;">
         <div style="font-size:12px;font-weight:700;color:#68736d;">${escapeHtml(translate(lang, "email.link.fallback"))}</div>
-        <a href="${escapeHtml(options.actionLink.trim())}" target="_blank" style="display:block;margin-top:8px;font-size:12px;line-height:1.5;color:${GREEN};word-break:break-all;text-decoration:underline;">${escapeHtml(options.actionLink.trim())}</a>
+        <a href="${escapeHtml(options.actionLink.trim())}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:8px;font-size:12px;line-height:1.5;color:${GREEN};word-break:break-all;text-decoration:underline;">${escapeHtml(options.actionLink.trim())}</a>
       </div>`
     : "";
   const note = options.footerHint.trim();
@@ -119,6 +170,7 @@ export function buildEmailHtml(options: {
       .email-footer { padding: 20px 24px 26px !important; }
       .email-title { font-size: 26px !important; }
       .email-button { display: block !important; }
+      .email-card-side { display: block !important; width: 100% !important; padding: 0 0 14px !important; }
     }
   </style>
 </head>

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { rigaDate } from "@/app/lib/balance-range";
 import { buildIcs, type CalendarFeedEvent } from "@/app/lib/calendar/ical";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { listEnabledFrontendModuleKeys, listFrontendModules } from "@/app/lib/site-admin/repository";
@@ -8,10 +9,6 @@ const TOKEN_PATTERN = /^[a-f0-9]{48}$/;
 
 export function isCalendarToken(value: string) {
   return TOKEN_PATTERN.test(value);
-}
-
-function todayInRiga() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Riga", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 export async function calendarFeedIcs(token: string): Promise<string | null> {
@@ -39,7 +36,7 @@ export async function calendarFeedIcs(token: string): Promise<string | null> {
 
   const [teams, events] = await Promise.all([
     admin.from("teams").select("id, name").in("id", teamIds),
-    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id").in("team_id", teamIds).gte("event_date", todayInRiga()).order("event_date").order("start_time"),
+    admin.from("team_events").select("id, team_id, event_date, start_time, event_type, venue_id").in("team_id", teamIds).gte("event_date", rigaDate()).order("event_date").order("start_time"),
   ]);
   const teamName = new Map((teams.data ?? []).map((row) => [row.id as string, String(row.name)]));
   const venueIds = [...new Set((events.data ?? []).map((row) => row.venue_id as string).filter(Boolean))];

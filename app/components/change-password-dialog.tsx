@@ -8,7 +8,7 @@ import { changePassword } from "@/app/lib/auth/actions";
 import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
-export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+export function ChangePasswordDialog({ hasPassword, onClose, onSaved }: { hasPassword: boolean; onClose: () => void; onSaved?: () => void }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const titleId = useId();
@@ -18,7 +18,8 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pending, setPending] = useState(false);
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
-  const canSave = !pending && currentPassword.length > 0 && password.length >= 8 && password === confirmPassword && password !== currentPassword;
+  const same = hasPassword && password.length > 0 && password === currentPassword;
+  const canSave = !pending && password.length >= 8 && password === confirmPassword && !same && (!hasPassword || currentPassword.length > 0);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -38,7 +39,8 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       showFeedback({ message: t(result.error), variant: "error" });
       return;
     }
-    showFeedback({ message: t("auth.forgot.done"), variant: "success" });
+    showFeedback({ message: t(hasPassword ? "auth.forgot.done" : "user.password.set_done"), variant: "success" });
+    onSaved?.();
     onClose();
   }
 
@@ -51,20 +53,20 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold tracking-tight">
-              {t("user.password")}
+              {t(hasPassword ? "user.password" : "user.password.set")}
             </h2>
-            <p className="mt-1 text-sm leading-6 text-muted">{t("user.password.lead")}</p>
+            <p className="mt-1 text-sm leading-6 text-muted">{t(hasPassword ? "user.password.lead" : "user.password.set_lead")}</p>
           </div>
           <button type="button" aria-label={t("event.close")} onClick={onClose} className="rounded-lg p-2 text-muted hover:bg-ice hover:text-ink">
             <CloseIcon />
           </button>
         </div>
         <div className="mt-6 grid gap-3">
-          <PasswordField label={t("user.password.current")} name="currentPassword" autoComplete="current-password" value={currentPassword} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setCurrentPassword} />
+          {hasPassword ? <PasswordField label={t("user.password.current")} name="currentPassword" autoComplete="current-password" value={currentPassword} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setCurrentPassword} /> : null}
           <PasswordField label={t("auth.forgot.password")} name="password" autoComplete="new-password" value={password} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setPassword} meter />
           <PasswordField label={t("user.password.confirm")} name="confirmPassword" autoComplete="new-password" value={confirmPassword} minLength={8} showLabel={t("auth.password.show")} hideLabel={t("auth.password.hide")} onChange={setConfirmPassword} meter />
           {mismatch ? <p className="text-sm text-game">{t("user.password.mismatch")}</p> : null}
-          {password.length > 0 && password === currentPassword ? <p className="text-sm text-game">{t("user.password.same")}</p> : null}
+          {same ? <p className="text-sm text-game">{t("user.password.same")}</p> : null}
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" disabled={pending} onClick={onClose} className="rounded-lg bg-paper px-4 py-2.5 text-sm font-medium ring-1 ring-line hover:bg-ice disabled:opacity-60">

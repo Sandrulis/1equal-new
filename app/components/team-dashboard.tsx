@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { ContentImage } from "@/app/components/content-image";
 import { CURRENT_USER_ID, TEAM_NAME } from "@/app/lib/demo-constants";
+import type { AttendanceStats } from "@/app/lib/attendance-stats";
 import type { EventType, Member, TeamEvent } from "@/app/lib/demo-data";
 import { teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
@@ -1214,6 +1215,28 @@ export function TeamDashboard({
   const rsvpFloor = ownedTeam?.rsvpSince && ownedTeam.rsvpSince > historySince() ? ownedTeam.rsvpSince : historySince();
   const historyNeeded = Boolean(historyKey && basePath !== "/demo" && historyFrom < rsvpFloor && !loadedHistory.includes(historyKey));
   const historyLoading = historyNeeded && historyMiss !== historyKey;
+  const attendanceTeamId = view === "team" && basePath !== "/demo" && ownedTeam?.id && !ownedTeam.demo && moduleOn(FRONTEND_MODULE_KEYS.playerEventStats) ? ownedTeam.id : "";
+  const attendanceReady = Boolean(attendanceTeamId && (ownedTeam?.members ?? []).some((member) => member.attendance));
+  useEffect(() => {
+    if (!attendanceTeamId || attendanceReady) return;
+    let active = true;
+    void fetch(`/api/teams/${attendanceTeamId}/attendance`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; attendance?: Record<string, AttendanceStats> | null }) : null))
+      .then((body) => {
+        if (!active || !body?.ok || !body.attendance) return;
+        const stats = body.attendance;
+        setOwnedTeam((current) => {
+          if (!current || current.id !== attendanceTeamId) return current;
+          return {
+            ...current,
+            members: (current.members ?? []).map((member) => ({ ...member, attendance: stats[member.id] ?? member.attendance })),
+          };
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [attendanceReady, attendanceTeamId]);
   useEffect(() => {
     if (!historyNeeded || !historyTeamId) return;
     let active = true;
@@ -1541,6 +1564,7 @@ export function TeamDashboard({
             sportId={activeTeam.demo ? null : (activeTeam.sportId ?? null)}
             sports={activeTeam.demo ? [] : sports}
             enabledModules={teamModules}
+            attendanceOn={moduleOn(FRONTEND_MODULE_KEYS.playerEventStats)}
             onTeamSaved={rememberTeam}
             initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.watching ? (activeTeam.members ?? []).filter((member) => member.id !== profile.id) : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
@@ -1631,7 +1655,15 @@ export function TeamDashboard({
                 <AdminSectionPending label={t("admin.loading")} />
               </>
             ) : null}
-            {route.section === "users" && admin?.usersLoaded ? <AdminUsersList users={admin.users} sports={sports} /> : null}
+            {route.section === "users" && admin?.usersLoaded ? (
+              <AdminUsersList
+                users={admin.users}
+                sports={sports}
+                accountId={account?.id ?? ""}
+                showAttendance={Boolean(admin.modules.find((module) => module.moduleKey === FRONTEND_MODULE_KEYS.playerEventStats)?.isEnabled)}
+                onDeleted={(userId) => setAdmin((current) => (current ? { ...current, users: current.users.filter((user) => user.id !== userId), userCount: Math.max(0, current.userCount - 1) } : current))}
+              />
+            ) : null}
             {route.section === "teams" && admin && !admin.membersLoaded ? (
               <>
                 <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL.teams)}</h1>
@@ -2008,6 +2040,7 @@ export function TeamDashboard({
             guestBusy={guestBusy}
             onAllowGuests={(allowed) => void setGuestsAllowed(allowed)}
             onCopyGuestLink={copyGuestLink}
+            teamId={ownedTeam?.id ?? null}
             onRemoveGuest={managesTeam ? (userId) => void removeGuest(userId) : undefined}
           />
         ) : null}

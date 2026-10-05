@@ -191,7 +191,7 @@ async function deleteScheduledAccount(admin: Admin, userId: string, email: strin
 async function sendAccountDeletionEmail(admin: Admin, userId: string, email: string, kind: "deactivated" | "deleted" | "confirm", dueIso?: string, actionLink?: string): Promise<MailResult> {
   const integration = await admin
     .from("site_integrations")
-    .select("client_id, client_secret, is_configured, is_enabled")
+    .select("client_id, client_secret, configured_account_email, is_configured, is_enabled")
     .eq("integration_key", "resend")
     .maybeSingle();
   const fromEmail = integration.data?.client_id?.trim() ?? "";
@@ -229,11 +229,12 @@ async function sendAccountDeletionEmail(admin: Admin, userId: string, email: str
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;
+  const replyTo = integration.data?.configured_account_email?.trim() || undefined;
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [email], subject, html }),
+      body: JSON.stringify({ from, to: [email], subject, html, reply_to: replyTo }),
     });
     return response.ok ? "sent" : "failed";
   } catch {

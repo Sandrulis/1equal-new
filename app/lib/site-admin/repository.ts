@@ -7,7 +7,8 @@ import { DEFAULT_SITE_NAME } from "@/app/lib/site-brand";
 import { currentPublicOrigin } from "@/app/lib/public-origin";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { displayPosition } from "@/app/lib/positions";
-import { BUILTIN_NAV_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
+import { BUILTIN_NAV_KEYS, FRONTEND_MODULE_KEYS, KNOWN_FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
+import { emptyAttendance, loadAttendanceByUser } from "@/app/lib/attendance-stats";
 import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminFeedbackItem, type AdminFeedbackKind, type AdminTodo, type EmailKind, type EmailTemplate, type IntegrationKey, type IntegrationStatus, type PublicI18n, type PublicSentry, type PublicUmami, type SiteBrand, type SiteLanguage, type SiteTranslationRow, type SystemSubteam, type SystemTeam, type SystemTeamMember, type SystemUser } from "@/app/lib/site-admin/types";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { listUserOrigins } from "@/app/lib/admin-origin";
@@ -159,10 +160,12 @@ const listMemberships = cache(async (): Promise<MembershipLink[]> => {
 export async function listSystemUsers(): Promise<SystemUser[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const [{ data, error }, links, languages] = await Promise.all([
+  const statsTeams = await playerEventStatsTeamIds();
+  const [{ data, error }, links, languages, attendance] = await Promise.all([
     admin.from("users").select("id, email, name, first_name, last_name, is_admin, created_at, last_seen_at, language_code"),
     listMemberships(),
-    admin.from("site_languages").select("code, name"),
+    listSiteLanguages(),
+    statsTeams ? loadAttendanceByUser(admin, statsTeams) : Promise.resolve(new Map()),
   ]);
   if (error || !data) return [];
   const teamsByUser = new Map<string, { id: string; name: string; sportId: string | null }[]>();
@@ -181,7 +184,7 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
     teamsByUser.set(link.user_id, list);
   }
   const origins = await listUserOrigins(data.map((row) => row.id));
-  const languageNames = new Map((languages.data ?? []).map((language) => [language.code, language.name]));
+  const languageNames = new Map(languages.map((language) => [language.code, language.name]));
   return data
     .map((row) => {
       const origin = origins.get(row.id);
@@ -199,6 +202,7 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
         languageCode,
         languageName: languageNames.get(languageCode) ?? "",
         teams: (teamsByUser.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "lv")),
+        attendance: attendance.get(row.id) ?? emptyAttendance(),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "lv"));
@@ -240,13 +244,13 @@ export async function listSystemTeamMembers(): Promise<SystemTeamMember[]> {
   });
 }
 
-export async function listSystemTeams(): Promise<SystemTeam[]> {
+export const listSystemTeams = cache(async (): Promise<SystemTeam[]> => {
   const admin = createAdminClient();
   if (!admin) return [];
   const { data, error } = await admin.from("teams").select("id, name, sport_id, leader_id, updated_at").order("name");
   if (error || !data) return [];
   return data.map((row) => ({ id: row.id, name: row.name, sportId: row.sport_id, leaderId: row.leader_id, updatedAt: row.updated_at }));
-}
+});
 
 export async function listSystemSubteams(): Promise<SystemSubteam[]> {
   const admin = createAdminClient();
@@ -338,13 +342,13 @@ function mapModule(row: ModuleRow): FrontendModule {
   return { id: row.id, moduleKey: row.module_key, isEnabled: row.is_enabled, isIndividual: row.is_individual === true, sortOrder: row.sort_order };
 }
 
-export async function listFrontendModules(): Promise<FrontendModule[] | null> {
+export const listFrontendModules = cache(async (): Promise<FrontendModule[] | null> => {
   const admin = createAdminClient();
   if (!admin) return null;
   const { data, error } = await admin.from("site_frontend_modules").select("id, module_key, is_enabled, is_individual, sort_order").order("sort_order").order("module_key");
   if (error || !data) return null;
   return (data as ModuleRow[]).map(mapModule).filter((module) => !(BUILTIN_NAV_KEYS as readonly string[]).includes(module.moduleKey));
-}
+});
 
 export async function listEnabledFrontendModuleKeys(): Promise<string[]> {
   const modules = await listFrontendModules();
@@ -358,13 +362,39 @@ export async function listIndividualFrontendModuleKeys(): Promise<string[]> {
   return modules.filter((module) => module.isIndividual).map((module) => module.moduleKey);
 }
 
-export async function listTeamModuleLinks(): Promise<{ teamId: string; moduleKey: string }[]> {
+async function playerEventStatsTeamIds(): Promise<Set<string> | null> {
+  const modules = await listFrontendModules();
+  const found = modules?.find((item) => item.moduleKey === FRONTEND_MODULE_KEYS.playerEventStats);
+  if (!found?.isEnabled) return null;
+  const teams = await listSystemTeams();
+  if (found.isIndividual) {
+    const links = await listTeamModuleLinks();
+    return new Set(links.filter((link) => link.moduleKey === FRONTEND_MODULE_KEYS.playerEventStats).map((link) => link.teamId));
+  }
+  const sports = await listSportModuleLinks();
+  const sportIds = new Set(sports.filter((link) => link.moduleKey === FRONTEND_MODULE_KEYS.playerEventStats).map((link) => link.sportId));
+  const allowed = new Set<string>();
+  for (const team of teams) {
+    if (!team.sportId || sportIds.has(team.sportId)) allowed.add(team.id);
+  }
+  return allowed;
+}
+
+export const listTeamModuleLinks = cache(async (): Promise<{ teamId: string; moduleKey: string }[]> => {
   const admin = createAdminClient();
   if (!admin) return [];
   const { data, error } = await admin.from("team_modules").select("team_id, module_key");
   if (error || !data) return [];
   return (data as { team_id: string; module_key: string }[]).map((row) => ({ teamId: row.team_id, moduleKey: row.module_key }));
-}
+});
+
+export const listSportModuleLinks = cache(async (): Promise<{ sportId: string; moduleKey: string }[]> => {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data, error } = await admin.from("sport_modules").select("sport_id, module_key");
+  if (error || !data) return [];
+  return (data as { sport_id: string; module_key: string }[]).map((row) => ({ sportId: row.sport_id, moduleKey: row.module_key }));
+});
 
 export async function listEmailTemplates(): Promise<EmailTemplate[]> {
   const admin = createAdminClient();
@@ -517,11 +547,11 @@ export async function listSports(): Promise<Sport[]> {
   const [sports, names, links] = await Promise.all([
     admin.from("sports").select("id, icon, is_active, sort_order").order("sort_order").order("created_at"),
     admin.from("sport_names").select("sport_id, language_code, name"),
-    admin.from("sport_modules").select("sport_id, module_key"),
+    listSportModuleLinks(),
   ]);
   if (sports.error || !sports.data) return [];
   const nameRows = (names.data ?? []) as { sport_id: string; language_code: string; name: string }[];
-  const linkRows = (links.data ?? []) as { sport_id: string; module_key: string }[];
+  const linkRows = links;
   return (sports.data as { id: string; icon: string; is_active: boolean; sort_order: number }[]).map((row) => {
     const sportNames: Record<string, string> = {};
     for (const name of nameRows) {
@@ -534,7 +564,7 @@ export async function listSports(): Promise<Sport[]> {
       isActive: row.is_active === true,
       sortOrder: row.sort_order,
       names: sportNames,
-      moduleKeys: linkRows.filter((link) => link.sport_id === row.id).map((link) => link.module_key),
+      moduleKeys: linkRows.filter((link) => link.sportId === row.id).map((link) => link.moduleKey),
     };
   });
 }

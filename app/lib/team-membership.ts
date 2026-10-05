@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
-import { rigaDayEndExclusiveIso, rigaDayStartIso } from "@/app/lib/balance-range";
+import { rigaDayEndExclusiveIso, rigaDayStartIso, rigaStamp } from "@/app/lib/balance-range";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
 import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
@@ -166,20 +166,6 @@ export async function settleFinishedEvents(teamIds: string[]): Promise<void> {
   await admin.rpc("settle_finished_events", { team_ids: teamIds });
 }
 
-function rigaNowStamp(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Riga",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
-  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`;
-}
-
 function pickDetailTeamId(rows: { id: string }[], activeTeamId: string | null | undefined, watchOnly: Set<string>): string | null {
   if (activeTeamId && rows.some((row) => row.id === activeTeamId)) return activeTeamId;
   return rows.find((row) => !watchOnly.has(row.id))?.id ?? rows[0]?.id ?? null;
@@ -246,7 +232,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   if (teamIds.length === 0) return [];
   const memberIdSet = new Set(memberIds);
   const watchOnly = new Set(watchIds.filter((id) => !memberIdSet.has(id)));
-  const today = rigaNowStamp().slice(0, 10);
+  const today = rigaStamp().slice(0, 10);
   const since = historySince();
   const hinted = activeTeamId && teamIds.includes(activeTeamId) ? activeTeamId : null;
   const loadDetail = (id: string) => Promise.all([
@@ -269,7 +255,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   if (!detailId) return [];
   const [cron, members, groups, links, totals, places, events, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
   const financeReserve = cron.data?.enabled === true;
-  const nowStamp = rigaNowStamp();
+  const nowStamp = rigaStamp();
   const activeHolds = ((holds.data ?? []) as { team_id: string; event_id: string; user_id: string; amount: number | string; team_events: { event_date: string; start_time: string } | { event_date: string; start_time: string }[] | null }[]).filter((row) => {
     const event = one(row.team_events);
     if (!event) return false;
@@ -388,7 +374,17 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
           : {}),
       };
     })
-    .sort((left, right) => Number(Boolean(left.watching)) - Number(Boolean(right.watching)));
+    .sort((left, right) => Number(Boolean(left.watching)) - Number(Boolean(right.watching)))
+    .map((team) => {
+      if (!team.members) return team;
+      const privileged = userRow.data?.is_admin === true || team.leaderId === userId || team.members.some((member) => member.id === userId && member.teamAdmin);
+      if (privileged) return team;
+      return {
+        ...team,
+        members: team.members.map((member) => (member.id === userId ? member : { ...member, email: "", phone: "", originIp: "", originCountry: "" })),
+        guests: (team.guests ?? []).map((guest) => ({ ...guest, email: "", phone: "" })),
+      };
+    });
 }
 
 export async function listEventLineup(teamId: string, eventId: string): Promise<Pick<TeamEvent, "lineupSlots" | "lineupSides"> | null> {

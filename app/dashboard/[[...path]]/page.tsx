@@ -17,6 +17,9 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Panelis",
+  description: "Komandas panelis.",
+  openGraph: { title: "Panelis", description: "Komandas panelis." },
+  twitter: { title: "Panelis", description: "Komandas panelis." },
   robots: { index: false, follow: false },
 };
 

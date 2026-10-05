@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.1.37
+
+- Publiskās lapas ir latviešu saknē, ar `/en` un `/ru`, kanonisko adresi, hreflang un lapu karti
+- Sākumlapas teksts saka, ka citus sporta veidus var lietot, un pozīcijas paliek hokeja. Zīmols ir 1Equal
+- Parasts spēlētājs neredz citu e-pastu, tālruni un IP. Paneļa saites priekšskats vairs neņem sākumlapas aprakstu
+
+## v0.1.36
+
+- Spēlētāja apmeklētība rādās komandas vadītājam, komandas administratoram un admina lietotājiem, ja modulis ir ieslēgts
+- Skaitļi nāk tikai atverot komandas sarakstu. Kamēr tie nav atnākuši, šūnā ir «—»
+- Admina vaicājums ņem tikai komandas ar ieslēgtu moduli, un virsgrāmata pirmajā kadrā nenāk
+
+## v0.1.35
+
+- Komandas biedram un viesim aiziet uzaicinājuma e-pasts, vairākas adreses parādās pēc kārtas, un balsojums no e-pasta atver sākumlapu ar paldies logu
+- Notikuma izveidotājs e-pastu nesaņem, vietai vienmēr rādās cena, un tukšs viesu bloks nerādās
+- Sākumlapa piemin uzaicinājumus un balsošanu. Ir `llms.txt`, juridisko lapu schema.org un `noindex` galvene privātajiem ceļiem
+
 ## v0.1.34
 
 - Mobilajā kreisā un labā izvēlne ieslīd no malas, un valodu un lietotāja izvēlne iznāk zem augšējās joslas. Vienlaikus paliek atvērta tikai viena

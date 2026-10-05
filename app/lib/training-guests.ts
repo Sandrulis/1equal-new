@@ -5,11 +5,14 @@ import { refreshTeamData } from "@/app/lib/cache-tags";
 import { eventHasEnded } from "@/app/lib/event-voting";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { formatClock, formatDisplayDate, formatMoney } from "@/app/lib/format";
+import { isEmailAddress } from "@/app/lib/email/email-address";
+import { sendGuestInvite } from "@/app/lib/email/guest-mail";
 import type { MessageKey } from "@/app/lib/messages";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { requireUserAdmin } from "@/app/lib/team-membership";
+import { normalizeCurrency } from "@/app/lib/team-defaults";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 
 const ID = /^[0-9a-f-]{36}$/i;
@@ -257,4 +260,47 @@ export async function removeTrainingGuest(input: { teamId: string; eventId: stri
   if (removed.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
   return { ok: true };
+}
+
+export async function inviteTrainingGuests(input: { teamId: string; eventId: string; emails: string[] }): Promise<{ ok: true; count: number } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate || !ID.test(input.teamId) || !ID.test(input.eventId)) return { ok: false, error: "auth.error.generic" };
+  const emails = [...new Set(input.emails.map((item) => item.trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length || emails.length > 20 || emails.some((email) => !isEmailAddress(email))) return { ok: false, error: "roster.error.email" };
+  if (!(await canManage(input.teamId, gate.account.id, gate.account.isAdmin))) return { ok: false, error: "auth.error.generic" };
+  const event = await gate.client
+    .from("team_events")
+    .select("id, event_date, start_time, event_type, with_coach, allow_guests, venue_id")
+    .eq("id", input.eventId)
+    .eq("team_id", input.teamId)
+    .maybeSingle();
+  if (event.error || !event.data || event.data.event_type !== "training" || event.data.with_coach || !event.data.allow_guests) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("name, sport_id, currency").eq("id", input.teamId).maybeSingle();
+  if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+  const pond = await moduleEnabledForSport(gate.client, team.data.sport_id as string | null, FRONTEND_MODULE_KEYS.pond, input.teamId);
+  if (!pond) return { ok: false, error: "frontend_modules.disabled" };
+  const venue = event.data.venue_id
+    ? await gate.client.from("venues").select("name, price_per_hour").eq("id", event.data.venue_id).maybeSingle()
+    : { data: null };
+  const brand = await getSiteBrand();
+  const currency = normalizeCurrency(team.data.currency || brand.currency);
+  const price = Number(venue.data?.price_per_hour ?? 0);
+  const inviter = [gate.account.firstName, gate.account.lastName].map((part) => part.trim()).filter(Boolean).join(" ") || gate.account.email;
+  const mail = {
+    teamName: String(team.data.name ?? ""),
+    inviterName: inviter,
+    eventId: input.eventId,
+    date: formatDisplayDate(String(event.data.event_date).slice(0, 10), brand.display),
+    time: formatClock(String(event.data.start_time).slice(0, 5), brand.display.timeFormat),
+    venue: venue.data?.name?.trim() || "-",
+    price: formatMoney(Number.isFinite(price) ? price : 0, currency),
+  };
+  let sent = 0;
+  for (const email of emails) {
+    if (await rateLimit(`guest-invite:${input.eventId}:${email}`, 5, 15 * 60 * 1000)) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.error.rate" };
+    const ok = await sendGuestInvite({ admin: gate.client, email, ...mail });
+    if (!ok) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.email.unavailable" };
+    sent += 1;
+  }
+  return { ok: true, count: sent };
 }

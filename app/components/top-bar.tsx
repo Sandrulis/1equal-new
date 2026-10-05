@@ -105,7 +105,7 @@ export function TopBar({
   const [holdsOpen, setHoldsOpen] = useState(false);
   const reservedBalance = Math.round(reservedHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
 
-  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string }) {
+  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string; hasPassword?: boolean }) {
     setProfile((current) => (current ? { ...current, ...next } : current));
     if (profile) onAccountChange?.({ ...profile, ...next });
   }
@@ -201,7 +201,7 @@ function UserMenu({
   photoUrl: string | null;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean }) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; hasPassword?: boolean }) => void;
   calendarIntegration?: boolean;
   entuziasti?: boolean;
 }) {
@@ -237,7 +237,7 @@ function UserMenu({
     <div className="p-1.5">
       <MenuItem
         icon={<IconKey />}
-        label={t("user.password")}
+        label={t(account?.hasPassword === false ? "user.password.set" : "user.password")}
         onClick={() => {
           setOpen(false);
           if (account) setPasswordOpen(true);
@@ -321,7 +321,13 @@ function UserMenu({
       {settingsOpen && account ? (
         <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
       ) : null}
-      {passwordOpen && account ? <ChangePasswordDialog onClose={() => setPasswordOpen(false)} /> : null}
+      {passwordOpen && account ? (
+        <ChangePasswordDialog
+          hasPassword={account.hasPassword}
+          onClose={() => setPasswordOpen(false)}
+          onSaved={() => onSaved({ firstName: account.firstName, lastName: account.lastName, ehlPlayers: account.ehlPlayers, avatarUrl: account.avatarUrl, display: account.display, hasPassword: true })}
+        />
+      ) : null}
       {mfaOpen && account ? <MfaSettingsDialog onClose={() => setMfaOpen(false)} /> : null}
       {noticesOpen && account ? (
         <NotificationsDialog

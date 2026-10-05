@@ -5,6 +5,7 @@ export const FRONTEND_MODULE_KEYS = {
   calendar: "module_calendar",
   entuziasti: "module_entuziasti",
   pond: "module_pond",
+  playerEventStats: "module_player_event_stats",
 } as const;
 
 export const KNOWN_FRONTEND_MODULE_KEYS = Object.values(FRONTEND_MODULE_KEYS);

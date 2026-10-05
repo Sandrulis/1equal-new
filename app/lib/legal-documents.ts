@@ -17,12 +17,12 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
   privacy: {
     lv: {
       intro:
-        "Šajā politikā ir aprakstīts, kādus personas datus 1equal apstrādā, kad tu lieto sākumlapu, kontu un komandas paneli. Publiskais demo /demo ir paraugs un neveido tavu komandas uzskaiti.",
+        "Šajā politikā ir aprakstīts, kādus personas datus 1Equal apstrādā, kad tu lieto sākumlapu, kontu un komandas paneli. Publiskais demo /demo ir paraugs un neveido tavu komandas uzskaiti.",
       sections: [
         {
           heading: "Kas mēs esam",
           paragraphs: [
-            "1equal ir komandas vadības panelis: kalendārs, sastāvs, dalība un komandas izdevumi. Personas datu pārzinis ir šīs vietnes uzturētājs.",
+            "1Equal ir komandas vadības panelis: kalendārs, sastāvs, dalība un komandas izdevumi. Personas datu pārzinis ir šīs vietnes uzturētājs.",
             "Reģistrācijas numurs un pasta adrese šajā lapā nav publicēti. Saziņai izmanto sākumlapas formu Sazinies ar mums. Ja uzturētājs ir norādījis kontakta e-pastu, atbilde nāk no tā.",
           ],
         },
@@ -83,12 +83,12 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
     },
     en: {
       intro:
-        "This policy describes the personal data 1equal processes when you use the landing page, an account and the team panel. The public demo at /demo is a sample and is not your team's records.",
+        "This policy describes the personal data 1Equal processes when you use the landing page, an account and the team panel. The public demo at /demo is a sample and is not your team's records.",
       sections: [
         {
           heading: "Who we are",
           paragraphs: [
-            "1equal is a team panel: calendar, roster, attendance and team expenses. The controller of personal data is the operator of this website.",
+            "1Equal is a team panel: calendar, roster, attendance and team expenses. The controller of personal data is the operator of this website.",
             "A registration number and postal address are not published on this page. Use the contact form on the landing page. If the operator has set a contact email, the reply comes from that address.",
           ],
         },
@@ -149,12 +149,12 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
     },
     ru: {
       intro:
-        "В этой политике описано, какие персональные данные обрабатывает 1equal, когда ты пользуешься главной страницей, аккаунтом и панелью команды. Публичное демо /demo - образец и не является учётом твоей команды.",
+        "В этой политике описано, какие персональные данные обрабатывает 1Equal, когда ты пользуешься главной страницей, аккаунтом и панелью команды. Публичное демо /demo - образец и не является учётом твоей команды.",
       sections: [
         {
           heading: "Кто мы",
           paragraphs: [
-            "1equal - панель команды: календарь, состав, явка и расходы команды. Оператор персональных данных - тот, кто ведёт этот сайт.",
+            "1Equal - панель команды: календарь, состав, явка и расходы команды. Оператор персональных данных - тот, кто ведёт этот сайт.",
             "Регистрационный номер и почтовый адрес на этой странице не опубликованы. Для связи используй форму на главной странице. Если оператор указал контактный e-mail, ответ придёт с него.",
           ],
         },
@@ -216,7 +216,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
   },
   terms: {
     lv: {
-      intro: "Šie noteikumi attiecas uz 1equal izmantošanu: kontu, komandas kalendāru, sastāvu, dalību un komandas izdevumiem.",
+      intro: "Šie noteikumi attiecas uz 1Equal izmantošanu: kontu, komandas kalendāru, sastāvu, dalību un komandas izdevumiem.",
       sections: [
         {
           heading: "Pakalpojums",
@@ -265,7 +265,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
       ],
     },
     en: {
-      intro: "These terms cover use of 1equal: the account, team calendar, roster, attendance and team expenses.",
+      intro: "These terms cover use of 1Equal: the account, team calendar, roster, attendance and team expenses.",
       sections: [
         {
           heading: "The service",
@@ -308,7 +308,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
       ],
     },
     ru: {
-      intro: "Эти условия относятся к использованию 1equal: аккаунту, календарю команды, составу, явке и расходам команды.",
+      intro: "Эти условия относятся к использованию 1Equal: аккаунту, календарю команды, составу, явке и расходам команды.",
       sections: [
         {
           heading: "Сервис",
@@ -353,7 +353,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
   },
   cookies: {
     lv: {
-      intro: "Šeit ir aprakstīts, kādas sīkdatnes un līdzīgas tehnoloģijas 1equal izmanto un kā izvēli mainīt.",
+      intro: "Šeit ir aprakstīts, kādas sīkdatnes un līdzīgas tehnoloģijas 1Equal izmanto un kā izvēli mainīt.",
       sections: [
         {
           heading: "Kas ir sīkdatne",
@@ -417,7 +417,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
       ],
     },
     en: {
-      intro: "This page describes which cookies and similar technologies 1equal uses, and how to change the choice.",
+      intro: "This page describes which cookies and similar technologies 1Equal uses, and how to change the choice.",
       sections: [
         {
           heading: "What a cookie is",
@@ -479,7 +479,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
       ],
     },
     ru: {
-      intro: "Здесь описано, какие cookie и похожие технологии использует 1equal и как изменить выбор.",
+      intro: "Здесь описано, какие cookie и похожие технологии использует 1Equal и как изменить выбор.",
       sections: [
         {
           heading: "Что такое cookie",

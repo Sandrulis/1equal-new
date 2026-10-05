@@ -17,6 +17,7 @@ const MODULE_LABEL: Record<string, MessageKey> = {
   [FRONTEND_MODULE_KEYS.calendar]: "frontend_modules.calendar",
   [FRONTEND_MODULE_KEYS.entuziasti]: "frontend_modules.entuziasti",
   [FRONTEND_MODULE_KEYS.pond]: "frontend_modules.pond",
+  [FRONTEND_MODULE_KEYS.playerEventStats]: "frontend_modules.player_event_stats",
 };
 
 function sortModules(modules: FrontendModule[]): FrontendModule[] {

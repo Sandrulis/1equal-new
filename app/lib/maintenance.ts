@@ -4,7 +4,7 @@ export function isMaintenanceOpenPath(pathname: string): boolean {
   if (pathname === "/login" || pathname === "/maintenance") return true;
   if (pathname === "/auth/callback" || pathname === "/auth/google/sign-in") return true;
   if (pathname === "/auth/confirm-email" || pathname === "/auth/confirm-delete") return true;
-  if (pathname === "/robots.txt" || pathname === "/sitemap.xml") return true;
+  if (pathname === "/robots.txt" || pathname === "/sitemap.xml" || pathname === "/llms.txt") return true;
   if (pathname.startsWith("/api/cron/")) return true;
   if (pathname.startsWith("/api/i18n/")) return true;
   return false;

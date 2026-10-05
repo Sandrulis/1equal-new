@@ -185,22 +185,30 @@ export async function changePassword(formData: FormData): Promise<AuthResult> {
   const current = typeof formData.get("currentPassword") === "string" ? String(formData.get("currentPassword")) : "";
   const next = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
   const confirm = typeof formData.get("confirmPassword") === "string" ? String(formData.get("confirmPassword")) : "";
-  if (!current) return { error: "user.password.wrong" };
   if (next.length < MIN_PASSWORD) return { error: "auth.error.weak" };
   if (next !== confirm) return { error: "user.password.mismatch" };
-  if (next === current) return { error: "user.password.same" };
 
   const { supabase, user } = await getVerifiedAuth();
   const email = user?.email;
   if (!supabase || !user || !email || (await sessionNeedsMfaVerify())) return { error: "auth.error.generic" };
 
-  const checked = await supabase.auth.signInWithPassword({ email, password: current });
-  if (checked.error) return { error: "user.password.wrong" };
+  const hasPassword = user.app_metadata?.password_set !== false;
+  if (hasPassword) {
+    if (!current || next === current) return { error: next === current ? "user.password.same" : "user.password.wrong" };
+    const checked = await supabase.auth.signInWithPassword({ email, password: current });
+    if (checked.error) return { error: "user.password.wrong" };
+    const updated = await supabase.auth.updateUser({ password: next });
+    if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+    return { ok: true };
+  }
 
-  const updated = await supabase.auth.updateUser({ password: next });
+  const admin = createAdminClient();
+  if (!admin) return { error: "auth.error.config" };
+  const updated = await admin.auth.admin.updateUserById(user.id, {
+    password: next,
+    app_metadata: { ...user.app_metadata, password_set: true },
+  });
   if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
-  await markPasswordSet(user.id, user.app_metadata);
-
   return { ok: true };
 }
 
@@ -211,11 +219,12 @@ export async function resetPassword(formData: FormData): Promise<AuthResult> {
   if (!email) return { error: "auth.error.generic" };
   const turnstile = await requireTurnstileToken(readField(formData, "turnstileToken"));
   if (!turnstile.ok) return { error: turnstile.error };
-  if (await rateLimit(`reset:${email}`, 5, 15 * 60 * 1000)) return { sent: true };
 
   const admin = createAdminClient();
   if (!admin) return { error: "auth.error.config" };
   if (await siteMaintenanceOn(admin)) return { error: "auth.error.maintenance" };
+  if (await accountHasNoPassword(admin, email)) return { error: "auth.forgot.no_password" };
+  if (await rateLimit(`reset:${email}`, 5, 15 * 60 * 1000)) return { sent: true };
   await mailAccountLink(admin, email, "recovery");
   return { sent: true };
 }
@@ -238,7 +247,16 @@ async function markPasswordSet(userId: string, appMetadata: Record<string, unkno
   await admin.auth.admin.updateUserById(userId, { app_metadata: { ...appMetadata, password_set: true } });
 }
 
+async function accountHasNoPassword(admin: NonNullable<ReturnType<typeof createAdminClient>>, email: string) {
+  const safe = email.replaceAll("%", "\\%").replaceAll("_", "\\_");
+  const person = await admin.from("users").select("id").ilike("email", safe).maybeSingle();
+  if (!person.data?.id) return false;
+  const authUser = await admin.auth.admin.getUserById(person.data.id);
+  return authUser.data.user?.app_metadata?.password_set === false;
+}
+
 async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminClient>>, email: string, kind: "signup" | "recovery"): Promise<boolean> {
+  if (kind === "recovery" && (await accountHasNoPassword(admin, email))) return false;
   const redirectTo = `${getSiteUrl()}/auth/callback${kind === "recovery" ? "?next=/reset-password" : ""}`;
   const link = await admin.auth.admin.generateLink({
     type: kind === "recovery" ? "recovery" : "magiclink",
@@ -248,7 +266,7 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
   const actionLink = link.data.properties?.action_link;
   if (link.error || !actionLink) return kind === "recovery";
 
-  const integration = await admin.from("site_integrations").select("client_id, client_secret, is_configured, is_enabled").eq("integration_key", "resend").maybeSingle();
+  const integration = await admin.from("site_integrations").select("client_id, client_secret, configured_account_email, is_configured, is_enabled").eq("integration_key", "resend").maybeSingle();
   const fromEmail = integration.data?.client_id?.trim() ?? "";
   const apiKey = openIntegrationSecret(integration.data?.client_secret);
   if (!integration.data?.is_enabled || !integration.data.is_configured || !fromEmail || !apiKey) return false;
@@ -270,11 +288,13 @@ async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminC
     language: lang,
   });
   const from = fromEmail.includes("<") ? fromEmail : `${brand.name} <${fromEmail}>`;
+  const replyTo = integration.data?.configured_account_email?.trim() || undefined;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: [email], subject: translate(lang, subjectKey), html }),
+    body: JSON.stringify({ from, to: [email], subject: translate(lang, subjectKey), html, reply_to: replyTo }),
   });
+  if (!response.ok) console.error("account email send failed", response.status);
   return response.ok;
 }
 

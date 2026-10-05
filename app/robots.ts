@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
-import { getSiteUrl } from "@/app/lib/site";
+import { ROBOTS_DISALLOW_PATHS } from "@/app/lib/seo";
+import { getIndexableSiteUrl } from "@/app/lib/site";
 
 export default function robots(): MetadataRoute.Robots {
-  const url = getSiteUrl();
+  const url = getIndexableSiteUrl();
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/dashboard", "/demo", "/panel", "/login", "/signup", "/forgot-password", "/reset-password", "/auth", "/api", "/v", "/cal", "/maintenance"],
+      disallow: [...ROBOTS_DISALLOW_PATHS],
     },
     sitemap: `${url}/sitemap.xml`,
     host: new URL(url).host,

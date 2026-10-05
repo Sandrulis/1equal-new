@@ -86,7 +86,7 @@ export function AdminCronPage() {
             <IconCopy />
           </IconTipButton>
         </div>
-        <a href="https://console.cron-job.org/jobs" target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-medium text-train hover:underline">
+        <a href="https://console.cron-job.org/jobs" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm font-medium text-train hover:underline">
           {t("admin.cron.open")}
         </a>
       </div>

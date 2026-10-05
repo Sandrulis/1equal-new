@@ -2,9 +2,24 @@ export const BALANCE_RANGE_MAX_DAYS = 92;
 
 const ZONE = "Europe/Riga";
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const rigaDateTime = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
 export function rigaDate(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  return rigaStamp(now).slice(0, 10);
+}
+
+export function rigaStamp(now = new Date()): string {
+  const parts = rigaDateTime.formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
+  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`;
 }
 
 export function currentMonthRange(now = new Date()): { from: string; to: string } {

@@ -6,7 +6,9 @@ import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { previewEvents, type PreviewEvent } from "@/app/lib/landing-preview";
+import { LANDING_FAQ } from "@/app/lib/landing-faq";
 import { sendContactMessage } from "@/app/lib/contact/actions";
+import { publicPath, type PublicLocale } from "@/app/lib/seo-slugs";
 import { formatMonthTitle, isoDate, weekdayHeaders } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
 import { landingSectionFromSlug, landingSlug, scrollToLandingSection } from "@/app/lib/landing-sections";
@@ -35,7 +37,7 @@ function LandingSeo() {
   const brand = useSiteBrand();
 
   useEffect(() => {
-    const title = `${brand.name} · ${t("landing.hero.title")}`;
+    const title = t("landing.seo.title");
     const description = t("landing.seo.description");
     document.title = title;
     setHeadMeta("description", description);
@@ -49,11 +51,15 @@ function LandingSeo() {
     if (!script?.textContent) return;
     try {
       const data = JSON.parse(script.textContent) as { "@graph"?: Array<Record<string, unknown>> };
+      const shown = brand.name.trim().toLowerCase() === "1equal" ? "1Equal" : brand.name;
       for (const item of data["@graph"] ?? []) {
-        if ("inLanguage" in item) item.inLanguage = formatLang;
-        if ("description" in item) item.description = description;
-        if (item["@type"] === "WebPage") item.name = title;
-        if (item["@type"] === "WebSite" || item["@type"] === "Organization" || item["@type"] === "SoftwareApplication") item.name = brand.name;
+        if (item["@type"] === "WebPage") {
+          item.inLanguage = formatLang;
+          item.name = title;
+          item.description = description;
+        }
+        if (item["@type"] === "WebSite") item.description = description;
+        if (item["@type"] === "WebSite" || item["@type"] === "Organization" || item["@type"] === "SoftwareApplication") item.name = shown;
       }
       script.textContent = JSON.stringify(data).replace(/</g, "\\u003c");
     } catch {
@@ -64,7 +70,7 @@ function LandingSeo() {
   return null;
 }
 
-export function LandingPage() {
+export function LandingPage({ embedded = false }: { embedded?: boolean }) {
   const { formatLang, t } = useLanguage();
   const contentSlug = landingSlug(formatLang, "content");
   const openedHash = useRef(false);
@@ -86,7 +92,7 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-ice text-ink">
-      <LandingSeo />
+      {embedded ? null : <LandingSeo />}
       <a
         href={`#${contentSlug}`}
         onClick={(event) => {
@@ -119,9 +125,16 @@ export function LandingPage() {
                 </Link>
               </div>
             </div>
-            <ProductPreview />
+            {/* TODO: replace this calendar mock with a real screenshot via next/image (priority, width 1200, height 750, alt landing.preview.alt). */}
+            <div className="w-full" style={{ minHeight: 420 }}>
+              <ProductPreview />
+            </div>
           </div>
         </section>
+
+        <AudienceSection />
+        <ProofSection />
+        <EverydaySection />
 
         <section id={landingSlug(formatLang, "features")} aria-labelledby="features-title" className="scroll-mt-20 border-t border-line bg-paper">
           <div className="mx-auto max-w-6xl px-4 py-12">
@@ -132,6 +145,8 @@ export function LandingPage() {
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <Feature icon={<IconCalendar />} title={t("landing.feature.calendar.title")} text={t("landing.feature.calendar.text")} />
               <Feature icon={<IconUsers />} title={t("landing.feature.team.title")} text={t("landing.feature.team.text")} />
+              <Feature icon={<IconMail />} title={t("landing.feature.invite.title")} text={t("landing.feature.invite.text")} />
+              <Feature icon={<IconCheck />} title={t("landing.feature.vote.title")} text={t("landing.feature.vote.text")} />
               <Feature icon={<IconCoin />} title={t("landing.feature.money.title")} text={t("landing.feature.money.text")} />
               <Feature icon={<IconPin />} title={t("landing.feature.venues.title")} text={t("landing.feature.venues.text")} />
             </div>
@@ -212,14 +227,107 @@ function Advantage({ icon, title, text }: { icon: ReactNode; title: string; text
   );
 }
 
-const FAQ: { q: MessageKey; a: MessageKey }[] = [
-  { q: "landing.faq.1.q", a: "landing.faq.1.a" },
-  { q: "landing.faq.2.q", a: "landing.faq.2.a" },
-  { q: "landing.faq.3.q", a: "landing.faq.3.a" },
-  { q: "landing.faq.4.q", a: "landing.faq.4.a" },
-  { q: "landing.faq.5.q", a: "landing.faq.5.a" },
-  { q: "landing.faq.6.q", a: "landing.faq.6.a" },
+const FAQ = LANDING_FAQ;
+
+const TOPIC_LINKS: { slug: string; label: MessageKey }[] = [
+  { slug: "sports-team-management", label: "landing.link.management" },
+  { slug: "team-calendar", label: "landing.link.calendar" },
+  { slug: "team-calendar", label: "landing.link.schedule" },
+  { slug: "training-management", label: "landing.link.training" },
+  { slug: "player-attendance", label: "landing.link.attendance" },
+  { slug: "team-expenses", label: "landing.link.expenses" },
 ];
+
+const SPORT_LINKS: { slug: string; label: MessageKey }[] = [
+  { slug: "football-team-management", label: "landing.sport.football" },
+  { slug: "hokeja-komandas", label: "landing.sport.hockey" },
+  { slug: "basketbola-komandas", label: "landing.sport.basketball" },
+  { slug: "florbola-komandas", label: "landing.sport.floorball" },
+  { slug: "volejbola-komandas", label: "landing.sport.volleyball" },
+];
+
+const AUDIENCE: { slug: string; title: MessageKey; text: MessageKey }[] = [
+  { slug: "hokeja-komandas", title: "landing.audience.hockey", text: "landing.audience.hockey.text" },
+  { slug: "florbola-komandas", title: "landing.audience.floorball", text: "landing.audience.floorball.text" },
+  { slug: "basketbola-komandas", title: "landing.audience.basketball", text: "landing.audience.basketball.text" },
+  { slug: "volejbola-komandas", title: "landing.audience.volleyball", text: "landing.audience.volleyball.text" },
+];
+
+function AudienceSection() {
+  const { formatLang, t } = useLanguage();
+  const lang = formatLang as PublicLocale;
+  return (
+    <section id="audience" aria-labelledby="audience-title" className="border-t border-line">
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <h2 id="audience-title" className="text-2xl font-semibold tracking-tight">
+          {t("landing.audience.title")}
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-muted">{t("landing.audience.lead")}</p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          {AUDIENCE.map((item) => (
+            <article key={item.slug} className="rounded-2xl bg-paper p-5 ring-1 ring-line">
+              <h3 className="font-semibold">
+                <Link href={publicPath(lang, `/${item.slug}`)} className="cursor-pointer hover:underline">
+                  {t(item.title)}
+                </Link>
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted">{t(item.text)}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProofSection() {
+  const { t } = useLanguage();
+  return (
+    <section aria-labelledby="proof-title" className="border-t border-line bg-paper">
+      {/* TODO: replace with real figures and a team name after written permission. Do not invent counts. */}
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <h2 id="proof-title" className="text-lg font-semibold">
+          {t("landing.proof.title")}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{t("landing.proof.text")}</p>
+      </div>
+    </section>
+  );
+}
+
+function EverydaySection() {
+  const { formatLang, t } = useLanguage();
+  return (
+    <section id="everyday" aria-labelledby="everyday-title" className="border-t border-line">
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <h2 id="everyday-title" className="text-2xl font-semibold tracking-tight">
+          {t("landing.everyday.title")}
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-muted">{t("landing.everyday.text")}</p>
+        <p className="mt-4 max-w-3xl leading-7 text-muted">{t("landing.everyday.sports")}</p>
+        <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          {SPORT_LINKS.map((item) => (
+            <li key={item.slug}>
+              <Link href={publicPath(formatLang as PublicLocale, `/${item.slug}`)} className="cursor-pointer font-medium text-navy hover:underline">
+                {t(item.label)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <h3 className="mt-8 text-lg font-semibold">{t("landing.everyday.links")}</h3>
+        <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          {TOPIC_LINKS.map((item) => (
+            <li key={item.label}>
+              <Link href={publicPath(formatLang as PublicLocale, `/${item.slug}`)} className="cursor-pointer font-medium text-navy hover:underline">
+                {t(item.label)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
 
 function ContactSection() {
   const { formatLang, t } = useLanguage();
@@ -271,6 +379,13 @@ function ContactSection() {
           <button type="submit" disabled={pending} className="justify-self-start rounded-lg bg-navy px-5 py-3 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
             {t("landing.contact.send")}
           </button>
+          <p className="text-sm text-muted">
+            {t("landing.contact.privacy")}{" "}
+            <Link href={publicPath(formatLang as PublicLocale, "/privacy")} className="cursor-pointer font-medium text-navy hover:underline">
+              {t("legal.privacy")}
+            </Link>
+            .
+          </p>
         </form>
       </div>
     </section>
@@ -280,20 +395,9 @@ function ContactSection() {
 function FaqSection() {
   const { formatLang, t } = useLanguage();
   const items = FAQ.map((item) => ({ q: t(item.q), a: t(item.a) }));
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    inLanguage: formatLang,
-    mainEntity: items.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      acceptedAnswer: { "@type": "Answer", text: item.a },
-    })),
-  };
 
   return (
     <section id={landingSlug(formatLang, "faq")} aria-labelledby="faq-title" className="scroll-mt-20 border-t border-line bg-paper">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="mx-auto max-w-3xl px-4 py-12">
         <h2 id="faq-title" className="text-2xl font-semibold tracking-tight">
           {t("landing.faq.title")}
@@ -339,7 +443,7 @@ function ProductPreview() {
   const nextPlace = nextGame?.area ?? "";
 
   return (
-    <div aria-hidden="true" className="rounded-3xl bg-paper p-4 shadow-[0_24px_60px_-28px_rgba(16,36,51,0.55)] ring-1 ring-line sm:p-5">
+    <div role="img" aria-label={t("landing.preview.alt")} className="rounded-3xl bg-paper p-4 shadow-[0_24px_60px_-28px_rgba(16,36,51,0.55)] ring-1 ring-line sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-base font-semibold">{formatMonthTitle(year, month, formatLang)}</p>
         <div className="flex gap-3 text-xs text-muted">
@@ -489,6 +593,24 @@ function IconDevice() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <rect x="7" y="2" width="10" height="20" rx="2" />
       <path d="M11 18h2" />
+    </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" />
     </svg>
   );
 }

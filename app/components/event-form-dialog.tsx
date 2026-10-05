@@ -49,16 +49,6 @@ export function EventFormDialog({
   const { formatDate, formatTime, display } = useDisplayFormat();
   const currency = useCurrencySymbol();
   const formatMoney = useFormatMoney();
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 599px)");
-    function sync() {
-      setNarrow(query.matches);
-    }
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
-  }, []);
   const initialClock = clockParts(event?.start ?? "");
   const [dateIso, setDateIso] = useState(event?.date || initialDate || "");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -196,7 +186,7 @@ export function EventFormDialog({
                 <option value="">{t("event.add.place")}</option>
                 {venues.map((venue) => (
                   <option key={venue.id} value={venue.id}>
-                    {narrow ? `${venue.name} (${formatMoney(venue.pricePerHour)})` : venue.name}
+                    {`${venue.name} (${formatMoney(venue.pricePerHour)})`}
                   </option>
                 ))}
               </select>

@@ -13,6 +13,7 @@ const KIND_LABEL: Record<EmailKind, MessageKey> = {
   signup: "admin.email.kind.signup",
   password_reset: "admin.email.kind.password_reset",
   invite: "admin.email.kind.invite",
+  guest: "admin.email.kind.guest",
   event: "admin.email.kind.event",
   delete_confirm: "admin.email.kind.delete_confirm",
   delete_started: "admin.email.kind.delete_started",
@@ -84,9 +85,10 @@ export function AdminEmailDesign({
     const button = plainDash(fillEmailText(active.buttons[language.code] ?? "", params));
     const card = kind === "invite"
       ? { label: translate(mailLang, "admin.users.team"), title: params.team, detail: translate(mailLang, "email.invite.by", { name: params.inviter }) }
-      : kind === "event"
+      : kind === "guest" || kind === "event"
         ? { label: translate(mailLang, "admin.users.team"), title: params.team, detail: `${params.date} ${params.time}\n${params.type}\n${params.venue}` }
         : undefined;
+    const actionLink = kind === "guest" ? "https://example.com/training/preview" : params.link;
     return {
       subject,
       html: buildEmailHtml({
@@ -95,7 +97,7 @@ export function AdminEmailDesign({
         heading: subject || systemName,
         bodyText: body,
         buttonLabel: button,
-        actionLink: params.link,
+        actionLink,
         footerHint: translate(mailLang, kind.startsWith("delete_") ? "user.delete.mail_footer" : "admin.email.footer"),
         tagline: language.slogan,
         language: mailLang,
@@ -178,6 +180,7 @@ export function AdminEmailDesign({
               </button>
             ))}
           </div>
+          {kind === "guest" ? <p className="text-sm leading-6 text-muted">{t("admin.email.guest_note")}</p> : null}
           {kind === "event" ? <p className="text-sm leading-6 text-muted">{t("admin.email.event_note")}</p> : null}
           {kind.startsWith("delete_") ? <p className="text-sm leading-6 text-muted">{t("admin.email.delete_note")}</p> : null}
           {active && language ? (

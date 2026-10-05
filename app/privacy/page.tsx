@@ -1,17 +1,7 @@
-import type { Metadata } from "next";
-import { LegalDocument } from "@/app/components/legal-document";
-import { getSiteBrand } from "@/app/lib/site-admin/repository";
-import { applyBrandName } from "@/app/lib/site-brand";
+import { createRootLegalPage } from "@/app/lib/legal-page";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const brand = await getSiteBrand();
-  return {
-    title: "Privātuma politika",
-    description: applyBrandName("Kādus datus 1equal apstrādā un kādas ir tavas tiesības.", brand.name),
-    alternates: { canonical: "/privacy" },
-  };
-}
+const page = createRootLegalPage("privacy");
 
-export default function PrivacyPage() {
-  return <LegalDocument id="privacy" />;
-}
+export const revalidate = 3600;
+export const generateMetadata = page.generateMetadata;
+export default page.Page;

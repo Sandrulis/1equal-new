@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { parseRememberSession, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
+import { JOIN_INVITE_COOKIE, joinInviteCookieOptions, normalizeJoinCode } from "@/app/lib/join-invite";
 import { isMaintenanceOpenPath, siteMaintenanceOn } from "@/app/lib/maintenance";
+import { isIndexablePublicPath } from "@/app/lib/seo-slugs";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
@@ -55,6 +57,7 @@ export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", policy);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
 
   const env = getSupabasePublicEnv();
   if (!env) return nextWithPolicy(requestHeaders, policy);
@@ -67,7 +70,8 @@ export async function updateSession(request: NextRequest) {
     pathname === "/terms" ||
     pathname === "/cookies" ||
     pathname === "/demo" ||
-    pathname.startsWith("/demo/");
+    pathname.startsWith("/demo/") ||
+    isIndexablePublicPath(pathname);
 
   let supabaseResponse = nextWithPolicy(requestHeaders, policy);
   const remember = parseRememberSession(request.cookies.get(REMEMBER_SESSION_COOKIE)?.value);
@@ -155,6 +159,9 @@ export async function updateSession(request: NextRequest) {
     redirect.headers.set("Content-Security-Policy", policy);
     return redirect;
   }
+
+  const joinCode = normalizeJoinCode(/^\/join\/([A-Z0-9]{4,16})$/i.exec(pathname)?.[1]);
+  if (joinCode && !activeUser) supabaseResponse.cookies.set(JOIN_INVITE_COOKIE, joinCode, joinInviteCookieOptions());
 
   supabaseResponse.headers.set("Content-Security-Policy", policy);
   return supabaseResponse;

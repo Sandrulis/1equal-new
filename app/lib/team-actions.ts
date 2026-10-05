@@ -7,10 +7,13 @@ import { writeAudit } from "@/app/lib/security/audit";
 import type { Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
+import { teamLogoUrl } from "@/app/lib/entuziasti-view";
+import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { castMemberVote } from "@/app/lib/attendance-vote";
 import { isEmailAddress } from "@/app/lib/email/email-address";
+import { sendTeamInvite } from "@/app/lib/email/invite-mail";
 import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
 import { notifyNewEvent } from "@/app/lib/email/event-mail";
 import { eventHasEnded } from "@/app/lib/event-voting";
@@ -23,7 +26,10 @@ import { toLocalDateTimeStamp } from "@/app/lib/format";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
 import { normalizePositionCode, serializeExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
+import { normalizeJoinCode, JOIN_INVITE_COOKIE } from "@/app/lib/join-invite";
 import { rateLimit } from "@/app/lib/security/rate-limit";
+import { createAdminClient } from "@/app/lib/supabase/admin";
+import { cookies } from "next/headers";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -608,7 +614,7 @@ export async function createOwnedEvent(input: {
     .single();
   if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(inserted.data);
-  await notifyNewEvent(event, input.teamId);
+  await notifyNewEvent(event, input.teamId, gate.account.id);
   refreshTeamData();
   return { ok: true, event };
 }
@@ -854,4 +860,74 @@ export async function deleteOwnedSubteam(teamId: string, subteamId: string): Pro
   if (removed.error) return { ok: false, error: "auth.error.generic" };
   refreshTeamData();
   return { ok: true };
+}
+
+export async function inviteTeamPlayer(teamId: string, rawEmails: string[]): Promise<{ ok: true; count: number } | { ok: false; error: MessageKey }> {
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
+  const emails = [...new Set(rawEmails.map((item) => item.trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length || emails.length > 20 || emails.some((email) => !isEmailAddress(email))) return { ok: false, error: "roster.error.email" };
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("name, invite_code, logo_url, sport_id").eq("id", teamId).maybeSingle();
+  const code = normalizeJoinCode(team.data?.invite_code);
+  if (team.error || !team.data || !code) return { ok: false, error: "auth.error.generic" };
+  const entuziasti = await moduleEnabledForSport(gate.client, team.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, teamId);
+  const imageUrl = teamLogoUrl(team.data.logo_url, entuziasti);
+  const inviter = [gate.account.firstName, gate.account.lastName].map((part) => part.trim()).filter(Boolean).join(" ") || gate.account.email;
+  let sent = 0;
+  for (const email of emails) {
+    if (await rateLimit(`invite:${teamId}:${email}`, 5, 15 * 60 * 1000)) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.error.rate" };
+    const ok = await sendTeamInvite({
+      admin: gate.client,
+      email,
+      teamName: team.data.name,
+      inviteCode: code,
+      inviterName: inviter,
+      imageUrl,
+      imageFit: isOwnAvatarUrl(imageUrl) ? "cover" : "contain",
+    });
+    if (!ok) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.email.unavailable" };
+    sent += 1;
+  }
+  await writeAudit("team.invite", "teams", teamId);
+  return { ok: true, count: sent };
+}
+
+export async function inspectJoinLink(rawCode: string): Promise<{ ok: true; state: "auth" | "ready" } | { ok: false; error: MessageKey }> {
+  const code = normalizeJoinCode(rawCode);
+  if (!code) return { ok: false, error: "team.join.not_found" };
+  const gate = await requireUserAdmin();
+  const admin = gate?.client ?? createAdminClient();
+  if (!admin) return { ok: false, error: "auth.error.config" };
+  const found = await admin.from("teams").select("id").eq("invite_code", code).maybeSingle();
+  if (found.error || !found.data) return { ok: false, error: "team.join.not_found" };
+  return { ok: true, state: gate ? "ready" : "auth" };
+}
+
+export async function openJoinLink(rawCode: string): Promise<{ ok: true; state: "joined" | "auth" } | { ok: false; error: MessageKey }> {
+  const code = normalizeJoinCode(rawCode);
+  if (!code) return { ok: false, error: "team.join.not_found" };
+  const gate = await requireUserAdmin();
+  if (!gate) {
+    const admin = createAdminClient();
+    if (!admin) return { ok: false, error: "auth.error.config" };
+    const found = await admin.from("teams").select("id").eq("invite_code", code).maybeSingle();
+    if (found.error || !found.data) return { ok: false, error: "team.join.not_found" };
+    return { ok: true, state: "auth" };
+  }
+  const joined = await joinOwnedTeam(code);
+  if (!joined.ok) return joined;
+  return { ok: true, state: "joined" };
+}
+
+export async function acceptStoredJoin(): Promise<{ joined: boolean }> {
+  const store = await cookies();
+  const code = normalizeJoinCode(store.get(JOIN_INVITE_COOKIE)?.value);
+  if (!code) return { joined: false };
+  store.delete(JOIN_INVITE_COOKIE);
+  const gate = await requireUserAdmin();
+  if (!gate) return { joined: false };
+  const joined = await joinOwnedTeam(code);
+  return { joined: joined.ok };
 }

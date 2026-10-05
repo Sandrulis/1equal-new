@@ -8,7 +8,7 @@
 - i18n: `t(key, params?)` no `useLanguage`. Kanons ir `app/lib/messages.ts` (lv, en, ru). `site_translations` ir overlay. Aktīvā valoda ir `string`; datumu formāts nāk no iestatījumiem
 - Datumi UI: `dd.mm.yyyy` caur `formatDisplayDate` / `formatDisplayDateTime` (`app/lib/format.ts`). Iekšēji ISO `YYYY-MM-DD`
 - Nauda: `formatMoney` kā `€ 1 234.56`, tūkstošu atdalītājs ir atstarpe, mīnuss priekšā
-- Zīmols: `applyBrandName` aizstāj vārdu `1equal`, ja tam neseko `-`. `1equal-lang` un `1equal-consent` paliek
+- Zīmols: noklusējuma attēlojums ir `1Equal`. `applyBrandName` aizstāj vārdu `1equal`, ja tam neseko `-` vai punkts. `1equal-lang`, `1equal-consent` un `1equal.com` paliek
 - Favicon: `app/icon.tsx`. Ja admin ir augšupielādējis favicon, cilne rāda to, citādi pirmo burtu uz tumša kvadrāta
 
 ## Publiskās lapas
@@ -18,20 +18,21 @@
 | `/` | Landing. Ielogotu aizved uz `/dashboard`. Izvēlnes saites ritina līdz sadaļai. Enkurs seko valodai, piemēram `#kontakti` un `#contact` |
 | `/login` | Ienākt |
 | `/signup` | Reģistrēties. Service role `admin.createUser` ar `email_confirm: false`, tad apstiprinājuma vēstule caur Resend. Ja vēstuli nevar nosūtīt, lietotājs tiek dzēsts |
-| `/forgot-password` | Tikai e-pasts. Ja Turnstile ir ieslēgts, prasa Cloudflare pārbaudi. Nosūta recovery saiti. Neatklāj, vai e-pasts eksistē |
+| `/forgot-password` | Tikai e-pasts. Ja Turnstile ir ieslēgts, prasa Cloudflare pārbaudi. Kontam bez paroles saite netiek sūtīta. Neatklāj, vai e-pasts eksistē |
 | `/reset-password` | Jaunā parole pēc recovery sesijas, caur `updateUser` |
-| `/auth/callback` | Supabase `code` apmaiņa pret sesiju. `next` drīkst būt `/reset-password` vai `/training/{uuid}`. Pēc sesijas `public.users.email` sakrīt ar sesijas e-pastu |
+| `/auth/callback` | Supabase `code` apmaiņa pret sesiju. `next` drīkst būt `/reset-password`, `/training/{uuid}` vai `/join/{kods}`. Ja sesija ir adreses `#` daļā, pārlūks to saglabā un atver paneli vai `/reset-password`. Pēc sesijas `public.users.email` sakrīt ar sesijas e-pastu |
+| `/join/[code]` | Komandas uzaicinājuma saite. Nav indeksējama. E-pasts aiziet gan jaunam, gan jau reģistrētam adresātam, un konts netiek izveidots sūtīšanas brīdī. Jauns lietotājs reģistrējas ar Google vai e-pastu. Ielogots lietotājs pievienojas uzreiz. Bez sesijas kods paliek sīkdatnē `1equal-join`, lai pēc apstiprinājuma paneļa ielāde pabeidz pievienošanos |
 | `/auth/confirm-email` | Vienreizēja e-pasta maiņas saite. Tokens glabājas kā SHA-256, der 24 stundas. Pēc apstiprinājuma jaunais e-pasts tiek ierakstīts un pārlūks iet uz magic link |
 | `/privacy` | Privātuma politika |
 | `/terms` | Lietošanas noteikumi |
 | `/cookies` | Sīkdatņu politika |
 | `/demo` | Publisks panelis ar parauga datiem |
 | `/panel` | Novirza uz `/demo` |
-| `/training/[id]` | Publisks treniņš bez trenera, ja viesi ir atļauti un komandai ir `module_pond`. Kopīgam modulim vajag sporta veidu, individuālam vajag `team_modules`. Rāda komandu, veidu, cenu, datumu un laukumu. Lapa nav indeksējama. Bez sesijas pieteikšanās ved uz `/login?next=`. Viesis nemaksā un nav sastāvā |
+| `/training/[id]` | Publisks treniņš bez trenera, ja viesi ir atļauti un komandai ir `module_pond`. Kopīgam modulim vajag sporta veidu, individuālam vajag `team_modules`. Rāda komandu, veidu, cenu, datumu un laukumu. Lapa nav indeksējama. Bez sesijas pieteikšanās ved uz `/login?next=`. Viesis nemaksā un nav sastāvā. Vadītājs var nosūtīt šo saiti e-pastā |
 
-`/dashboard` bez sesijas iet uz `/login`. Ielogots lietotājs no `/login` un `/signup` iet uz `/dashboard`. Ja `next` ir `/training/{uuid}`, viņš atgriežas uz šo treniņu.
+`/dashboard` bez sesijas iet uz `/login`. Ielogots lietotājs no `/login` un `/signup` iet uz `/dashboard`. Ja `next` ir `/training/{uuid}` vai `/join/{kods}`, viņš atgriežas uz šo adresi.
 
-SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/auth`, `/api`, `/v`, `/cal`. `app/sitemap.ts` iekļauj tikai indeksējamās lapas: `/`, `/privacy`, `/terms`, `/cookies`. Lokāli kanoniskais hosts ir `NEXT_PUBLIC_SITE_URL`. Produkcijas build bez publiska https URL izmanto `https://1equal.com`. Valoda pārslēdzas pārlūkā, tāpēc atsevišķu `/en` un `/ru` ceļu un hreflang nav.
+SEO: latviešu publiskās lapas ir bez prefiksa (`/`, `/privacy`, `/terms`, `/cookies`, `/hokeja-komandas`, `/florbola-komandas`, `/basketbola-komandas`, `/volejbola-komandas`, `/ledus-naudas-uzskaite`, `/cenas`). `/lv` ved uz `/`. Angļu un krievu ir `/en` un `/ru`, arī tām pašām lapām un funkciju lapām (`/en/sports-team-management` un pārējās). Vecās angļu sporta adreses ved uz latviešu tēmu lapām. `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/auth`, `/api`, `/v`, `/cal`, `/join`, `/maintenance`, `/training`, `/old-2-new`. Tiem pašiem ceļiem `next.config.ts` sūta `X-Robots-Tag: noindex, nofollow`. `app/sitemap.ts` iekļauj tikai šīs publiskās lapas trijās valodās. Katrai ir canonical, hreflang (`lv`, `en`, `ru`, `x-default` uz latviešu) un JSON-LD. `public/llms.txt` apraksta tās. Kājene ved uz `/sitemap.xml`. Kanoniskais hosts nāk no `NEXT_PUBLIC_SITE_URL` (produkcijā bez publiska https URL ir `https://1equal.com`), un otrs `www` vai bez `www` hosts tiek novirzīts uz to. Vercel nedrīkst novirzīt pretējā virzienā, citādi pārlūks paliek cilpā. Lokāli novirzes nav. Parasts spēlētājs nesaņem citu dalībnieku e-pastu, tālruni un IP. Tos redz vietnes administrators, komandas vadītājs un komandas administrators.
 
 ## Panelis
 
@@ -40,7 +41,7 @@ SEO: `app/robots.ts` bloķē `/dashboard`, `/demo`, `/panel`, `/login`, `/signup
 | Ceļš | Saturs |
 |---|---|
 | `/dashboard` | Kalendārs bez parauga notikumiem. Apakškomandas notikums ir tās krāsā, zem kalendāra ir leģenda, aplis ir spēle un kvadrāts ir treniņš. Ja ir notikumi, par kuriem vēl jābalso, atveras balsojuma skats. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst notikumu var tikai vadītājs un komandas administrators. Laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
-| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāja logu. Labot, citu spēlētāju noņemšana, uzaicinājuma kods un Uzaicināt ir vadītājam un komandas administratoram. Parasts spēlētājs labo savu vārdu, uzvārdu, e-pastu, tālruni, numuru, pozīcijas un Entuziastu saiti un var noņemt tikai sevi. Pirms noņemšanas ir apstiprinājums. Neprasīt samaksu un Apakškomandas redz tikai vadītājs un administrators. Komandas iestatījumos vadītājs un administrators labo nosaukumu, valūtu, balsošanas stundas, sporta veidu un Entuziastu saiti. Sporta slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens veids. Tukša saite noņem `source_url` un no tās ielādēto logo, un tad var izgriezt kvadrāta attēlu. Uzaicināt sagatavo e-pastu, bet vēl nenosūta |
+| `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāja logu. Labot, citu spēlētāju noņemšana, uzaicinājuma kods un Uzaicināt ir vadītājam un komandas administratoram. Parasts spēlētājs labo savu vārdu, uzvārdu, e-pastu, tālruni, numuru, pozīcijas un Entuziastu saiti un var noņemt tikai sevi. Pirms noņemšanas ir apstiprinājums. Neprasīt samaksu un Apakškomandas redz tikai vadītājs un administrators. Komandas iestatījumos vadītājs un administrators labo nosaukumu, valūtu, balsošanas stundas, sporta veidu un Entuziastu saiti. Sporta slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens veids. Tukša saite noņem `source_url` un no tās ielādēto logo, un tad var izgriezt kvadrāta attēlu. Uzaicināt nosūta e-pastu ar saiti `/join/{kods}` |
 | `/dashboard/team/:id` | Spēlētāja logs. Bilances vēsture ir redzama tikai ar `module_finance`. Tikai vadītājs redz slēdzi Administrators, arī dalībnieka labošanā. Administrators dara to pašu, ko vadītājs, bet nevar iecelt administratorus |
 | `/dashboard/guests` | Viesu reģistrs. Vārds, e-pasts, tālrunis, treniņi un komandas piezīme. Sānjoslas saite un saraksts rādās tikai, ja ir vismaz viens viesis. Redz tikai vadītājs un administrators, ja `module_pond` ir komandai. Tiešā saite bez moduļa vai bez viesiem ved uz kalendāru |
 | `/dashboard/subteams` | Komandas apakškomandas. Krāsa, pievienot un labot. Redz tikai vadītājs un komandas administrators. Slēpts, ja `module_subteams` ir izslēgts. Tiešā saite ved uz kalendāru |
@@ -59,7 +60,7 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard/admin/users` | Visi `public.users`. Meklēšana un alfabeta josla Visi, A-Z un #. Aiz vārda ir `users.language_code` un valodas nosaukums. E-pasts, tālrunis no komandas dalības, valsts un IP no `user_origins`, loma, komanda ar sporta veidu, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē). Publiska IP maiņa pārraksta valsti |
+| `/dashboard/admin/users` | Visi `public.users`. Meklēšana un alfabeta josla Visi, A-Z un #. Aiz vārda ir `users.language_code` un valodas nosaukums. E-pasts, tālrunis no komandas dalības, valsts un IP no `user_origins`, loma, komanda ar sporta veidu, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē). Publiska IP maiņa pārraksta valsti. Administrators dzēš citu lietotāju pēc modāļa apstiprinājuma. Savu kontu un pēdējo administratoru dzēst nevar |
 | `/dashboard/admin/teams` | `public.teams`. Meklēšana, alfabeta josla, labošana. Noņemšana prasa apstiprinājumu. Kolonnas: apakškomandas un spēlētāji. Aiz komandas vārda ir sporta veids, un vārds atver logu ar sarakstu. Pie spēlētāja ir vadītāja un administratora atzīme, e-pasts, tālrunis un valsts ar IP. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`, uzliek aktīvo komandu un atver tās kalendāru. Admins sastāvā neparādās. Atvienošana no pārslēdzēja aizved atpakaļ uz šo sarakstu |
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
 | `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, individuāls slēdzis, pievienot pēc atslēgas, dzēst. Individuāls modulis sākas izslēgts katrā komandā. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
@@ -80,7 +81,7 @@ Tabula `site_integrations`. Secret lauki klientam atpakaļ netiek sūtīti, tika
 | Atslēga | Lauki | Kas notiek, kad aktīva |
 |---|---|---|
 | `turnstile` | Site Key, Secret Key | Ienākšana, reģistrācija, Google pieslēgums un aizmirstā parole prasa pārbaudi. Skripts saņem lapas CSP nonce |
-| `google_oauth` | Client ID, Client Secret, Redirect URI ir publiskais hosts plus `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu |
+| `google_oauth` | Client ID, Client Secret, Redirect URI ir publiskais hosts plus `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu. Kontam bez paroles jaunu var uzlikt bez pašreizējās |
 | `resend` | From, Reply-To, API Key | Reģistrācijas, paroles, e-pasta maiņas, notikumu un konta dzēšanas vēstules ar vienotu izkārtojumu. Dzēšanas apstiprinājums, uzsākšana un pabeigšana nāk no `email_templates`. Kājene rāda valodas sloganu. Saite zem pogas ir tā pati, kas pogai. Tekstā garā domuzīme ir defise. Bez šīs integrācijas jaunu kontu ar paroli izveidot nevar |
 | `umami` | Website ID, Script URL tikai `https://cloud.umami.is` | Skripts ielādējas tikai ar statistikas sīkdatņu piekrišanu |
 | `sentry` | Environment, DSN | Pārlūka un servera kļūdas. Sesiju replay ir izslēgts. Kļūdu replay maskē tekstu un ievadi |
@@ -160,6 +161,7 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `058_team_guest_notes.sql` | `team_guest_notes`. Komandas piezīme viesim, līdz 500 rakstzīmēm |
 | `059_site_maintenance.sql` | `site_settings.maintenance`. Apkopes režīms |
 | `060_user_language.sql` | `users.language_code`. Lietotāja izvēlētā valoda |
+| `061_guest_invite_email.sql` | E-pasta veids `guest`. Viesa uzaicinājums uz treniņu |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 
@@ -177,6 +179,7 @@ app/
   privacy/ terms/ cookies/
   dashboard/[[...path]]/     # Ielogots panelis, ieskaitot /admin
   training/[id]/page.tsx     # Publisks treniņš viesim
+  join/[code]/page.tsx       # Komandas uzaicinājuma saite
   demo/[[...path]]/          # Publisks demo panelis
   panel/page.tsx             # Redirect uz /demo
   icon.tsx                   # Favicon
@@ -235,8 +238,8 @@ Noklusējuma solis ir patch +0.0.1. `README.md` rāda **Current version**. Izmai
 
 Pārskati: [security-check.md](security-check.md) (9/10) un [speed-suggestions.md](speed-suggestions.md) (9.5/10).
 
-Komandu tabulas `authenticated` lasa tikai caur `is_team_member`. Rakstīšana paliek service role. `getAccountProfile()` neatdod profilu, kamēr divu faktoru sesija vēl ir `aal1`. Vienā servera pieprasījumā lietotājs tiek pārbaudīts vienreiz. E-pasta balss ir POST, saite der 14 dienas. Bilanci maina `adjust_team_balance`, un summas nāk no `member_balance_totals`. Vecās spēles noslēdz `settle_finished_events` pēc atbildes, ja finansu cron nav ieslēgts. Publiskie iestatījumi kešojas 60 sekundes. Aktīvā komanda velk pasākumus un virsgrāmatu par pēdējām 400 dienām. Izcelsmes IP nāk no Vercel vai Cloudflare galvenes, nevis no pirmās `x-forwarded-for`. CSP skriptiem ir nonce. Pārējās galvenes ir `nosniff`, `X-Frame-Options` un `Permissions-Policy`. Integrāciju noslēpumi tabulā ir AES-256-GCM. Ātruma limits un audita žurnāls ir `031_audit_rate_limit.sql`. Brendinga spainis ir publisks, bet failus nevar uzskaitīt, un SVG nav atļauts. Kalendāra tokens glabājas kā SHA-256. Noplūdušo paroļu pārbaude jāieslēdz Supabase Auth panelī. Tas ir Pro plāna iestatījums, ne migrācija.
+Komandu tabulas `authenticated` lasa tikai caur `is_team_member`. Rakstīšana paliek service role. `getAccountProfile()` neatdod profilu, kamēr divu faktoru sesija vēl ir `aal1`. Vienā servera pieprasījumā lietotājs tiek pārbaudīts vienreiz. E-pasta balss ir POST, saite der 14 dienas. Bilanci maina `adjust_team_balance`, un summas nāk no `member_balance_totals`. Vecās spēles noslēdz `settle_finished_events` pēc atbildes, ja finansu cron nav ieslēgts. Publiskie iestatījumi kešojas 60 sekundes. Aktīvā komanda velk pasākumus par pēdējām 400 dienām. Virsgrāmata nāk, kad atver bilanci. Apmeklētība nāk, kad atver komandas sarakstu. Izcelsmes IP nāk no Vercel vai Cloudflare galvenes, nevis no pirmās `x-forwarded-for`. CSP skriptiem ir nonce. Pārējās galvenes ir `nosniff`, `X-Frame-Options` un `Permissions-Policy`. Integrāciju noslēpumi tabulā ir AES-256-GCM. Ātruma limits un audita žurnāls ir `031_audit_rate_limit.sql`. Brendinga spainis ir publisks, bet failus nevar uzskaitīt, un SVG nav atļauts. Kalendāra tokens glabājas kā SHA-256. Noplūdušo paroļu pārbaude jāieslēdz Supabase Auth panelī. Tas ir Pro plāna iestatījums, ne migrācija.
 
 ## Roadmap
 
-- Uzaicinājuma e-pasts vēl netiek nosūtīts
+- (none)

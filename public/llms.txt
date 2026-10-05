@@ -1,0 +1,30 @@
+# 1equal
+
+> 1Equal is sports team management software for games, training, player attendance, venues and team expenses. Public pages are at https://1equal.com.
+
+Languages have their own URLs. Signed-in routes such as `/dashboard`, `/demo`, `/login`, `/signup` and `/training` must not be crawled.
+
+## Languages
+
+- [Latviešu](https://1equal.com/)
+- [English](https://1equal.com/en)
+- [Русский](https://1equal.com/ru)
+
+## Pages
+
+- [Hokeja komandas](https://1equal.com/hokeja-komandas)
+- [Florbola komandas](https://1equal.com/florbola-komandas)
+- [Basketbola komandas](https://1equal.com/basketbola-komandas)
+- [Volejbola komandas](https://1equal.com/volejbola-komandas)
+- [Ledus naudas uzskaite](https://1equal.com/ledus-naudas-uzskaite)
+- [Cenas](https://1equal.com/cenas)
+- [Sports team management](https://1equal.com/en/sports-team-management)
+- [Team calendar](https://1equal.com/en/team-calendar)
+- [Training management](https://1equal.com/en/training-management)
+- [Player attendance](https://1equal.com/en/player-attendance)
+- [Team expenses](https://1equal.com/en/team-expenses)
+- [Privacy](https://1equal.com/privacy)
+- [Terms](https://1equal.com/terms)
+- [Cookies](https://1equal.com/cookies)
+- [Sitemap](https://1equal.com/sitemap.xml)
+- [Robots](https://1equal.com/robots.txt)

@@ -37,7 +37,7 @@ function voteLinks(token: string): { going: string; absent: string } {
   return { going: `${base}/v/${token}/going`, absent: `${base}/v/${token}/absent` };
 }
 
-export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<void> {
+export async function notifyNewEvent(event: TeamEvent, teamId: string, skipUserId: string): Promise<void> {
   try {
     const client = createAdminClient();
     if (!client) return;
@@ -92,7 +92,7 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string): Promise<
 
     await Promise.allSettled(
       people.data
-        .filter((person) => person.event_emails !== false && !person.deletion_due_at && Boolean(person.email?.trim()))
+        .filter((person) => person.id !== skipUserId && person.event_emails !== false && !person.deletion_due_at && Boolean(person.email?.trim()))
         .map(async (person) => {
           const token = randomBytes(32).toString("hex");
           const tokenHash = createHash("sha256").update(token).digest("hex");

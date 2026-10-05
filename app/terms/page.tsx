@@ -1,17 +1,7 @@
-import type { Metadata } from "next";
-import { LegalDocument } from "@/app/components/legal-document";
-import { getSiteBrand } from "@/app/lib/site-admin/repository";
-import { applyBrandName } from "@/app/lib/site-brand";
+import { createRootLegalPage } from "@/app/lib/legal-page";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const brand = await getSiteBrand();
-  return {
-    title: "Lietošanas noteikumi",
-    description: applyBrandName("Noteikumi, kā lietot 1equal: komandas, kalendārs, dalība un maksājumi.", brand.name),
-    alternates: { canonical: "/terms" },
-  };
-}
+const page = createRootLegalPage("terms");
 
-export default function TermsPage() {
-  return <LegalDocument id="terms" />;
-}
+export const revalidate = 3600;
+export const generateMetadata = page.generateMetadata;
+export default page.Page;

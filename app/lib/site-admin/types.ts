@@ -1,3 +1,4 @@
+import type { AttendanceStats } from "@/app/lib/attendance-stats";
 import type { SiteDisplaySettings } from "@/app/lib/display-preferences";
 import type { FrontendModule } from "@/app/lib/frontend-modules";
 import type { CurrencyCode } from "@/app/lib/team-defaults";
@@ -43,6 +44,7 @@ export type SystemUser = {
   languageCode: string;
   languageName: string;
   teams: { id: string; name: string; sportId: string | null }[];
+  attendance: AttendanceStats;
 };
 
 export type SystemTeam = {
@@ -102,7 +104,7 @@ export type PublicSentry = {
   environment: string;
 };
 
-export const EMAIL_KINDS = ["signup", "password_reset", "invite", "event", "delete_confirm", "delete_started", "delete_done"] as const;
+export const EMAIL_KINDS = ["signup", "password_reset", "invite", "guest", "event", "delete_confirm", "delete_started", "delete_done"] as const;
 
 export type EmailKind = (typeof EMAIL_KINDS)[number];
 

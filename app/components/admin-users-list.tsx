@@ -2,13 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminDialog } from "@/app/components/admin-dialog";
 import { useDisplayFormat } from "@/app/components/display-preferences";
+import { useFeedbackToast } from "@/app/components/feedback-toast";
+import { IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import { LetterFilter } from "@/app/components/letter-filter";
+import { AttendanceLegend, AttendanceLines, AttendanceMark } from "@/app/components/attendance-lines";
 import { PlayerContact } from "@/app/components/player-contact";
 import { originLabel } from "@/app/lib/country-name";
 import { nameLetter } from "@/app/lib/name-letter";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
+import { deleteSystemUser } from "@/app/lib/site-admin/actions";
 import type { SystemUser } from "@/app/lib/site-admin/types";
 import { sportLabel, type Sport } from "@/app/lib/sports";
 
@@ -26,12 +31,28 @@ function countKey(count: number): MessageKey {
   return count === 1 ? "admin.users.count.one" : "admin.users.count";
 }
 
-export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports: Sport[] }) {
+export function AdminUsersList({ users, sports, accountId, showAttendance = false, onDeleted }: { users: SystemUser[]; sports: Sport[]; accountId: string; showAttendance?: boolean; onDeleted: (userId: string) => void }) {
   const { t, lang, languages } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
   const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [letter, setLetter] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<SystemUser | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function remove(userId: string) {
+    setPending(true);
+    const result = await deleteSystemUser(userId);
+    setPending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    setRemoving(null);
+    onDeleted(userId);
+    showFeedback({ message: t("admin.users.deleted"), variant: "success" });
+  }
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -79,14 +100,21 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
                 <th className="px-4 py-3 font-medium">{t("roster.member")}</th>
                 <th className="hidden px-4 py-3 font-medium min-[768px]:table-cell">{t("admin.users.role")}</th>
                 <th className="px-4 py-3 font-medium">{t("admin.users.team")}</th>
+                {showAttendance ? (
+                  <th className="hidden px-4 py-3 font-medium min-[768px]:table-cell" aria-describedby="attendance-legend">
+                    {t("roster.attendance")}
+                    <AttendanceMark />
+                  </th>
+                ) : null}
                 <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("admin.users.registered")}</th>
                 <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("admin.users.last_seen")}</th>
+                <th className="px-4 py-3 text-right font-medium">{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-muted">
+                  <td colSpan={6 + (showAttendance ? 1 : 0)} className="px-4 py-8 text-muted">
                     {query.trim() || letter ? t("admin.users.noMatch") : t("admin.users.empty")}
                   </td>
                 </tr>
@@ -139,11 +167,23 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
                           <span className="text-muted">{t("admin.users.no_team")}</span>
                         )}
                       </td>
+                      {showAttendance ? (
+                        <td className="hidden px-4 py-3 min-[768px]:table-cell">
+                          <AttendanceLines stats={user.attendance} />
+                        </td>
+                      ) : null}
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
                         <WhenCell value={user.createdAt} />
                       </td>
                       <td className="hidden px-4 py-3 min-[900px]:table-cell">
                         {user.lastSeenAt ? <WhenCell value={user.lastSeenAt} /> : <span className="text-muted">{t("admin.users.last_seen.never")}</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {user.id === accountId ? null : (
+                          <IconTipButton label={t("actions.delete")} tone="game" disabled={pending} onClick={() => setRemoving(user)}>
+                            <IconTrash />
+                          </IconTipButton>
+                        )}
                       </td>
                     </tr>
                   );
@@ -152,7 +192,25 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
             </tbody>
           </table>
         </div>
+        {showAttendance ? <AttendanceLegend /> : null}
       </div>
+      <AdminDialog
+        open={removing !== null}
+        closeButton
+        title={t("admin.users.delete.title")}
+        onClose={() => { if (!pending) setRemoving(null); }}
+      >
+        <p className="text-sm text-muted">{t("admin.users.delete.confirm", { name: removing?.name ?? "" })}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={pending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="button" disabled={pending || !removing} onClick={() => { if (removing) void remove(removing.id); }} className="inline-flex items-center gap-2 rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+            {t("actions.delete")}
+          </button>
+        </div>
+      </AdminDialog>
     </div>
   );
 }
