@@ -319,6 +319,8 @@ export const messages = {
   "admin.loading": { lv: "Ielādē…", en: "Loading…", ru: "Загрузка…" },
   "admin.teams.saved": { lv: "Komanda ir saglabāta.", en: "Team saved.", ru: "Команда сохранена." },
   "admin.teams.deleted": { lv: "Komanda ir noņemta.", en: "Team removed.", ru: "Команда удалена." },
+  "admin.teams.delete.title": { lv: "Dzēst komandu", en: "Delete team", ru: "Удалить команду" },
+  "admin.teams.delete.confirm": { lv: "Komanda {name} tiks dzēsta.", en: "Team {name} will be deleted.", ru: "Команда {name} будет удалена." },
   "admin.teams.players": { lv: "Spēlētāji", en: "Players", ru: "Игроки" },
   "admin.teams.players.empty": { lv: "Šajā komandā vēl nav spēlētāju.", en: "This team has no players yet.", ru: "В этой команде ещё нет игроков." },
   "admin.teams.subteams": { lv: "{count} apakškomandas", en: "{count} sub-teams", ru: "{count} подкоманды" },

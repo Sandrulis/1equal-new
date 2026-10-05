@@ -126,6 +126,14 @@ jobs:
                   fi
                   continue
                   ;;
+                # Account deletion: one-time hashed token from the confirmation email, not a session cookie.
+                app/auth/confirm-delete/route.ts)
+                  if ! grep -q "confirmAccountDeletionToken" "$file"; then
+                    echo "FAIL: No deletion token check in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
                 # Email vote link: hashed token, not a session cookie.
                 app/v/\[token\]/\[choice\]/route.ts)
                   if ! grep -q "voteFromEmailLink" "$file"; then

@@ -60,6 +60,7 @@ export function AdminTeamsList({
   const [query, setQuery] = useState("");
   const [letter, setLetter] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<SystemTeam | null>(null);
   const [name, setName] = useState("");
   const [savedName, setSavedName] = useState("");
   const [pending, setPending] = useState(false);
@@ -107,6 +108,7 @@ export function AdminTeamsList({
       return;
     }
     if (editingId === id) setEditingId(null);
+    setRemoving(null);
     showFeedback({ message: t("admin.teams.deleted"), variant: "success" });
     router.refresh();
   }
@@ -306,7 +308,7 @@ export function AdminTeamsList({
                           <IconTipButton label={t("roster.edit")} tone="train" disabled={pending} onClick={() => openEdit(team)}>
                             <IconPencil />
                           </IconTipButton>
-                          <IconTipButton label={t("roster.remove")} tone="game" disabled={pending} onClick={() => void remove(team.id)}>
+                          <IconTipButton label={t("actions.delete")} tone="game" disabled={pending} onClick={() => setRemoving(team)}>
                             <IconTrash />
                           </IconTipButton>
                         </span>
@@ -417,6 +419,22 @@ export function AdminTeamsList({
           )}
         </AdminDialog>
       ) : null}
+      <AdminDialog
+        open={removing !== null}
+        closeButton
+        title={t("admin.teams.delete.title")}
+        onClose={() => { if (!pending) setRemoving(null); }}
+      >
+        <p className="text-sm text-muted">{t("admin.teams.delete.confirm", { name: removing?.name ?? "" })}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={pending} onClick={() => setRemoving(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+            {t("actions.cancel")}
+          </button>
+          <button type="button" disabled={pending || !removing} onClick={() => { if (removing) void remove(removing.id); }} className="rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            {t("actions.delete")}
+          </button>
+        </div>
+      </AdminDialog>
     </div>
   );
 }

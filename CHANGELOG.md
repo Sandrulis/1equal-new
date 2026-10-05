@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.30
+
+- Konta dzēšanas saite ir vienreizējs tokens, un drošības pārbaude to vairs neuzskata par maršrutu bez autentifikācijas
+- Admina komandas dzēšana prasa apstiprinājumu
+
 ## v0.1.29
 
 - Ielogošanās forma treniņa atgriešanās adresi ņem no lapas, lai lint vairs nekrīt uz stāvokļa maiņu efektā
