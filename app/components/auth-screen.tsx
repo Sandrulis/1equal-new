@@ -14,7 +14,7 @@ import { safeTrainingPath } from "@/app/lib/safe-next";
 
 type Mode = "login" | "signup" | "forgot";
 
-export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "" }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string }) {
+export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "", trainingNext = null }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string; trainingNext?: string | null }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const router = useRouter();
@@ -22,14 +22,12 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
   const [pending, setPending] = useState(false);
   const [googlePending, setGooglePending] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [trainingNext, setTrainingNext] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const turnstileRequired = Boolean(turnstileSiteKey);
   const showGoogle = googleEnabled && mode !== "forgot";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setTrainingNext(safeTrainingPath(params.get("next")));
     const error = params.get("error");
     const notice = params.get("notice");
     if (error === "google") showFeedback({ message: t("auth.google.failed"), variant: "error" });

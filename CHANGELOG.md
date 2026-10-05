@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.29
+
+- Ielogošanās forma treniņa atgriešanās adresi ņem no lapas, lai lint vairs nekrīt uz stāvokļa maiņu efektā
+
 ## v0.1.28
 
 - Iestatījumos e-pasts un tālrunis ir blakus. Viesa tālrunis rādās aiz e-pasta notikumā un viesu reģistrā
