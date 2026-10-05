@@ -11,6 +11,7 @@ export type SiteBrand = {
   trainingVotingHours: number;
   gameVotingHours: number;
   contactEmail: string;
+  maintenance: boolean;
   slogans: Record<string, string>;
 };
 
@@ -39,6 +40,8 @@ export type SystemUser = {
   isAdmin: boolean;
   createdAt: string;
   lastSeenAt: string | null;
+  languageCode: string;
+  languageName: string;
   teams: { id: string; name: string; sportId: string | null }[];
 };
 

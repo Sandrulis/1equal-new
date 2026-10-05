@@ -86,15 +86,17 @@ export async function recordUserOrigin(userId: string, captured?: RequestAddress
   const admin = createAdminClient();
   if (!admin) return;
   const address = captured ?? (await captureRequestAddress());
-  if (!address.ip) return;
-  const snapshot = { ip: address.ip, countryCode: address.publicIp ? address.countryCode : "" };
+  if (!address.ip || !address.publicIp) return;
   const existing = await admin.from("user_origins").select("ip, country_code").eq("user_id", userId).maybeSingle();
-  const sameIp = existing.data?.ip === snapshot.ip;
-  if (sameIp && (existing.data?.country_code || !snapshot.countryCode)) return;
-  let countryCode = snapshot.countryCode;
-  if (!countryCode && !sameIp && address.publicIp) countryCode = await lookupCountry(snapshot.ip);
-  if (!countryCode && sameIp) countryCode = existing.data?.country_code ?? "";
-  await admin.from("user_origins").upsert({ user_id: userId, ip: snapshot.ip, country_code: countryCode, updated_at: new Date().toISOString() });
+  if (existing.error) return;
+  const previousIp = existing.data?.ip ?? "";
+  const previousCountry = existing.data?.country_code ?? "";
+  const ipChanged = previousIp !== address.ip;
+  let countryCode = address.countryCode;
+  if (!countryCode && ipChanged) countryCode = await lookupCountry(address.ip);
+  if (!countryCode && !ipChanged) countryCode = previousCountry;
+  if (!ipChanged && countryCode === previousCountry) return;
+  await admin.from("user_origins").upsert({ user_id: userId, ip: address.ip, country_code: countryCode, updated_at: new Date().toISOString() });
 }
 
 export async function recordTeamOrigin(teamId: string): Promise<void> {

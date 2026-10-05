@@ -46,7 +46,7 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
         })
         .join(" ");
       const origin = originLabel(user.originIp, user.originCountry, lang);
-      return [user.name, user.email, user.phone, origin, user.originIp, role, teams].join(" ").toLowerCase().includes(needle);
+      return [user.name, user.email, user.phone, user.languageCode, user.languageName, origin, user.originIp, role, teams].join(" ").toLowerCase().includes(needle);
     });
     return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
   }, [fallbackLang, lang, letter, query, sports, t, users]);
@@ -100,7 +100,14 @@ export function AdminUsersList({ users, sports }: { users: SystemUser[]; sports:
                             {initials(user.name)}
                           </span>
                           <span className="min-w-0">
-                            <span className="block font-medium">{user.name}</span>
+                            <span className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="font-medium">{user.name}</span>
+                              {user.languageCode ? (
+                                <span className="font-normal text-muted">
+                                  {user.languageName ? `${user.languageCode} - ${user.languageName}` : user.languageCode}
+                                </span>
+                              ) : null}
+                            </span>
                             <PlayerContact email={user.email} phone={user.phone} originIp={user.originIp} originCountry={user.originCountry} />
                             <span className="block text-muted min-[768px]:hidden">{t(user.isAdmin ? "roles.admin" : "roles.user")}</span>
                           </span>

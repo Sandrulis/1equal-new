@@ -31,6 +31,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     const error = params.get("error");
     const notice = params.get("notice");
     if (error === "google") showFeedback({ message: t("auth.google.failed"), variant: "error" });
+    if (error === "maintenance") showFeedback({ message: t("auth.error.maintenance"), variant: "error" });
     if (error === "deleted") showFeedback({ message: t("user.delete.gone"), variant: "error" });
     if (error === "delete_link") showFeedback({ message: t("user.delete.link_invalid"), variant: "error" });
     if (error === "delete_failed") showFeedback({ message: t("user.delete.email_failed"), variant: "error" });

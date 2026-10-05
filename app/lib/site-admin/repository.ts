@@ -59,9 +59,9 @@ function sloganMap(languages: { code: string; slogan?: string | null }[]): Recor
 
 export const getSiteBrand = cachedPublic("site-brand", async (): Promise<SiteBrand> => {
   const admin = createAdminClient();
-  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null, display: normalizeSiteDisplay(null), currency: normalizeCurrency(null), trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS, gameVotingHours: DEFAULT_GAME_VOTING_HOURS, contactEmail: "", slogans: sloganMap(FALLBACK_LANGUAGES) };
+  if (!admin) return { name: DEFAULT_SITE_NAME, logoUrl: null, faviconUrl: null, display: normalizeSiteDisplay(null), currency: normalizeCurrency(null), trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS, gameVotingHours: DEFAULT_GAME_VOTING_HOURS, contactEmail: "", maintenance: false, slogans: sloganMap(FALLBACK_LANGUAGES) };
   const [{ data }, slogans] = await Promise.all([
-    admin.from("site_settings").select("name, logo_path, favicon_path, week_start_day, date_format, date_separator, time_format, timezone, currency, training_voting_hours, game_voting_hours, contact_email").eq("id", 1).maybeSingle(),
+    admin.from("site_settings").select("name, logo_path, favicon_path, week_start_day, date_format, date_separator, time_format, timezone, currency, training_voting_hours, game_voting_hours, contact_email, maintenance").eq("id", 1).maybeSingle(),
     admin.from("site_languages").select("code, slogan").then((result) => sloganMap(result.data ?? [])),
   ]);
   return {
@@ -79,6 +79,7 @@ export const getSiteBrand = cachedPublic("site-brand", async (): Promise<SiteBra
     trainingVotingHours: votingHours(data?.training_voting_hours) ?? DEFAULT_TRAINING_VOTING_HOURS,
     gameVotingHours: votingHours(data?.game_voting_hours) ?? DEFAULT_GAME_VOTING_HOURS,
     contactEmail: data?.contact_email?.trim() ?? "",
+    maintenance: data?.maintenance === true,
     slogans,
   };
 });
@@ -158,9 +159,10 @@ const listMemberships = cache(async (): Promise<MembershipLink[]> => {
 export async function listSystemUsers(): Promise<SystemUser[]> {
   const admin = createAdminClient();
   if (!admin) return [];
-  const [{ data, error }, links] = await Promise.all([
-    admin.from("users").select("id, email, name, first_name, last_name, is_admin, created_at, last_seen_at"),
+  const [{ data, error }, links, languages] = await Promise.all([
+    admin.from("users").select("id, email, name, first_name, last_name, is_admin, created_at, last_seen_at, language_code"),
     listMemberships(),
+    admin.from("site_languages").select("code, name"),
   ]);
   if (error || !data) return [];
   const teamsByUser = new Map<string, { id: string; name: string; sportId: string | null }[]>();
@@ -179,9 +181,11 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
     teamsByUser.set(link.user_id, list);
   }
   const origins = await listUserOrigins(data.map((row) => row.id));
+  const languageNames = new Map((languages.data ?? []).map((language) => [language.code, language.name]));
   return data
     .map((row) => {
       const origin = origins.get(row.id);
+      const languageCode = typeof row.language_code === "string" ? row.language_code : "";
       return {
         id: row.id,
         name: displayName(row),
@@ -192,6 +196,8 @@ export async function listSystemUsers(): Promise<SystemUser[]> {
         isAdmin: row.is_admin,
         createdAt: row.created_at,
         lastSeenAt: row.last_seen_at,
+        languageCode,
+        languageName: languageNames.get(languageCode) ?? "",
         teams: (teamsByUser.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "lv")),
       };
     })
@@ -437,7 +443,7 @@ export async function loadTranslationCatalog(): Promise<SiteTranslationRow[]> {
   const keys = new Set<string>([...Object.keys(messages), ...stored.keys()]);
   return [...keys].sort().map((key) => {
     const bundled = key in messages;
-    const builtIn = bundled ? messages[key as keyof typeof messages] : null;
+    const builtIn = bundled ? (messages as Record<string, { lv: string; en: string; ru: string }>)[key] : null;
     const values: Record<string, string> = {};
     for (const language of languages) {
       const saved = stored.get(key)?.[language.code];
@@ -456,8 +462,13 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
   const needUsers = section === "users";
   const needTranslations = section === "translations";
   const needMembers = section === "teams";
-  const [brand, languages] = await Promise.all([getSiteBrand(), listSiteLanguages()]);
   const admin = createAdminClient();
+  const [brand, languages, maintenanceRow] = await Promise.all([
+    getSiteBrand(),
+    listSiteLanguages(),
+    admin ? admin.from("site_settings").select("maintenance").eq("id", 1).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const liveBrand = { ...brand, maintenance: maintenanceRow.data?.maintenance === true };
   const [users, translations, userCount, teams, members, subteams, modules, teamModules, integrations, emailTemplates, todos, feedback, watched] = await Promise.all([
     needUsers ? listSystemUsers() : Promise.resolve([] as SystemUser[]),
     needTranslations ? loadTranslationCatalog() : Promise.resolve([] as SiteTranslationRow[]),
@@ -477,7 +488,7 @@ export async function loadAdminConsole(userId: string, section: AdminSection): P
   ]);
   const watchedTeamIds = (watched.data ?? []).map((row) => row.team_id);
   return {
-    brand,
+    brand: liveBrand,
     languages,
     translations,
     users,

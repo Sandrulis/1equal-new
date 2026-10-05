@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminDialog } from "@/app/components/admin-dialog";
 import { ContentImage } from "@/app/components/content-image";
 import { DisplayPreferencesFields } from "@/app/components/display-preferences";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { displaySettingsEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
-import { saveSiteSettings } from "@/app/lib/site-admin/actions";
+import { saveSiteSettings, setSiteMaintenance } from "@/app/lib/site-admin/actions";
 import type { SiteBrand, SiteLanguage } from "@/app/lib/site-admin/types";
 import { useLanguage } from "@/app/lib/language";
 
@@ -40,6 +41,9 @@ export function AdminSettingsForm({ initial, languages }: { initial: SiteBrand; 
   const [trainingHours, setTrainingHours] = useState(String(initial.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(initial.gameVotingHours));
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
+  const [maintenance, setMaintenance] = useState(initial.maintenance);
+  const [askMaintenance, setAskMaintenance] = useState<boolean | null>(null);
+  const [maintenancePending, setMaintenancePending] = useState(false);
   const [slogans, setSlogans] = useState(() => sloganDraft(languages));
   const [pending, setPending] = useState(false);
   const [seenInitial, setSeenInitial] = useState(initial);
@@ -56,6 +60,7 @@ export function AdminSettingsForm({ initial, languages }: { initial: SiteBrand; 
     setTrainingHours(String(initial.trainingVotingHours));
     setGameHours(String(initial.gameVotingHours));
     setContactEmail(initial.contactEmail);
+    setMaintenance(initial.maintenance);
   }
   if (languages !== seenLanguages) {
     setSeenLanguages(languages);
@@ -98,9 +103,42 @@ export function AdminSettingsForm({ initial, languages }: { initial: SiteBrand; 
     router.refresh();
   }
 
+  async function applyMaintenance() {
+    if (askMaintenance === null || maintenancePending) return;
+    setMaintenancePending(true);
+    const result = await setSiteMaintenance(askMaintenance);
+    setMaintenancePending(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    setMaintenance(askMaintenance);
+    setAskMaintenance(null);
+    showFeedback({ message: t("site_settings.saved"), variant: "success" });
+    router.refresh();
+  }
+
   return (
+    <>
     <form onSubmit={(event) => void onSubmit(event)} className="max-w-3xl space-y-6 rounded-2xl bg-paper p-5 ring-1 ring-line">
       <p className="text-sm leading-6 text-muted">{t("site_settings.lead")}</p>
+      <div className="flex items-start justify-between gap-4 rounded-xl bg-ice px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">{t("site_settings.form.maintenance")}</p>
+          <p className="mt-1 text-xs leading-5 text-muted">{t("site_settings.form.maintenance_hint")}</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={maintenance}
+          aria-label={t("site_settings.form.maintenance")}
+          disabled={pending || maintenancePending}
+          onClick={() => setAskMaintenance(!maintenance)}
+          className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full disabled:cursor-not-allowed disabled:opacity-60 ${maintenance ? "bg-game" : "bg-line"}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper ${maintenance ? "translate-x-5" : ""}`} />
+        </button>
+      </div>
       <label className="block text-sm font-medium">
         {t("catalog.name")}
         <input
@@ -201,6 +239,28 @@ export function AdminSettingsForm({ initial, languages }: { initial: SiteBrand; 
         </button>
       </div>
     </form>
+    <AdminDialog
+      open={askMaintenance !== null}
+      closeButton
+      title={t(askMaintenance ? "site_settings.maintenance.on_title" : "site_settings.maintenance.off_title")}
+      onClose={() => { if (!maintenancePending) setAskMaintenance(null); }}
+    >
+      <p className="text-sm text-muted">{t(askMaintenance ? "site_settings.maintenance.on_lead" : "site_settings.maintenance.off_lead")}</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" disabled={maintenancePending} onClick={() => setAskMaintenance(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
+          {t("actions.cancel")}
+        </button>
+        <button
+          type="button"
+          disabled={maintenancePending || askMaintenance === null}
+          onClick={() => void applyMaintenance()}
+          className={`rounded-lg px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 ${askMaintenance ? "bg-game" : "bg-navy"}`}
+        >
+          {t(askMaintenance ? "site_settings.maintenance.turn_on" : "site_settings.maintenance.turn_off")}
+        </button>
+      </div>
+    </AdminDialog>
+    </>
   );
 }
 

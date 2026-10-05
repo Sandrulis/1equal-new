@@ -1,11 +1,13 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { saveUserLanguage } from "@/app/lib/auth/actions";
 import type { Lang, MessageKey } from "@/app/lib/messages";
 import { applyBrandName } from "@/app/lib/site-brand";
 import type { PublicI18n } from "@/app/lib/site-admin/types";
 
 const STORAGE_KEY = "1equal-lang";
+let syncedLanguage = "";
 const langListeners = new Set<() => void>();
 
 function subscribeStoredLang(onChange: () => void) {
@@ -106,6 +108,15 @@ export function LanguageProvider({
 
   useEffect(() => {
     document.documentElement.lang = lang;
+  }, [lang]);
+
+  useEffect(() => {
+    if (syncedLanguage === lang) return;
+    if (!document.cookie.split("; ").some((part) => part.includes("-auth-token"))) return;
+    syncedLanguage = lang;
+    void saveUserLanguage(lang).then((saved) => {
+      if (!saved) syncedLanguage = "";
+    });
   }, [lang]);
 
   useEffect(() => {

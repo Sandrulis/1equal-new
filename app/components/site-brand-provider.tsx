@@ -15,6 +15,7 @@ const SiteBrandContext = createContext<SiteBrand>({
   trainingVotingHours: DEFAULT_TRAINING_VOTING_HOURS,
   gameVotingHours: DEFAULT_GAME_VOTING_HOURS,
   contactEmail: "",
+  maintenance: false,
   slogans: {},
 });
 

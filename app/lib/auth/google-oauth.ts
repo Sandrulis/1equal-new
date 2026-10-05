@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { settleAccountDeletionOnSignIn, withAccountRestoredCookie } from "@/app/lib/auth/account-deletion";
+import { siteMaintenanceOn } from "@/app/lib/maintenance";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
@@ -189,6 +190,11 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
   if (!accessToken) return fail();
   const profile = await fetchProfile(accessToken);
   if (!profile) return fail();
+  if (await siteMaintenanceOn(admin)) {
+    const email = profile.email.replaceAll("%", "\\%").replaceAll("_", "\\_");
+    const person = await admin.from("users").select("is_admin").ilike("email", email).maybeSingle();
+    if (person.data?.is_admin !== true) return clearGoogleOAuthCookie(NextResponse.redirect(`${origin}/login?error=maintenance`));
+  }
 
   const created = await admin.auth.admin.createUser({
     email: profile.email,

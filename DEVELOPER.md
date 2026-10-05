@@ -59,13 +59,14 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard/admin/users` | Visi `public.users`. Meklēšana un alfabeta josla Visi, A-Z un #. Vārds, e-pasts, tālrunis no komandas dalības, valsts un IP no `user_origins`, loma, komanda ar sporta veidu, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē) |
+| `/dashboard/admin/users` | Visi `public.users`. Meklēšana un alfabeta josla Visi, A-Z un #. Aiz vārda ir `users.language_code` un valodas nosaukums. E-pasts, tālrunis no komandas dalības, valsts un IP no `user_origins`, loma, komanda ar sporta veidu, reģistrēts un pēdējo reizi redzēts (`last_seen_at`, atjaunojas paneļa ielādē). Publiska IP maiņa pārraksta valsti |
 | `/dashboard/admin/teams` | `public.teams`. Meklēšana, alfabeta josla, labošana. Noņemšana prasa apstiprinājumu. Kolonnas: apakškomandas un spēlētāji. Aiz komandas vārda ir sporta veids, un vārds atver logu ar sarakstu. Pie spēlētāja ir vadītāja un administratora atzīme, e-pasts, tālrunis un valsts ar IP. Pievienot nav. Pieslēgties ieraksta `admin_team_watches`, uzliek aktīvo komandu un atver tās kalendāru. Admins sastāvā neparādās. Atvienošana no pārslēdzēja aizved atpakaļ uz šo sarakstu |
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
 | `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, individuāls slēdzis, pievienot pēc atslēgas, dzēst. Individuāls modulis sākas izslēgts katrā komandā. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
 | `/dashboard/admin/sports` | Sporta veidi visās valodās. Ikonu meklē starp brīvajām Font Awesome solid, regular un brands ikonām, un ielāde rāda indikatoru. Formā ir tikai kopīgie moduļi. Individuālos ieslēdz komandai. Vismaz vienam sporta veidam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām |
 | `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Tokens ir tikai admina lapā |
-| `/dashboard/admin/settings` | Nosaukums, logotips, favicon un slogans katrai valodai. Tukšs slogans e-pasta kājenē nerādās. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding` |
+| `/dashboard/admin/settings` | Nosaukums, logotips, favicon, slogans katrai valodai un apkopes slēdzis. Tukšs slogans e-pasta kājenē nerādās. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding`. Apkope izslēdz sistēmu: `/login` paliek, un ielogoties var tikai `users.is_admin` |
+| `/maintenance` | Apkopes lapa, kad `site_settings.maintenance` ir ieslēgts. Bez apkopes ved uz `/` |
 | `/dashboard/admin/integrations` | Turnstile, Google auth, Resend, Umami, Sentry |
 | `/dashboard/admin/languages` | Valodas: aktīva, noklusējums, nosaukums. Noklusējumu nevar izslēgt vai dzēst |
 | `/dashboard/admin/translations` | Visas `messages.ts` atslēgas plus DB rindas. Labo visas valodas vienā logā |
@@ -157,13 +158,15 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `056_module_pond_guests.sql` | `module_pond`, `team_events.allow_guests`, `team_event_rsvps.is_guest` |
 | `057_user_phone.sql` | `users.phone`. Aizpilda no pēdējā `team_members.phone` |
 | `058_team_guest_notes.sql` | `team_guest_notes`. Komandas piezīme viesim, līdz 500 rakstzīmēm |
+| `059_site_maintenance.sql` | `site_settings.maintenance`. Apkopes režīms |
+| `060_user_language.sql` | `users.language_code`. Lietotāja izvēlētā valoda |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 
 ## Project structure
 
 ```
-proxy.ts                     # Sesijas refresh un /dashboard aizsardzība
+proxy.ts                     # Sesijas refresh, /dashboard aizsardzība un www.1equal.com novirze uz https://1equal.com
 app/
   layout.tsx                 # Zīmols, valoda, sīkdatnes, Umami, toast
   page.tsx                   # Landing

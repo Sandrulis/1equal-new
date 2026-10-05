@@ -43,19 +43,20 @@ export default async function DashboardPage({
   const ledTeamIds = initialTeams.filter((team) => team.leaderId === account.id && team.id).map((team) => team.id as string);
   const settleIds = initialTeams.some((team) => team.financeReserve) ? [] : initialTeams.filter((team) => team.id).map((team) => team.id as string);
   const clientAddress = await captureRequestAddress();
+  const originWrite = recordUserOrigin(account.id, clientAddress);
   after(async () => {
     await Promise.all([
       purgeDueAccounts(),
       touchUserLastSeen(account.id),
       (async () => {
-        await recordUserOrigin(account.id, clientAddress);
+        await originWrite;
         if (ledTeamIds.length > 0) await recordMissingTeamOrigins(ledTeamIds, clientAddress);
       })(),
       settleIds.length ? settleFinishedEvents(settleIds) : Promise.resolve(),
     ]);
   });
   const [admin, enabledModules, individualModuleKeys, sports] = await Promise.all([
-    account.isAdmin && route.view === "admin" ? loadAdminConsole(account.id, route.section) : Promise.resolve(null),
+    originWrite.then(() => (account.isAdmin && route.view === "admin" ? loadAdminConsole(account.id, route.section) : null)),
     modulesPromise,
     individualPromise,
     sportsPromise,

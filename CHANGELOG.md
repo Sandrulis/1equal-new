@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.31
+
+- Apkopes slēdzis izslēdz sistēmu. Ielogoties var tikai administrators, un publiskā lapa atvainojas bez ielogošanās pogas
+- Admina lietotājiem aiz vārda ir izvēlētā valoda. IP un valsts atjauninās no pēdējās publiskās adreses
+- `www.1equal.com` novirza uz `https://1equal.com`, lai Google OAuth adrese sakrīt ar reģistrēto
+
 ## v0.1.30
 
 - Konta dzēšanas saite ir vienreizējs tokens, un drošības pārbaude to vairs neuzskata par maršrutu bez autentifikācijas

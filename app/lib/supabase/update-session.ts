@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { parseRememberSession, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
+import { isMaintenanceOpenPath, siteMaintenanceOn } from "@/app/lib/maintenance";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
 
@@ -21,6 +22,26 @@ function contentSecurityPolicy(): { nonce: string; policy: string } {
     "frame-ancestors 'none'",
   ].join("; ");
   return { nonce, policy };
+}
+
+function redirectWithCookies(request: NextRequest, pathname: string, policy: string, source: NextResponse) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  url.search = "";
+  const redirect = NextResponse.redirect(url);
+  redirect.headers.set("Content-Security-Policy", policy);
+  for (const cookie of source.headers.getSetCookie()) redirect.headers.append("set-cookie", cookie);
+  return redirect;
+}
+
+function maintenanceDenied(request: NextRequest, pathname: string, policy: string, source: NextResponse) {
+  if (pathname.startsWith("/api/")) {
+    const denied = NextResponse.json({ error: "maintenance" }, { status: 503 });
+    denied.headers.set("Content-Security-Policy", policy);
+    for (const cookie of source.headers.getSetCookie()) denied.headers.append("set-cookie", cookie);
+    return denied;
+  }
+  return redirectWithCookies(request, "/maintenance", policy, source);
 }
 
 function nextWithPolicy(requestHeaders: Headers, policy: string) {
@@ -47,7 +68,6 @@ export async function updateSession(request: NextRequest) {
     pathname === "/cookies" ||
     pathname === "/demo" ||
     pathname.startsWith("/demo/");
-  if (!hasAuthCookie && isPublic) return nextWithPolicy(requestHeaders, policy);
 
   let supabaseResponse = nextWithPolicy(requestHeaders, policy);
   const remember = parseRememberSession(request.cookies.get(REMEMBER_SESSION_COOKIE)?.value);
@@ -67,17 +87,35 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
+  const maintenance = await siteMaintenanceOn(supabase);
+  if (!maintenance && !hasAuthCookie && isPublic) return nextWithPolicy(requestHeaders, policy);
+  if (!maintenance && pathname === "/maintenance") return redirectWithCookies(request, "/", policy, supabaseResponse);
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  let activeUser = user;
 
   const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const isHome = pathname === "/";
   const isAuthForm = pathname === "/login" || pathname === "/signup";
   const signInPost = request.method === "POST" && (isAuthForm || pathname.startsWith("/auth/"));
 
-  if (user && !signInPost) {
-    const marked = await supabase.from("users").select("deletion_due_at").eq("id", user.id).maybeSingle();
+  if (maintenance) {
+    const adminRow = activeUser ? await supabase.from("users").select("is_admin").eq("id", activeUser.id).maybeSingle() : null;
+    const admin = adminRow?.data?.is_admin === true;
+    if (admin && pathname === "/maintenance") return redirectWithCookies(request, "/dashboard", policy, supabaseResponse);
+    if (!admin) {
+      if (activeUser && !signInPost) {
+        await supabase.auth.signOut();
+        activeUser = null;
+      }
+      if (!isMaintenanceOpenPath(pathname)) return maintenanceDenied(request, pathname, policy, supabaseResponse);
+    }
+  }
+
+  if (activeUser && !signInPost) {
+    const marked = await supabase.from("users").select("deletion_due_at").eq("id", activeUser.id).maybeSingle();
     const dueAt = marked.data?.deletion_due_at;
     if (!marked.error && typeof dueAt === "string" && dueAt) {
       await supabase.auth.signOut();
@@ -96,7 +134,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (!user && isDashboard) {
+  if (!activeUser && isDashboard) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
@@ -105,7 +143,7 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
-  if (user && (isAuthForm || isHome)) {
+  if (activeUser && (isAuthForm || isHome)) {
     const homeUrl = request.nextUrl.clone();
     const next = isAuthForm ? safeTrainingPath(request.nextUrl.searchParams.get("next")) : null;
     homeUrl.pathname = next ?? "/dashboard";

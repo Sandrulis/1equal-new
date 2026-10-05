@@ -13,6 +13,7 @@ import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-cha
 import { isEmailAddress } from "@/app/lib/email/email-address";
 import { asLang, translate, type MessageKey } from "@/app/lib/messages";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import { siteMaintenanceOn } from "@/app/lib/maintenance";
 import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
@@ -75,6 +76,14 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient(remember);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: mapAuthError(error.code, error.message) };
+  const admin = createAdminClient();
+  if (admin && data.user && (await siteMaintenanceOn(admin))) {
+    const person = await admin.from("users").select("is_admin").eq("id", data.user.id).maybeSingle();
+    if (person.data?.is_admin !== true) {
+      await supabase.auth.signOut();
+      return { error: "auth.error.maintenance" };
+    }
+  }
   const settlement = data.user ? await settleAccountDeletionOnSignIn(data.user.id) : "none";
   if (settlement === "deleted") {
     await supabase.auth.signOut();
@@ -101,6 +110,7 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
 
   const admin = createAdminClient();
   if (!admin) return { error: "auth.error.config" };
+  if (await siteMaintenanceOn(admin)) return { error: "auth.error.maintenance" };
 
   const { data, error } = await admin.auth.admin.createUser({
     email,
@@ -209,6 +219,7 @@ export async function resetPassword(formData: FormData): Promise<AuthResult> {
 
   const admin = createAdminClient();
   if (!admin) return { error: "auth.error.config" };
+  if (await siteMaintenanceOn(admin)) return { error: "auth.error.maintenance" };
   await mailAccountLink(admin, email, "recovery");
   return { sent: true };
 }
@@ -466,6 +477,24 @@ export async function requestAccountDeletion(formData: FormData): Promise<AuthRe
   if ("error" in scheduled) return scheduled;
   await supabase.auth.signOut();
   return { ok: true };
+}
+
+export async function saveUserLanguage(code: string): Promise<boolean> {
+  const languageCode = code.trim().toLowerCase();
+  if (!/^[a-z]{2,12}$/.test(languageCode)) return false;
+  if (!isSupabaseConfigured()) return false;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return false;
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const known = await admin.from("site_languages").select("code").eq("code", languageCode).eq("is_active", true).maybeSingle();
+  if (!known.data) return false;
+  const current = await admin.from("users").select("language_code").eq("id", data.user.id).maybeSingle();
+  if (current.error) return false;
+  if (current.data?.language_code === languageCode) return true;
+  const saved = await admin.from("users").update({ language_code: languageCode }).eq("id", data.user.id);
+  return !saved.error;
 }
 
 export async function signOut() {

@@ -70,6 +70,16 @@ async function removeStored(path: string | null) {
   await client.storage.from("branding").remove([path]);
 }
 
+export async function setSiteMaintenance(enabled: boolean): Promise<ActionResult> {
+  const gate = await adminClient();
+  if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
+  const { error } = await gate.client.from("site_settings").update({ maintenance: enabled, updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("site_settings.maintenance", "site_settings", "1");
+  refresh();
+  return { ok: true };
+}
+
 export async function saveSiteSettings(formData: FormData): Promise<ActionResult> {
   const gate = await adminClient();
   if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
