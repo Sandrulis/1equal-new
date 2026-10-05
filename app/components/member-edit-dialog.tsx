@@ -9,7 +9,7 @@ import type { Member, Subteam } from "@/app/lib/demo-data";
 import { parseEhlPlayerUrl } from "@/app/lib/ehl-player";
 import { useLanguage } from "@/app/lib/language";
 import { isEmailAddress } from "@/app/lib/email/email-address";
-import { normalizePositionCode, parseExtraPositions, PLAYING_POSITIONS, positionLabel } from "@/app/lib/positions";
+import { formatPosition, parseExtraPositions, resolvePositionCode, type PositionCatalogItem } from "@/app/lib/positions";
 import { lookupPlayerLink, saveMemberProfile } from "@/app/lib/team-actions";
 
 const fieldClass = "mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring-line outline-none focus:ring-train";
@@ -35,6 +35,7 @@ export function MemberEditDialog({
   canRoster = false,
   canAppoint = false,
   entuziasti = true,
+  positions,
   subteams,
   onClose,
   onSaved,
@@ -47,17 +48,19 @@ export function MemberEditDialog({
   canRoster?: boolean;
   canAppoint?: boolean;
   entuziasti?: boolean;
+  positions: PositionCatalogItem[];
   subteams: Subteam[];
   onClose: () => void;
   onSaved: (member: Member, teamCode: string) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const { showFeedback } = useFeedbackToast();
   const startNumber = member.number == null ? "" : String(member.number);
   const startIds = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const startFee = member.feeExempt === true;
-  const startPosition = normalizePositionCode(member.position);
-  const startExtras = parseExtraPositions(member.extraPositions, startPosition);
+  const startPosition = resolvePositionCode(member.position, positions);
+  const startExtras = parseExtraPositions(member.extraPositions, startPosition, positions);
   const startPerson = personParts(member);
   const startEmail = member.email.trim().toLowerCase();
   const startAdmin = member.teamAdmin === true;
@@ -116,7 +119,7 @@ export function MemberEditDialog({
       return;
     }
     setNumber((current) => (current.trim() ? current : result.number));
-    setPosition((current) => current || normalizePositionCode(result.position));
+    setPosition((current) => current || resolvePositionCode(result.position, positions));
   }
 
   async function save(event: FormEvent) {
@@ -181,7 +184,7 @@ export function MemberEditDialog({
         ...member,
         number: trimmedNumber && Number.isInteger(parsed) && parsed >= 0 && parsed <= 99 ? parsed : null,
         position,
-        extraPositions: parseExtraPositions(extraPositions, position),
+        extraPositions: parseExtraPositions(extraPositions, position, positions),
         ...(canManage
           ? {
               firstName: firstName.trim(),
@@ -255,6 +258,7 @@ export function MemberEditDialog({
             <span className="text-muted">{t("roster.fields.number")}</span>
             <input value={number} onChange={(event) => setNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" className={fieldClass} />
           </label>
+          {positions.length ? (
           <label className="block min-w-0 text-sm">
             <span className="text-muted">{t("roster.fields.position")}</span>
             <select
@@ -267,18 +271,22 @@ export function MemberEditDialog({
               className={fieldClass}
             >
               <option value="">{t("roster.fields.position.none")}</option>
-              {PLAYING_POSITIONS.map((item) => (
+              {positions.map((item) => (
                 <option key={item.code} value={item.code}>
-                  {positionLabel(item.code, t)}
+                  {formatPosition(item.code, positions, lang, fallbackLang, t).label}
                 </option>
               ))}
             </select>
           </label>
+          ) : (
+            <p className="self-end text-sm text-muted">{t("roster.positions.empty")}</p>
+          )}
         </div>
+        {positions.some((item) => item.code !== position) ? (
         <fieldset>
           <legend className="text-sm text-muted">{t("roster.fields.positions_extra")}</legend>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line">
-            {PLAYING_POSITIONS.filter((item) => item.code !== position).map((item) => {
+            {positions.filter((item) => item.code !== position).map((item) => {
               const checked = extraPositions.includes(item.code);
               return (
                 <label key={item.code} className="inline-flex items-center gap-2 text-sm">
@@ -288,12 +296,13 @@ export function MemberEditDialog({
                     onChange={() => setExtraPositions((current) => (current.includes(item.code) ? current.filter((code) => code !== item.code) : [...current, item.code]))}
                     className="h-5 w-5 shrink-0 appearance-none rounded-md bg-paper ring-1 ring-line checked:bg-navy checked:ring-navy"
                   />
-                  {positionLabel(item.code, t)}
+                  {formatPosition(item.code, positions, lang, fallbackLang, t).label}
                 </label>
               );
             })}
           </div>
         </fieldset>
+        ) : null}
         {entuziasti ? (
         <label className="block text-sm">
           <span className="text-muted">{t("user.settings.player")}</span>

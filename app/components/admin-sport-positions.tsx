@@ -5,6 +5,7 @@ import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconChevronRight, IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import { useLanguage } from "@/app/lib/language";
+import { cleanPositionCode } from "@/app/lib/positions";
 import { deleteSportPosition, moveSportPosition, saveSportPosition } from "@/app/lib/site-admin/actions";
 import type { SiteLanguage } from "@/app/lib/site-admin/types";
 import { sportLabel, type Sport, type SportPosition } from "@/app/lib/sports";
@@ -93,10 +94,10 @@ export function AdminSportPositions({
                       {name ? <span className="ml-2 text-sm text-muted">{name}</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
-                      <IconTipButton label={t("sports.positions.up")} tone="muted" disabled={pending || index === 0} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "up"), null)}>
+                      <IconTipButton label={t("sports.positions.up")} tone="muted" disabled={pending || formOpen || index === 0} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "up"), null)}>
                         <span className="inline-flex -rotate-90"><IconChevronRight /></span>
                       </IconTipButton>
-                      <IconTipButton label={t("sports.positions.down")} tone="muted" disabled={pending || index === sport.positions.length - 1} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "down"), null)}>
+                      <IconTipButton label={t("sports.positions.down")} tone="muted" disabled={pending || formOpen || index === sport.positions.length - 1} onClick={() => void persist(() => moveSportPosition(sport.id, position.id, "down"), null)}>
                         <span className="inline-flex rotate-90"><IconChevronRight /></span>
                       </IconTipButton>
                       <IconTipButton label={t("actions.edit")} tone="muted" disabled={pending || formOpen} onClick={() => setEditing(position)}>
@@ -157,7 +158,7 @@ function PositionForm({
   const [code, setCode] = useState(position?.code ?? "");
   const [names, setNames] = useState<Record<string, string>>(() => ({ ...(position?.names ?? {}) }));
   const activeLanguages = languages.filter((language) => language.isActive);
-  const ready = /^[A-Z0-9]{1,8}$/.test(code) && activeLanguages.every((language) => (names[language.code] ?? "").trim().length > 0);
+  const ready = Boolean(cleanPositionCode(code)) && activeLanguages.every((language) => (names[language.code] ?? "").trim().length > 0);
 
   return (
     <form

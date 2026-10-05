@@ -1289,7 +1289,6 @@ export const messages = {
   "landing.everyday.links": { lv: "Vairāk par iespējām", en: "More about the tools", ru: "Подробнее о возможностях" },
   "landing.link.management": { lv: "sporta komandas vadība", en: "sports team management", ru: "управление спортивной командой" },
   "landing.link.calendar": { lv: "komandas kalendārs", en: "team calendar", ru: "календарь команды" },
-  "landing.link.schedule": { lv: "spēļu un treniņu plānošana", en: "game and training scheduling", ru: "планирование игр и тренировок" },
   "landing.link.training": { lv: "treniņu plānošana", en: "training management", ru: "планирование тренировок" },
   "landing.link.attendance": { lv: "spēlētāju dalības uzskaite", en: "player attendance", ru: "учёт явки игроков" },
   "landing.link.expenses": { lv: "komandas izdevumu uzskaite", en: "team expenses", ru: "учёт расходов команды" },

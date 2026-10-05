@@ -34,7 +34,7 @@ import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDism
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
-import { positionCode, positionLabel, positionName } from "@/app/lib/positions";
+import { catalogForSport, formatPosition } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
 
@@ -125,7 +125,8 @@ export function TeamRoster({
   memberHolds?: Record<string, BalanceHold[]>;
   attendanceOn?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const formatMoney = useFormatMoney();
   const { showFeedback } = useFeedbackToast();
   const { subteamById, subteams: catalogSubteams } = useTeamCatalog();
@@ -157,6 +158,7 @@ export function TeamRoster({
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
   const showAttendance = attendanceOn && (canAdjust || members.some((member) => member.attendance));
   const sportKeys = sportId ? (sports.find((item) => item.id === sportId)?.moduleKeys ?? null) : null;
+  const positionCatalog = catalogForSport(sportId, sports);
   const entuziasti = entuziastiForSport(enabledModules, sportKeys);
   const teamBalance = Math.round((persistedBalance + teamEntries.reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
   const teamReserved = Math.round(teamHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
@@ -200,7 +202,7 @@ export function TeamRoster({
       ? members.filter((member) => {
           const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
           const subteam = ids.map((id) => (groupList.find((item) => item.id === id) ?? subteamById(id))?.name ?? "").join(" ");
-          const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => `${code} ${positionLabel(code, t)}`);
+          const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => formatPosition(code, positionCatalog, lang, fallbackLang, t).label);
           return [member.name, member.email, member.phone, formatJersey(member.number) ?? "", ...positions, subteam]
             .join(" ")
             .toLowerCase()
@@ -208,7 +210,7 @@ export function TeamRoster({
         })
       : members;
     return [...matched].sort((left, right) => left.name.localeCompare(right.name, "lv", { sensitivity: "base" }));
-  }, [groupList, members, query, subteamById, t]);
+  }, [fallbackLang, groupList, lang, members, positionCatalog, query, subteamById, t]);
 
   async function removeMember(id: string) {
     if (removePending) return;
@@ -408,11 +410,11 @@ export function TeamRoster({
                       <td className="w-full max-w-0 px-3 py-3 min-[600px]:px-4">
                         <MemberIdentity member={member} leader={member.id === leaderId} />
                         <div className="mt-2 empty:hidden min-[768px]:hidden">
-                          <MemberMark member={member} groups={groupList} row />
+                          <MemberMark member={member} groups={groupList} positions={positionCatalog} row />
                         </div>
                       </td>
                       <td className="hidden px-4 py-3 text-center whitespace-nowrap min-[768px]:table-cell">
-                        <MemberMark member={member} groups={groupList} />
+                        <MemberMark member={member} groups={groupList} positions={positionCatalog} />
                       </td>
                       {showAttendance ? (
                         <td className="px-4 py-3">
@@ -456,6 +458,7 @@ export function TeamRoster({
           canRoster={!teamId || canAdjust}
           canAppoint={isLeader && editing.id !== leaderId}
           entuziasti={entuziasti}
+          positions={positionCatalog}
           subteams={groupList}
           onClose={() => setEditing(null)}
           onSaved={(member, teamCode) => {
@@ -562,7 +565,7 @@ export function TeamRoster({
               </button>
             </div>
           ) : null}
-          <PlayerProfile member={player} subteams={groupList} finance={finance} leader={player.id === leaderId} teamId={teamId} embedded />
+          <PlayerProfile member={player} subteams={groupList} positions={positionCatalog} finance={finance} leader={player.id === leaderId} teamId={teamId} embedded />
           </>
           )}
         </AdminDialog>
@@ -1042,11 +1045,13 @@ function MemberIdentity({ member, leader = false }: { member: Member; leader?: b
   );
 }
 
-function PositionChip({ code }: { code: string }) {
-  const { t } = useLanguage();
+function PositionChip({ code, positions }: { code: string; positions: ReturnType<typeof catalogForSport> }) {
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
-  const label = positionCode(code);
-  const name = positionName(code, t);
+  const shown = formatPosition(code, positions, lang, fallbackLang, t);
+  const label = shown.code;
+  const name = shown.name;
 
   function place(target: HTMLElement) {
     const box = target.getBoundingClientRect();
@@ -1076,20 +1081,20 @@ function PositionChip({ code }: { code: string }) {
   );
 }
 
-function MemberMark({ member, groups, row = false }: { member: Member; groups: Subteam[]; row?: boolean }) {
+function MemberMark({ member, groups, positions, row = false }: { member: Member; groups: Subteam[]; positions: ReturnType<typeof catalogForSport>; row?: boolean }) {
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const marks = ids.map((id) => groups?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const jersey = formatJersey(member.number);
-  const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
-  if (!jersey && positions.length === 0 && marks.length === 0) return null;
+  const codes = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
+  if (!jersey && codes.length === 0 && marks.length === 0) return null;
   return (
     <span className={row ? "flex flex-wrap items-center gap-1.5" : "inline-flex w-max flex-col items-center gap-1.5"}>
       {jersey ? <span className="text-sm font-semibold tabular-nums">{jersey}</span> : null}
-      {positions.length ? (
+      {codes.length ? (
         <span className="inline-flex w-max flex-nowrap items-center justify-center gap-1">
-          {positions.map((code) => (
-            <PositionChip key={code} code={code} />
+          {codes.map((code) => (
+            <PositionChip key={code} code={code} positions={positions} />
           ))}
         </span>
       ) : null}

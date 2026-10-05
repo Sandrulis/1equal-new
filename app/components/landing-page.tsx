@@ -232,7 +232,6 @@ const FAQ = LANDING_FAQ;
 const TOPIC_LINKS: { slug: string; label: MessageKey }[] = [
   { slug: "sports-team-management", label: "landing.link.management" },
   { slug: "team-calendar", label: "landing.link.calendar" },
-  { slug: "team-calendar", label: "landing.link.schedule" },
   { slug: "training-management", label: "landing.link.training" },
   { slug: "player-attendance", label: "landing.link.attendance" },
   { slug: "team-expenses", label: "landing.link.expenses" },

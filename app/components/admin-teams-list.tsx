@@ -10,7 +10,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconCheck, IconLogin, IconLogout, IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
-import { positionLabel } from "@/app/lib/positions";
+import { catalogForSport, formatPosition } from "@/app/lib/positions";
 import { deleteTeam, saveTeam, setAdminTeamWatch, setTeamModule } from "@/app/lib/site-admin/actions";
 import type { SystemSubteam, SystemTeam, SystemTeamMember } from "@/app/lib/site-admin/types";
 import { FRONTEND_MODULE_KEYS, type FrontendModule } from "@/app/lib/frontend-modules";
@@ -383,6 +383,7 @@ export function AdminTeamsList({
                 const photo = entuziastiOn ? player.photoUrl : player.avatarUrl;
                 const name = (entuziastiOn ? player.ehlName : null) || player.name;
                 const position = entuziastiOn ? player.position || player.ehlPosition : player.position;
+                const positionText = position ? formatPosition(position, catalogForSport(openTeam.sportId, sports), lang, fallbackLang, t).label : "";
                 return (
                 <li key={player.userId} className="flex items-center gap-3 py-3">
                   {photo ? (
@@ -406,7 +407,7 @@ export function AdminTeamsList({
                       <span className="block truncate text-sm text-muted">
                         {player.number != null ? `#${player.number}` : ""}
                         {player.number != null && position ? " " : ""}
-                        {position ? positionLabel(position, t) : ""}
+                        {positionText}
                       </span>
                     ) : null}
                     <PlayerContact email={player.email} phone={player.phone} />

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.39
+
+- Sākumlapā komandas kalendāram ir viena saite
+- Sastāvā, spēlētāja logā un admina komandā rādās šī sporta veida pozīcijas
+
 ## v0.1.38
 
 - Katram sporta veidam ir savas pozīcijas. Hokejam sākumā ir LW, C, RW, D un G

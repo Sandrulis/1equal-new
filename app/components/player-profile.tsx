@@ -11,7 +11,7 @@ import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useLanguage } from "@/app/lib/language";
 import type { MessageKey } from "@/app/lib/messages";
-import { positionLabel } from "@/app/lib/positions";
+import { formatPosition, type PositionCatalogItem } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
@@ -29,15 +29,16 @@ function roleKey(role: Member["role"]): MessageKey {
   return `role.${role}` as MessageKey;
 }
 
-export function PlayerProfile({ member, subteams, finance = true, leader = false, embedded = false, teamId = null }: { member: Member; subteams?: Subteam[]; finance?: boolean; leader?: boolean; embedded?: boolean; teamId?: string | null }) {
-  const { t } = useLanguage();
+export function PlayerProfile({ member, subteams, positions = [], finance = true, leader = false, embedded = false, teamId = null }: { member: Member; subteams?: Subteam[]; positions?: PositionCatalogItem[]; finance?: boolean; leader?: boolean; embedded?: boolean; teamId?: string | null }) {
+  const { t, lang, languages } = useLanguage();
+  const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const groups = ids.map((id) => subteams?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const entuziasti = useEntuziasti();
   const photo = memberFaceUrl(member, entuziasti);
   const jersey = formatJersey(member.number);
-  const positions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
+  const memberPositions = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -59,19 +60,19 @@ export function PlayerProfile({ member, subteams, finance = true, leader = false
             </p>
           </div>
         </div>
-        {jersey || positions.length || groups.length ? (
+        {jersey || memberPositions.length || groups.length ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {positions.length || jersey ? (
+            {memberPositions.length || jersey ? (
               <div className={`rounded-xl bg-ice px-4 py-3 ${groups.length ? "" : "sm:col-span-2"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("roster.fields.position")}</p>
                   {jersey ? <p className="text-lg leading-none font-semibold text-train tabular-nums">{jersey}</p> : null}
                 </div>
-                {positions.length ? (
+                {memberPositions.length ? (
                   <ul className="mt-1 space-y-1">
-                    {positions.map((code, index) => (
+                    {memberPositions.map((code, index) => (
                       <li key={code} className={`text-sm font-semibold ${index === 0 ? "text-train" : ""}`}>
-                        {positionLabel(code, t)}
+                        {formatPosition(code, positions, lang, fallbackLang, t).label}
                       </li>
                     ))}
                   </ul>
