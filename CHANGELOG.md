@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.32
+
+- Noņemta `www` novirze uz `1equal.com`, jo Vercel jau sūta otrādi un pārlūks palika noviržu cilpā
+
 ## v0.1.31
 
 - Apkopes slēdzis izslēdz sistēmu. Ielogoties var tikai administrators, un publiskā lapa atvainojas bez ielogošanās pogas

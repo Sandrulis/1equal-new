@@ -166,7 +166,7 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 ## Project structure
 
 ```
-proxy.ts                     # Sesijas refresh, /dashboard aizsardzība un www.1equal.com novirze uz https://1equal.com
+proxy.ts                     # Sesijas refresh un /dashboard aizsardzība
 app/
   layout.tsx                 # Zīmols, valoda, sīkdatnes, Umami, toast
   page.tsx                   # Landing
