@@ -40,7 +40,7 @@ SEO: latviešu sākums ir `/`. `/lv` ved uz `/`. Sporta un tēmu lapām katrā v
 
 | Ceļš | Saturs |
 |---|---|
-| `/dashboard` | Kalendārs bez parauga notikumiem. Apakškomandas notikums ir tās krāsā, zem kalendāra ir leģenda, aplis ir spēle un kvadrāts ir treniņš. Ja ir notikumi, par kuriem vēl jābalso, atveras balsojuma skats. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst notikumu var tikai vadītājs un komandas administrators. Laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
+| `/dashboard` | Kalendārs bez parauga notikumiem. Apakškomandas notikums ir tās krāsā, zem kalendāra ir leģenda, aplis ir spēle un kvadrāts ir treniņš. Ja ir notikumi, par kuriem vēl jābalso, atveras balsojuma skats. Klikšķis uz notikuma paliek kalendāra skatā un atver logu zem kalendāra. Balsojuma skatā jābalso bloks nerādās. Pievienot, labot un dzēst notikumu var tikai vadītājs un komandas administrators. Spēlei ir mājas vai izbraukums. Laiks ir no 08:00 līdz 22:55 ar 5 minūšu soli. Spēļu izklājums atver sastāvu, ja `module_game_layout` ir ieslēgts |
 | `/dashboard/team` | Komandas sastāvs no datubāzes. Klikšķis atver spēlētāja logu. Labot, citu spēlētāju noņemšana, uzaicinājuma kods un Uzaicināt ir vadītājam un komandas administratoram. Parasts spēlētājs labo savu vārdu, uzvārdu, e-pastu, tālruni, numuru, pozīcijas un Entuziastu saiti un var noņemt tikai sevi. Pirms noņemšanas ir apstiprinājums. Neprasīt samaksu un Apakškomandas redz tikai vadītājs un administrators. Komandas iestatījumos vadītājs un administrators labo nosaukumu, valūtu, balsošanas stundas, sporta veidu un Entuziastu saiti. Sporta slēdzis rādās tikai, ja aktīvi ir vairāk nekā viens veids. Tukša saite noņem `source_url` un no tās ielādēto logo, un tad var izgriezt kvadrāta attēlu. Uzaicināt nosūta e-pastu ar saiti `/join/{kods}` |
 | `/dashboard/team/:id` | Spēlētāja logs. Bilances vēsture ir redzama tikai ar `module_finance`. Tikai vadītājs redz slēdzi Administrators, arī dalībnieka labošanā. Administrators dara to pašu, ko vadītājs, bet nevar iecelt administratorus |
 | `/dashboard/guests` | Viesu reģistrs. Vārds, e-pasts, tālrunis, treniņi un komandas piezīme. Sānjoslas saite un saraksts rādās tikai, ja ir vismaz viens viesis. Redz tikai vadītājs un administrators, ja `module_pond` ir komandai. Tiešā saite bez moduļa vai bez viesiem ved uz kalendāru |
@@ -163,6 +163,8 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `060_user_language.sql` | `users.language_code`. Lietotāja izvēlētā valoda |
 | `061_guest_invite_email.sql` | E-pasta veids `guest`. Viesa uzaicinājums uz treniņu |
 | `063_sport_positions.sql` | `sport_positions` un nosaukumi katram sporta veidam. Hokejam un sportiem ar jau lietotiem hokeja kodiem sākumā LW, C, RW, D un G |
+| `064_event_home_away.sql` | `team_events.is_home`. Spēlei mājas vai izbraukums, treniņam tukšs |
+| `065_team_kit_urls.sql` | `teams.home_kit_url` un `away_kit_url` no Entuziastu lapas |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 

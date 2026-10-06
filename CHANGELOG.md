@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2
+
+- Spēlei norāda mājas vai izbraukumu, un labojot to var saglabāt
+- Izklājumā numurs ir aplī, uzvārds virs tā, logo kreisajā malā un Entuziastu forma labajā
+- Telefonā sastāva rinda rāda avataru, un dati, kas neietilpst, paslēpjas veseli
+
 ## v0.2.1
 
 - Velkot pozīciju, spraugā parādās līnija un kaimiņu rindas atvirzās

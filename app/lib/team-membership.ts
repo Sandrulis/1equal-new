@@ -11,6 +11,7 @@ import type { Subteam } from "@/app/lib/demo-data";
 import { displayPosition, parseExtraPositions } from "@/app/lib/positions";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { listUserOrigins } from "@/app/lib/admin-origin";
+import { fetchEhlTeamKits } from "@/app/lib/ehl-team-lookup";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 type UserName = { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null };
@@ -41,6 +42,8 @@ type TeamRow = {
   invite_code: string | null;
   source_url: string | null;
   logo_url: string | null;
+  home_kit_url?: string | null;
+  away_kit_url?: string | null;
   leader_id: string | null;
   training_voting_hours: number | null;
   game_voting_hours: number | null;
@@ -60,12 +63,13 @@ type EventRow = {
   subteam_id: string | null;
   expense: number | string | null;
   with_coach: boolean;
+  is_home?: boolean | null;
   allow_guests?: boolean;
   settled_at?: string | null;
   lineup?: unknown;
 };
 
-export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, allow_guests, settled_at";
+export const TEAM_EVENT_COLUMNS = "id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach, is_home, allow_guests, settled_at";
 
 export function eventFromRow(row: EventRow): TeamEvent {
   const includesLineup = Object.prototype.hasOwnProperty.call(row, "lineup");
@@ -80,6 +84,7 @@ export function eventFromRow(row: EventRow): TeamEvent {
     venueId: row.venue_id,
     expense: row.expense == null ? null : Number(row.expense),
     withCoach: row.with_coach === true,
+    home: row.is_home == null ? null : row.is_home === true,
     allowGuests: row.allow_guests === true,
     settled: Boolean(row.settled_at),
     ...(includesLineup ? { ...lineupFromJson(row.lineup), lineupLoaded: true } : { lineupLoaded: false }),
@@ -247,11 +252,20 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     admin.from("team_modules").select("team_id, module_key").eq("team_id", id),
   ]);
   const [teamRows, prefetched] = await Promise.all([
-    admin.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
+    admin.from("teams").select("id, name, invite_code, source_url, logo_url, home_kit_url, away_kit_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     hinted ? loadDetail(hinted) : Promise.resolve(null),
   ]);
   if (teamRows.error || !teamRows.data?.length) return [];
   const detailId = hinted && teamRows.data.some((row) => row.id === hinted) ? hinted : pickDetailTeamId(teamRows.data, null, watchOnly);
+  const detailTeam = (teamRows.data as TeamRow[]).find((team) => team.id === detailId);
+  if (detailTeam?.source_url && detailTeam.home_kit_url == null && detailTeam.away_kit_url == null) {
+    const kits = await fetchEhlTeamKits(detailTeam.source_url);
+    if (kits) {
+      detailTeam.home_kit_url = kits.homeKitUrl ?? "";
+      detailTeam.away_kit_url = kits.awayKitUrl ?? "";
+      await admin.from("teams").update({ home_kit_url: detailTeam.home_kit_url, away_kit_url: detailTeam.away_kit_url }).eq("id", detailTeam.id);
+    }
+  }
   if (!detailId) return [];
   const [cron, members, groups, links, totals, places, events, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
   const financeReserve = cron.data?.enabled === true;
@@ -348,6 +362,8 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
         demo: false,
         sourceUrl: team.source_url,
         logoUrl: team.logo_url,
+        homeKitUrl: team.home_kit_url?.trim() || null,
+        awayKitUrl: team.away_kit_url?.trim() || null,
         leaderId: team.leader_id,
         trainingVotingHours: team.training_voting_hours ?? 24,
         gameVotingHours: team.game_voting_hours ?? 72,

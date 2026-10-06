@@ -42,13 +42,14 @@ import { usePresence } from "@/app/lib/use-presence";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import type { MessageKey } from "@/app/lib/messages";
 import type { Sport } from "@/app/lib/sports";
-import { EventDetails, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
+import { EventDetails, LineupOpenButton, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
 import type { SideMap, SlotMap } from "@/app/components/event-lineup";
 import type { BalanceHold } from "@/app/components/team-roster";
 import { SiteFooter } from "@/app/components/site-footer";
 import { EntuziastiProvider } from "@/app/components/entuziasti-context";
+import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { CurrencyProvider, useFormatMoney } from "@/app/components/currency-provider";
 import { DisplayPreferencesProvider, useDisplayFormat } from "@/app/components/display-preferences";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
@@ -149,15 +150,6 @@ function withLineup(previous: TeamEvent, next: TeamEvent): TeamEvent {
 }
 
 
-function LineupOpenButton({ pending, label, onClick, className }: { pending: boolean; label: string; onClick: () => void; className: string }) {
-  return (
-    <button type="button" onClick={onClick} disabled={pending} aria-busy={pending} className={`inline-flex items-center gap-1.5 rounded-lg bg-navy text-sm font-medium text-white disabled:cursor-not-allowed ${className}`}>
-      {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
-      {label}
-    </button>
-  );
-}
-
 function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; game: boolean; cost: number | null; subteamName?: string }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -169,6 +161,7 @@ function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; g
       <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
         {game ? t("legend.game") : t("legend.training")}
       </p>
+      {game && event.home != null ? <p className="mt-0.5 text-sm">{t(event.home ? "event.game.home" : "event.game.away")}</p> : null}
       {event.titleId ? <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p> : null}
       {!event.titleId && !game ? <p className="mt-0.5 text-sm">{event.withCoach ? t("event.add.coach") : t("event.add.coach.off")}</p> : null}
       <p className="mt-2 text-sm text-muted">
@@ -242,7 +235,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? preferredTeam(initialTeams, account.activeTeamId) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}:${item.allowGuests ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}:${(team.guests ?? []).map((guest) => `${guest.eventId}:${guest.userId}:${guest.date}:${guest.email}:${guest.phone}:${guest.note}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}:${item.home === true ? 1 : item.home === false ? 0 : ""}:${item.allowGuests ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}:${(team.guests ?? []).map((guest) => `${guest.eventId}:${guest.userId}:${guest.date}:${guest.email}:${guest.phone}:${guest.note}`).join(",")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [guestSignups, setGuestSignups] = useState(initialGuestSignups);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -862,6 +855,7 @@ export function TeamDashboard({
       venueId: input.venueId,
       expense: input.expense,
       withCoach: input.withCoach,
+      home: input.home === "home" ? true : input.home === "away" ? false : null,
       allowGuests: input.type === "training" && !input.withCoach ? previous?.allowGuests : false,
       lineupSlots: previous?.lineupSlots,
       lineupSides: previous?.lineupSides,
@@ -896,9 +890,9 @@ export function TeamDashboard({
     }
     setSavingEvent(true);
     let savedTeam: IssuedTeam;
+    try {
     if (editing) {
       const updated = await updateOwnedEvent({ teamId: ownedTeam.id, eventId: editing.id, ...input });
-      setSavingEvent(false);
       if (!updated.ok) {
         showFeedback({ message: t(updated.error), variant: "error" });
         return;
@@ -910,7 +904,6 @@ export function TeamDashboard({
       };
     } else {
       const created = await createOwnedEvent({ teamId: ownedTeam.id, ...input });
-      setSavingEvent(false);
       if (!created.ok) {
         showFeedback({ message: t(created.error), variant: "error" });
         return;
@@ -927,6 +920,9 @@ export function TeamDashboard({
     setAddingEvent(false);
     setEditingEvent(null);
     showFeedback({ message: t(editing ? "event.edit.saved" : "event.add.saved"), variant: "success" });
+    } finally {
+      setSavingEvent(false);
+    }
   }
 
   function refundDemoEvent(event: TeamEvent) {
@@ -1517,6 +1513,8 @@ export function TeamDashboard({
             members={membersForEvent(lineupEvent, roster)}
             venueName={venueSource.find((item) => item.id === lineupEvent.venueId)?.name ?? ""}
             subteamName={filterSubteams.find((item) => item.id === lineupEvent.subteamId)?.name ?? ""}
+            logoUrl={teamLogoUrl(activeTeam?.logoUrl, entuziastiOn)}
+            kitUrl={lineupEvent.home == null ? null : teamLogoUrl(lineupEvent.home ? activeTeam?.homeKitUrl : activeTeam?.awayKitUrl, entuziastiOn)}
             knownRsvp={knownRsvp}
             rsvp={rsvp[lineupEvent.id]}
             savedSlots={savedSlots[lineupEvent.id] ?? lineupEvent.lineupSlots ?? {}}
@@ -1986,7 +1984,7 @@ export function TeamDashboard({
                             </button>
                           ) : null}
                           {lineupAllowed ? (
-                            <LineupOpenButton pending={lineupPendingId === event.id} label={t("frontend_modules.game_layout")} onClick={() => openLineup(event)} className="shrink-0 whitespace-nowrap px-2 py-1.5" />
+                            <LineupOpenButton pending={lineupPendingId === event.id} label={t("frontend_modules.game_layout")} onClick={() => openLineup(event)} />
                           ) : null}
                         </div>
                       ) : null}

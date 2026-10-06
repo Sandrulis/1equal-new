@@ -26,6 +26,7 @@ export type NewEventInput = {
   subteamId: string | null;
   expense: number | null;
   withCoach: boolean;
+  home: "home" | "away" | null;
 };
 
 export function EventFormDialog({
@@ -60,12 +61,13 @@ export function EventFormDialog({
   const [subteamId, setSubteamId] = useState(event?.subteamId ?? "");
   const [expense, setExpense] = useState(event?.expense != null ? String(event.expense) : "");
   const [withCoach, setWithCoach] = useState(Boolean(event?.withCoach));
+  const [home, setHome] = useState<boolean | null>(event?.type === "game" ? (event.home ?? null) : null);
   const timeAnchorRef = useRef<HTMLButtonElement>(null);
   const start = hour && minute ? `${hour}:${minute}` : "";
   const parsedExpense = Number(expense.replace(",", "."));
   const expenseFilled = expense.trim() !== "";
   const expenseOk = !expenseFilled || (Number.isFinite(parsedExpense) && parsedExpense >= 0);
-  const canSave = Boolean(dateIso && type && start && venueId && venues.length > 0 && expenseOk && (type === "training" || expenseFilled) && !pending);
+  const canSave = Boolean(dateIso && type && start && venueId && venues.length > 0 && expenseOk && (type === "training" || expenseFilled) && (type !== "game" || home !== null) && !pending);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -78,6 +80,7 @@ export function EventFormDialog({
       subteamId: subteamId || null,
       expense: expenseFilled ? Math.round(parsedExpense * 100) / 100 : null,
       withCoach: type === "training" && withCoach,
+      home: type === "game" && home !== null ? (home ? "home" : "away") : null,
     });
   }
 
@@ -96,8 +99,8 @@ export function EventFormDialog({
               <span className={dateIso ? "text-ink" : "text-muted"}>{dateIso ? formatDate(dateIso) : formatDate("2026-08-19")}</span>
             </button>
           </div>
-          <fieldset className="min-w-0 border-0 p-0">
-            <legend className="text-sm text-muted">{t("event.type")}</legend>
+          <div className="min-w-0">
+            <span className="text-sm text-muted">{t("event.type")}</span>
             <div className="mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ring-line" role="group" aria-label={t("event.type")}>
               {(["game", "training"] as const).map((option) => (
                 <button
@@ -111,7 +114,7 @@ export function EventFormDialog({
                 </button>
               ))}
             </div>
-          </fieldset>
+          </div>
         </div>
         <DatePickerModal
           open={pickerOpen}
@@ -121,7 +124,7 @@ export function EventFormDialog({
           onSelect={setDateIso}
         />
         <div>
-          <div className={type === "training" ? "grid grid-cols-2 items-end gap-3" : ""}>
+          <div className={type === "training" || type === "game" ? "grid grid-cols-2 items-end gap-3" : ""}>
             <div className="block text-sm">
               <span className="text-muted">{t("event.add.start")}</span>
               <button
@@ -135,6 +138,24 @@ export function EventFormDialog({
                 <span className={start ? "text-ink tabular-nums" : "text-muted"}>{start ? formatTime(start) : t("event.add.time")}</span>
               </button>
             </div>
+            {type === "game" ? (
+              <div className="min-w-0">
+                <span className="text-sm text-muted">{t("event.game.side")}</span>
+                <div className="mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ring-line" role="group" aria-label={t("event.game.side")}>
+                  {([true, false] as const).map((option) => (
+                    <button
+                      key={option ? "home" : "away"}
+                      type="button"
+                      aria-pressed={home === option}
+                      onClick={() => setHome(option)}
+                      className={`min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm ${home === option ? "bg-paper font-medium shadow-sm" : "text-muted"}`}
+                    >
+                      {t(option ? "event.game.home" : "event.game.away")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {type === "training" ? (
               <div className="text-sm">
                 <span className="text-muted">{t("event.add.coach")}</span>

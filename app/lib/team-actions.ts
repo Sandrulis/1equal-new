@@ -7,6 +7,7 @@ import { writeAudit } from "@/app/lib/security/audit";
 import type { Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
+import { fetchEhlTeamKits } from "@/app/lib/ehl-team-lookup";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
@@ -108,6 +109,18 @@ function inviteCode(): string {
   return code;
 }
 
+function presentKit(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || null;
+}
+
+async function kitColumns(source: string | null): Promise<{ home_kit_url: string | null; away_kit_url: string | null } | null> {
+  if (!source) return { home_kit_url: null, away_kit_url: null };
+  const kits = await fetchEhlTeamKits(source);
+  if (!kits) return null;
+  return { home_kit_url: kits.homeKitUrl ?? "", away_kit_url: kits.awayKitUrl ?? "" };
+}
+
 function cleanLogo(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -185,13 +198,14 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   if (entuziasti && input.sourceUrl && !parsed) return { ok: false, error: "team.link.invalid" };
   const source = entuziasti && parsed ? parsed.toString() : null;
   const logo = source ? cleanLogo(input.logoUrl) : null;
+  const kits = await kitColumns(source);
   const now = new Date().toISOString();
 
   let teamId = "";
   let code = "";
   for (let attempt = 0; attempt < 5; attempt += 1) {
     code = inviteCode();
-    const inserted = await gate.client.from("teams").insert({ name, invite_code: code, source_url: source, logo_url: logo, leader_id: gate.account.id, currency, training_voting_hours: training, game_voting_hours: game, sport_id: sport.sportId, updated_at: now }).select("id").single();
+    const inserted = await gate.client.from("teams").insert({ name, invite_code: code, source_url: source, logo_url: logo, home_kit_url: kits?.home_kit_url ?? null, away_kit_url: kits?.away_kit_url ?? null, leader_id: gate.account.id, currency, training_voting_hours: training, game_voting_hours: game, sport_id: sport.sportId, updated_at: now }).select("id").single();
     if (!inserted.error && inserted.data) {
       teamId = inserted.data.id;
       break;
@@ -217,7 +231,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   refreshTeamData();
   return {
     ok: true,
-    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
+    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, homeKitUrl: presentKit(kits?.home_kit_url), awayKitUrl: presentKit(kits?.away_kit_url), leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
   };
 }
 
@@ -230,7 +244,7 @@ export async function updateOwnedTeam(input: {
   sourceUrl: string | null;
   logoUrl: string | null;
   sportId?: string | null;
-}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId?: string } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; homeKitUrl: string | null; awayKitUrl: string | null; sportId?: string } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   const name = input.name.trim().slice(0, 80);
@@ -250,20 +264,29 @@ export async function updateOwnedTeam(input: {
     sportId = sport.sportId;
   }
   if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
-  const current = await gate.client.from("teams").select("source_url, logo_url, sport_id").eq("id", input.teamId).maybeSingle();
+  const current = await gate.client.from("teams").select("source_url, logo_url, sport_id, home_kit_url, away_kit_url").eq("id", input.teamId).maybeSingle();
   if (current.error || !current.data) return { ok: false, error: "auth.error.generic" };
   const entuziasti = await moduleEnabledForSport(gate.client, sportId ?? current.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, input.teamId);
   if (entuziasti && input.sourceUrl && !source) return { ok: false, error: "team.link.invalid" };
   const keptSource = entuziasti ? source : current.data.source_url;
   const keptLogo = entuziasti ? logo : current.data.logo_url;
+  const sourceChanged = keptSource !== current.data.source_url;
+  const kitsMissing = current.data.home_kit_url == null && current.data.away_kit_url == null;
+  let kits: { home_kit_url: string | null; away_kit_url: string | null } | null = null;
+  if (!keptSource) kits = { home_kit_url: null, away_kit_url: null };
+  else if (sourceChanged || kitsMissing) {
+    kits = (await kitColumns(keptSource)) ?? (sourceChanged ? { home_kit_url: null, away_kit_url: null } : null);
+  }
+  const homeKitUrl = kits ? kits.home_kit_url : current.data.home_kit_url;
+  const awayKitUrl = kits ? kits.away_kit_url : current.data.away_kit_url;
   const saved = await gate.client
     .from("teams")
-    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: keptSource, logo_url: keptLogo, ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
+    .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: keptSource, logo_url: keptLogo, ...(kits ? { home_kit_url: kits.home_kit_url, away_kit_url: kits.away_kit_url } : {}), ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
     .eq("id", input.teamId);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
   if (entuziasti && !ownLogo) await removeAvatar(`teams/${input.teamId}.jpg`);
   refreshTeamData();
-  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: keptSource, logoUrl: keptLogo, sportId };
+  return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: keptSource, logoUrl: keptLogo, homeKitUrl: presentKit(homeKitUrl), awayKitUrl: presentKit(awayKitUrl), sportId };
 }
 
 export async function saveTeamAvatar(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: MessageKey }> {
@@ -285,8 +308,17 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!code) return { ok: false, error: "team.join.not_found" };
   if (await rateLimit(`join:${gate.account.id}`, 10, 15 * 60 * 1000)) return { ok: false, error: "feedback.error.rate" };
-  const found = await gate.client.from("teams").select("id, name, invite_code, source_url, logo_url, leader_id, training_voting_hours, game_voting_hours, currency, balance").eq("invite_code", code).maybeSingle();
+  const found = await gate.client.from("teams").select("id, name, invite_code, source_url, logo_url, home_kit_url, away_kit_url, leader_id, training_voting_hours, game_voting_hours, currency, balance").eq("invite_code", code).maybeSingle();
   if (found.error || !found.data?.invite_code) return { ok: false, error: "team.join.not_found" };
+  if (found.data.source_url && found.data.home_kit_url == null && found.data.away_kit_url == null) {
+    const kits = await kitColumns(found.data.source_url);
+    if (kits) {
+      found.data.home_kit_url = kits.home_kit_url;
+      found.data.away_kit_url = kits.away_kit_url;
+      const admin = createAdminClient();
+      if (admin) await admin.from("teams").update({ home_kit_url: kits.home_kit_url, away_kit_url: kits.away_kit_url }).eq("id", found.data.id);
+    }
+  }
 
   await gate.client.from("team_members").upsert({ team_id: found.data.id, user_id: gate.account.id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
   const members = await gate.client
@@ -318,6 +350,8 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
       demo: false,
       sourceUrl: found.data.source_url,
       logoUrl: found.data.logo_url,
+      homeKitUrl: presentKit(found.data.home_kit_url),
+      awayKitUrl: presentKit(found.data.away_kit_url),
       leaderId: found.data.leader_id,
       trainingVotingHours: found.data.training_voting_hours ?? DEFAULT_TRAINING_VOTING_HOURS,
       gameVotingHours: found.data.game_voting_hours ?? DEFAULT_GAME_VOTING_HOURS,
@@ -592,6 +626,7 @@ export async function createOwnedEvent(input: {
   subteamId: string | null;
   expense: number | null;
   withCoach: boolean;
+  home: "home" | "away" | null;
 }): Promise<{ ok: true; event: TeamEvent } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
@@ -607,6 +642,7 @@ export async function createOwnedEvent(input: {
   }
   const expense = storedExpense(input.type, input.expense);
   if (expense === undefined) return { ok: false, error: "auth.error.generic" };
+  if (input.type === "game" && input.home !== "home" && input.home !== "away") return { ok: false, error: "auth.error.generic" };
   const inserted = await gate.client
     .from("team_events")
     .insert({
@@ -618,8 +654,9 @@ export async function createOwnedEvent(input: {
       subteam_id: subteamId,
       expense,
       with_coach: input.type === "training" && input.withCoach,
+      is_home: input.type === "game" ? input.home === "home" : null,
     })
-    .select("id, team_id, event_date, start_time, event_type, venue_id, subteam_id, expense, with_coach")
+    .select(TEAM_EVENT_COLUMNS)
     .single();
   if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(inserted.data);
@@ -711,6 +748,7 @@ export async function updateOwnedEvent(input: {
   subteamId: string | null;
   expense: number | null;
   withCoach: boolean;
+  home: "home" | "away" | null;
 }): Promise<{ ok: true; event: TeamEvent; teamBalance: number } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
@@ -728,6 +766,7 @@ export async function updateOwnedEvent(input: {
   }
   const expense = storedExpense(input.type, input.expense);
   if (expense === undefined) return { ok: false, error: "auth.error.generic" };
+  if (input.type === "game" && input.home !== "home" && input.home !== "away") return { ok: false, error: "auth.error.generic" };
   const updated = await gate.client
     .from("team_events")
     .update({
@@ -738,6 +777,7 @@ export async function updateOwnedEvent(input: {
       subteam_id: subteamId,
       expense,
       with_coach: input.type === "training" && input.withCoach,
+      is_home: input.type === "game" ? input.home === "home" : null,
       ...(input.type !== "training" || input.withCoach ? { allow_guests: false } : {}),
     })
     .eq("id", input.eventId)

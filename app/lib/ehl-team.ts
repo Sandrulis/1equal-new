@@ -31,13 +31,15 @@ export function readEhlTeamTitle(html: string): string | null {
 
 export function readEhlTeamLogo(html: string, pageUrl: string): string | null {
   const image = html.match(/<img[^>]*class="[^"]*\bmain-logo\b[^"]*"[^>]*>/i);
-  const src = image?.[0].match(/\bsrc="([^"]+)"/i)?.[1];
-  if (!src) return null;
-  try {
-    return new URL(decodeHtml(src), pageUrl).toString();
-  } catch {
-    return null;
-  }
+  return imageUrl(image?.[0] ?? "", pageUrl);
+}
+
+export function readEhlTeamKits(html: string, pageUrl: string): { homeKitUrl: string | null; awayKitUrl: string | null } {
+  const images = html.match(/<img\b[^>]*>/gi) ?? [];
+  return {
+    homeKitUrl: kitUrl(images, pageUrl, /forma mājās/i, /\/home_/i),
+    awayKitUrl: kitUrl(images, pageUrl, /forma izbraukumā/i, /\/away_/i),
+  };
 }
 
 export function teamNamesMatch(entered: string, remote: string): boolean {
@@ -52,6 +54,25 @@ function foldTeamName(value: string): string {
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("lv");
+}
+
+function imageUrl(tag: string, pageUrl: string): string | null {
+  const src = tag.match(/\bsrc="([^"]+)"/i)?.[1];
+  if (!src) return null;
+  try {
+    return new URL(decodeHtml(src), pageUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function kitUrl(images: string[], pageUrl: string, alt: RegExp, srcHint: RegExp): string | null {
+  const tag = images.find((item) => {
+    const label = decodeHtml(item.match(/\balt="([^"]*)"/i)?.[1] ?? "");
+    const src = item.match(/\bsrc="([^"]+)"/i)?.[1] ?? "";
+    return alt.test(label) || srcHint.test(src);
+  });
+  return tag ? imageUrl(tag, pageUrl) : null;
 }
 
 function decodeHtml(value: string): string {

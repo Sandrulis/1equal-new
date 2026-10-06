@@ -77,6 +77,57 @@ export function VoteCountdown({ deadline, align = "start", compact = false, clas
   );
 }
 
+export function LineupOpenButton({ pending, label, onClick }: { pending: boolean; label: string; onClick: () => void }) {
+  const [tip, setTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
+
+  function place(target: HTMLButtonElement) {
+    if (window.matchMedia("(max-width: 599px)").matches) return;
+    const box = target.getBoundingClientRect();
+    const below = box.top < 40;
+    const x = Math.min(window.innerWidth - 12, Math.max(12, box.left + box.width / 2));
+    setTip({ x, y: below ? box.bottom + 6 : box.top - 6, below });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        disabled={pending}
+        aria-busy={pending}
+        onMouseEnter={(event) => place(event.currentTarget)}
+        onMouseLeave={() => setTip(null)}
+        onFocus={(event) => place(event.currentTarget)}
+        onBlur={() => setTip(null)}
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-white disabled:cursor-not-allowed"
+      >
+        {pending ? <span className="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : <IconLineup />}
+      </button>
+      {tip ? (
+        <span
+          role="tooltip"
+          style={{ left: tip.x, top: tip.y, transform: tip.below ? "translateX(-50%)" : "translate(-50%, -100%)" }}
+          className="pointer-events-none fixed z-[80] rounded-md bg-navy px-2 py-1 text-xs font-medium whitespace-nowrap text-white"
+        >
+          {label}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function IconLineup() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="4.5" r="2.1" />
+      <circle cx="5.5" cy="12" r="2.1" />
+      <circle cx="18.5" cy="12" r="2.1" />
+      <circle cx="12" cy="19.5" r="2.1" />
+    </svg>
+  );
+}
+
 export function EventDetails({
   event,
   members,
@@ -156,7 +207,7 @@ export function EventDetails({
   return (
     <section id="event-details" className="mt-4 scroll-mt-4 rounded-2xl bg-paper ring-1 ring-line">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-        <h2 className="text-lg font-semibold">{t("event.details")}</h2>
+        <h2 className="text-lg font-semibold">{t(event.type === "game" ? "legend.game" : "legend.training")}</h2>
         <span className="flex items-center gap-2">
           {onEdit ? (
             <button type="button" onClick={onEdit} className="rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-ice">
@@ -168,12 +219,7 @@ export function EventDetails({
               {t("actions.delete")}
             </button>
           ) : null}
-          {onLineup ? (
-            <button type="button" onClick={onLineup} disabled={lineupPending} aria-busy={lineupPending} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed">
-              {lineupPending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
-              {t("frontend_modules.game_layout")}
-            </button>
-          ) : null}
+          {onLineup ? <LineupOpenButton pending={lineupPending} label={t("frontend_modules.game_layout")} onClick={onLineup} /> : null}
           <IconTipButton label={t("event.close")} tone="muted" onClick={onClose}>
             <IconX />
           </IconTipButton>
@@ -184,7 +230,7 @@ export function EventDetails({
         <dl className="order-2 grid min-w-0 flex-1 gap-2 text-sm min-[600px]:order-1 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
           <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)}`} />
           <Detail label={t("event.time")} value={event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)} />
-          <Detail label={t("event.type")} value={t(event.type === "game" ? "legend.game" : "legend.training")} />
+          {event.type === "game" && event.home != null ? <Detail label={t("event.game.side")} value={t(event.home ? "event.game.home" : "event.game.away")} /> : null}
           {event.type === "training" ? <Detail label={t("event.coach")} value={event.withCoach ? t("event.add.coach") : t("event.add.coach.off")} /> : null}
           <Detail label={t("event.venue")} value={venueName} />
           <Detail label={t("event.price")} value={formatMoney(fee)} />

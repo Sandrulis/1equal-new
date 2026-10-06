@@ -38,6 +38,8 @@ export type IssuedTeam = {
   demo: boolean;
   sourceUrl?: string | null;
   logoUrl?: string | null;
+  homeKitUrl?: string | null;
+  awayKitUrl?: string | null;
   leaderId?: string | null;
   trainingVotingHours?: number;
   gameVotingHours?: number;

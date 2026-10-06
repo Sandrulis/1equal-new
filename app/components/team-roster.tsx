@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { BalanceHistory, BalanceRangeFields, useBalanceRange } from "@/app/components/balance-history";
 import { AttendanceLegend, AttendanceLines, AttendanceMark } from "@/app/components/attendance-lines";
 import { ContentImage } from "@/app/components/content-image";
@@ -388,7 +388,7 @@ export function TeamRoster({
                     <AttendanceMark />
                   </th>
                 ) : null}
-                {finance ? <th className="px-4 py-3 font-medium">{t("roster.balance")}</th> : null}
+                {finance ? <th className="hidden px-4 py-3 font-medium min-[600px]:table-cell">{t("roster.balance")}</th> : null}
                 <th className="hidden px-4 py-3 font-medium min-[900px]:table-cell">{t("roster.joined")}</th>
                 <th className="px-4 py-3 font-medium">{t("roster.actions")}</th>
               </tr>
@@ -408,8 +408,20 @@ export function TeamRoster({
                       className="cursor-pointer border-b border-line last:border-b-0 hover:bg-ice"
                     >
                       <td className="w-full max-w-0 px-3 py-3 min-[600px]:px-4">
-                        <MemberIdentity member={member} leader={member.id === leaderId} />
-                        <div className="mt-2 empty:hidden min-[768px]:hidden">
+                        <MemberPhoneRow
+                          member={member}
+                          leader={member.id === leaderId}
+                          groups={groupList}
+                          positions={positionCatalog}
+                          finance={finance}
+                          holds={memberHolds[member.id] ?? []}
+                          onHolds={(holds) => setOpenHolds(holds)}
+                          onAdjust={canAdjust ? () => setAdjusting(member) : undefined}
+                        />
+                        <div className="hidden min-[600px]:block">
+                          <MemberIdentity member={member} leader={member.id === leaderId} />
+                        </div>
+                        <div className="mt-2 hidden min-[600px]:block min-[768px]:hidden">
                           <MemberMark member={member} groups={groupList} positions={positionCatalog} row />
                         </div>
                       </td>
@@ -422,7 +434,7 @@ export function TeamRoster({
                         </td>
                       ) : null}
                       {finance ? (
-                        <td className="px-4 py-3 whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                        <td className="hidden px-4 py-3 whitespace-nowrap min-[600px]:table-cell" onClick={(event) => event.stopPropagation()}>
                           <MemberBalance
                             member={member}
                             holds={memberHolds[member.id] ?? []}
@@ -1016,16 +1028,100 @@ function BalanceDialog({
   );
 }
 
+function MemberFace({ member, size }: { member: Member; size: "md" | "lg" }) {
+  const photo = memberFaceUrl(member, useEntuziasti());
+  const box = size === "lg" ? "h-14 w-14 text-sm" : "h-10 w-10 text-xs";
+  if (photo) return <ContentImage src={photo} className={`${box} shrink-0 rounded-lg bg-ice object-contain object-center`} />;
+  return <span className={`grid ${box} shrink-0 place-items-center rounded-lg bg-navy font-semibold text-white`}>{initials(member.name)}</span>;
+}
+
+function MemberPhoneRow({
+  member,
+  leader = false,
+  groups,
+  positions,
+  finance = false,
+  holds,
+  onHolds,
+  onAdjust,
+}: {
+  member: Member;
+  leader?: boolean;
+  groups: Subteam[];
+  positions: ReturnType<typeof catalogForSport>;
+  finance?: boolean;
+  holds: BalanceHold[];
+  onHolds: (holds: BalanceHold[]) => void;
+  onAdjust?: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="flex min-w-0 items-center gap-3 min-[600px]:hidden">
+      <MemberFace member={member} size="lg" />
+      <div className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+          <span className="min-w-0 truncate font-medium">{member.name}</span>
+          {leader ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("team.leader")}</span> : null}
+          {member.teamAdmin ? <span className="shrink-0 rounded-full bg-ice px-2 py-0.5 text-xs font-medium text-muted">{t("roles.admin")}</span> : null}
+          {member.feeExempt ? (
+            <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
+              <IconTipButton label={t("roster.fee_exempt.tip")} tone="muted" compact>
+                <IconNoFee />
+              </IconTipButton>
+            </span>
+          ) : null}
+        </span>
+        <PlayerContact email={member.email} phone={member.phone} />
+        <MemberMetaLine member={member} groups={groups} positions={positions} finance={finance} holds={holds} onHolds={onHolds} onAdjust={onAdjust} />
+      </div>
+    </div>
+  );
+}
+
+function MemberMetaLine({
+  member,
+  groups,
+  positions,
+  finance,
+  holds,
+  onHolds,
+  onAdjust,
+}: {
+  member: Member;
+  groups: Subteam[];
+  positions: ReturnType<typeof catalogForSport>;
+  finance: boolean;
+  holds: BalanceHold[];
+  onHolds: (holds: BalanceHold[]) => void;
+  onAdjust?: () => void;
+}) {
+  return (
+    <span className="mt-1 flex max-h-6 min-w-0 flex-wrap content-start items-center gap-x-1.5 gap-y-3 overflow-hidden">
+      {finance ? (
+        <span className="shrink-0" onClick={(event) => event.stopPropagation()}>
+          <MemberBalance member={member} holds={holds} onHolds={onHolds} onAdjust={onAdjust} inline />
+        </span>
+      ) : null}
+      <MemberMark member={member} groups={groups} positions={positions} line leadingSep={finance} />
+    </span>
+  );
+}
+
+function MetaSep() {
+  return (
+    <span aria-hidden className="shrink-0 text-muted">
+      •
+    </span>
+  );
+}
+
 function MemberIdentity({ member, leader = false }: { member: Member; leader?: boolean }) {
   const { t } = useLanguage();
-  const photo = memberFaceUrl(member, useEntuziasti());
   return (
     <div className="flex min-w-0 items-center gap-3">
-      {photo ? (
-        <ContentImage src={photo} className="h-10 w-10 shrink-0 rounded-lg bg-ice object-contain object-center" />
-      ) : (
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(member.name)}</span>
-      )}
+      <span className="max-[599px]:hidden">
+        <MemberFace member={member} size="md" />
+      </span>
       <span className="min-w-0 leading-5">
         <span className="flex min-w-0 flex-wrap items-center gap-1">
           <span className="truncate font-medium">{member.name}</span>
@@ -1081,15 +1177,45 @@ function PositionChip({ code, positions }: { code: string; positions: ReturnType
   );
 }
 
-function MemberMark({ member, groups, positions, row = false }: { member: Member; groups: Subteam[]; positions: ReturnType<typeof catalogForSport>; row?: boolean }) {
+function MemberMark({
+  member,
+  groups,
+  positions,
+  row = false,
+  line = false,
+  leadingSep = false,
+}: {
+  member: Member;
+  groups: Subteam[];
+  positions: ReturnType<typeof catalogForSport>;
+  row?: boolean;
+  line?: boolean;
+  leadingSep?: boolean;
+}) {
   const { subteamById } = useTeamCatalog();
   const ids = member.subteamIds?.length ? member.subteamIds : member.subteamId ? [member.subteamId] : [];
   const marks = ids.map((id) => groups?.find((item) => item.id === id) ?? subteamById(id)).filter((item): item is Subteam => Boolean(item));
   const jersey = formatJersey(member.number);
   const codes = [member.position, ...(member.extraPositions ?? [])].map((code) => code.trim()).filter(Boolean);
   if (!jersey && codes.length === 0 && marks.length === 0) return null;
+  if (line) {
+    const pieces: { key: string; node: ReactNode }[] = [];
+    if (jersey) pieces.push({ key: "number", node: <span className="text-sm font-semibold tabular-nums">{jersey}</span> });
+    for (const code of codes) pieces.push({ key: code, node: <PositionChip code={code} positions={positions} /> });
+    for (const subteam of marks) pieces.push({ key: subteam.id, node: <SubteamSwatch color={subteam.color} name={subteam.name} /> });
+    return (
+      <>
+        {pieces.map((piece, index) => (
+          <span key={piece.key} className="inline-flex shrink-0 items-center gap-1.5">
+            {leadingSep || index > 0 ? <MetaSep /> : null}
+            {piece.node}
+          </span>
+        ))}
+      </>
+    );
+  }
   return (
-    <span className={row ? "flex flex-wrap items-center gap-1.5" : "inline-flex w-max flex-col items-center gap-1.5"}>
+    <span className={row ? "flex flex-col items-start gap-1.5 min-[600px]:flex-row min-[600px]:flex-wrap min-[600px]:items-center" : "inline-flex w-max flex-col items-center gap-1.5"}>
       {jersey ? <span className="text-sm font-semibold tabular-nums">{jersey}</span> : null}
       {codes.length ? (
         <span className="inline-flex w-max flex-nowrap items-center justify-center gap-1">
@@ -1121,7 +1247,7 @@ function SubteamSwatch({ color, name }: { color: string; name: string }) {
     <>
       <span
         aria-label={name}
-        className="block h-4 w-4 rounded-md"
+        className="block h-4 w-4 shrink-0 rounded-md"
         style={{ background: color }}
         onMouseEnter={(event) => place(event.currentTarget)}
         onMouseLeave={() => setTip(null)}
@@ -1139,7 +1265,19 @@ function SubteamSwatch({ color, name }: { color: string; name: string }) {
   );
 }
 
-function MemberBalance({ member, holds, onHolds, onAdjust }: { member: Member; holds: BalanceHold[]; onHolds: (holds: BalanceHold[]) => void; onAdjust?: () => void }) {
+function MemberBalance({
+  member,
+  holds,
+  onHolds,
+  onAdjust,
+  inline = false,
+}: {
+  member: Member;
+  holds: BalanceHold[];
+  onHolds: (holds: BalanceHold[]) => void;
+  onAdjust?: () => void;
+  inline?: boolean;
+}) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
   const reserved = Math.round(holds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
@@ -1151,14 +1289,14 @@ function MemberBalance({ member, holds, onHolds, onAdjust }: { member: Member; h
     <span className={`font-medium tabular-nums ${member.balance < 0 ? "text-game" : "text-ink"}`}>{formatMoney(member.balance)}</span>
   );
   return (
-    <div>
+    <div className={inline ? "inline-flex shrink-0 items-baseline gap-1" : undefined}>
       {figure}
       {reserved > 0 ? (
         <button
           type="button"
           onClick={() => onHolds(holds)}
           aria-label={t("finance.reserved", { amount: formatMoney(reserved) })}
-          className="mt-0.5 block text-xs text-muted tabular-nums hover:underline"
+          className={inline ? "text-xs text-muted tabular-nums hover:underline" : "mt-0.5 block text-xs text-muted tabular-nums hover:underline"}
         >
           ({formatMoney(reserved)})
         </button>

@@ -38,21 +38,21 @@ const SHIFT_TONE = [
 const GOAL_TONE = { ring: "ring-[#d97706]", fill: "bg-[#d97706]" };
 
 const ICE_SPOTS: { shift: number; index: number; x: string; y: string }[] = [
-  { shift: 1, index: 0, x: "22%", y: "16%" },
-  { shift: 1, index: 1, x: "50%", y: "12%" },
-  { shift: 1, index: 2, x: "78%", y: "16%" },
-  { shift: 1, index: 3, x: "35%", y: "27%" },
-  { shift: 1, index: 4, x: "65%", y: "27%" },
-  { shift: 2, index: 0, x: "18%", y: "40%" },
-  { shift: 2, index: 1, x: "50%", y: "40%" },
-  { shift: 2, index: 2, x: "82%", y: "40%" },
-  { shift: 2, index: 3, x: "34%", y: "51%" },
-  { shift: 2, index: 4, x: "66%", y: "51%" },
-  { shift: 3, index: 0, x: "28%", y: "63%" },
-  { shift: 3, index: 1, x: "50%", y: "66%" },
-  { shift: 3, index: 2, x: "72%", y: "63%" },
-  { shift: 3, index: 3, x: "30%", y: "77%" },
-  { shift: 3, index: 4, x: "70%", y: "77%" },
+  { shift: 1, index: 0, x: "16%", y: "5%" },
+  { shift: 1, index: 1, x: "50%", y: "-1%" },
+  { shift: 1, index: 2, x: "84%", y: "5%" },
+  { shift: 1, index: 3, x: "30%", y: "22%" },
+  { shift: 1, index: 4, x: "70%", y: "22%" },
+  { shift: 2, index: 0, x: "14%", y: "38%" },
+  { shift: 2, index: 1, x: "50%", y: "36%" },
+  { shift: 2, index: 2, x: "86%", y: "38%" },
+  { shift: 2, index: 3, x: "32%", y: "54%" },
+  { shift: 2, index: 4, x: "68%", y: "54%" },
+  { shift: 3, index: 0, x: "18%", y: "68%" },
+  { shift: 3, index: 1, x: "50%", y: "70%" },
+  { shift: 3, index: 2, x: "82%", y: "68%" },
+  { shift: 3, index: 3, x: "26%", y: "84%" },
+  { shift: 3, index: 4, x: "74%", y: "84%" },
 ];
 
 function shiftSlotId(shift: number, index: number): number {
@@ -109,6 +109,8 @@ export function EventLineup({
   members,
   venueName,
   subteamName,
+  logoUrl = null,
+  kitUrl = null,
   knownRsvp = false,
   rsvp,
   savedSlots,
@@ -123,6 +125,8 @@ export function EventLineup({
   members: Member[];
   venueName: string;
   subteamName: string;
+  logoUrl?: string | null;
+  kitUrl?: string | null;
   knownRsvp?: boolean;
   rsvp: Record<string, Rsvp> | undefined;
   savedSlots: SlotMap;
@@ -141,6 +145,8 @@ export function EventLineup({
         going={going}
         venueName={venueName}
         subteamName={subteamName}
+        logoUrl={logoUrl}
+        kitUrl={kitUrl}
         saved={pruneSlots(savedSlots, going)}
         onSave={onSaveSlots}
         onBack={onBack}
@@ -239,6 +245,8 @@ function GameLineup({
   going,
   venueName,
   subteamName,
+  logoUrl,
+  kitUrl,
   saved,
   onSave,
   onBack,
@@ -249,6 +257,8 @@ function GameLineup({
   going: Member[];
   venueName: string;
   subteamName: string;
+  logoUrl: string | null;
+  kitUrl: string | null;
   saved: SlotMap;
   onSave: (slots: SlotMap) => boolean | Promise<boolean>;
   onBack: () => void;
@@ -318,36 +328,29 @@ function GameLineup({
 
   return (
     <div className="pb-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg bg-paper px-3 py-2 text-sm ring-1 ring-line">
-          <IconChevronLeft />
-          {t("lineup.back")}
-        </button>
-        <div className="min-w-0 text-center">
-          <h1 className="text-xl font-semibold tracking-tight">{subteamName}</h1>
-          <p className="text-sm text-muted">
-            {formatDate(event.date)} {formatTime(event.start)}
-          </p>
-          <p className="text-sm text-muted">{venueName}</p>
-        </div>
-        <span className="w-28" />
-      </div>
+      <button type="button" onClick={onBack} aria-label={t("lineup.back")} title={t("lineup.back")} className="mb-4 grid h-10 w-10 place-items-center rounded-lg bg-paper ring-1 ring-line">
+        <IconChevronLeft />
+      </button>
 
       {going.length === 0 ? <p className="mb-4 text-sm text-muted">{t("lineup.going.empty")}</p> : null}
 
       <div className="mx-auto w-full max-w-lg">
-        <div className="mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">
-          {[1, 2, 3].map((shift) => (
-            <span key={shift} className="inline-flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${SHIFT_TONE[shift].fill}`} />
-              {t("lineup.shift", { n: shift })}
-            </span>
-          ))}
-          <span className="inline-flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${GOAL_TONE.fill}`} />
-            {t("position.g")}
-          </span>
+        <div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+          <div className="justify-self-start">
+            {logoUrl ? <ContentImage src={logoUrl} alt="" className="h-[4.675rem] w-auto max-w-full object-contain object-left" /> : null}
+          </div>
+          <div className="min-w-0 text-center">
+            <h1 className="truncate text-xl font-semibold tracking-tight">{subteamName}</h1>
+            <p className="truncate text-sm text-muted">
+              {formatDate(event.date)} {formatTime(event.start)}
+            </p>
+            <p className="truncate text-sm text-muted">{venueName}</p>
+          </div>
+          <div className="justify-self-end">
+            {kitUrl ? <ContentImage src={kitUrl} alt={t(event.home === false ? "event.game.away" : "event.game.home")} className="h-[6.375rem] w-auto max-w-full object-contain object-right" /> : null}
+          </div>
         </div>
+        <div className="pt-16">
         <div className="relative">
           <Rink />
           {ICE_SPOTS.map((spot) => {
@@ -355,7 +358,7 @@ function GameLineup({
             const id = shiftSlotId(spot.shift, spot.index);
             const x = Number.parseFloat(spot.x);
             return (
-              <div key={id} className={`absolute -translate-x-1/2 -translate-y-1/2 ${openSlot === id ? "z-30" : "z-10"}`} style={{ left: spot.x, top: spot.y }}>
+              <div key={id} className={`absolute ${openSlot === id ? "z-30" : "z-10"}`} style={{ left: spot.x, top: spot.y, transform: "translate(-50%, calc(-50% - 15px))" }}>
                 <PositionPick
                   slot={id}
                   code={slot.code}
@@ -378,7 +381,7 @@ function GameLineup({
               </div>
             );
           })}
-          <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${openSlot === GOAL_SLOT ? "z-30" : "z-10"}`} style={{ left: "50%", top: "88%" }}>
+          <div className={`absolute ${openSlot === GOAL_SLOT ? "z-30" : "z-10"}`} style={{ left: "50%", top: "91%", transform: "translate(-50%, calc(-50% - 15px))" }}>
             <PositionPick
               slot={GOAL_SLOT}
               code="G"
@@ -399,6 +402,19 @@ function GameLineup({
               onPick={(memberId) => assign(GOAL_SLOT, memberId)}
             />
           </div>
+        </div>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">
+          {[1, 2, 3].map((shift) => (
+            <span key={shift} className="inline-flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${SHIFT_TONE[shift].fill}`} />
+              {t("lineup.shift", { n: shift })}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${GOAL_TONE.fill}`} />
+            {t("position.g")}
+          </span>
         </div>
       </div>
     </div>
@@ -446,6 +462,7 @@ function PositionPick({
   const anchorRef = useRef<HTMLDivElement>(null);
   const [menuPlace, setMenuPlace] = useState({ up: false, max: 320 });
   const name = member ? memberName(member) : "";
+  const surname = member ? memberSurname(member) : "";
   const jersey = member ? formatJersey(member.number) : null;
   const [nameTip, setNameTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
 
@@ -470,12 +487,12 @@ function PositionPick({
       )
     : null;
   const face = member ? (
-    <span className="text-[10px] font-semibold tabular-nums text-white sm:text-xs">{jersey ?? "—"}</span>
+    <span className="text-sm font-bold tabular-nums text-white min-[681px]:text-base">{jersey ?? "—"}</span>
   ) : (
-    <span className={`font-semibold tracking-wide text-navy ${compact ? "text-[10px]" : "text-sm"}`}>{code}</span>
+    <span className={`font-bold tracking-wide text-navy ${compact ? "text-sm min-[681px]:text-base" : "text-sm"}`}>{code}</span>
   );
   const shape = compact
-    ? `grid h-9 w-9 place-items-center rounded-full sm:h-11 sm:w-11 ${member ? fill ?? "bg-navy" : `bg-paper ring-2 ${ring ?? "ring-line"}`}`
+    ? `grid h-[45px] w-[45px] place-items-center rounded-full min-[681px]:h-[55px] min-[681px]:w-[55px] ${member ? fill ?? "bg-navy" : `bg-paper ring-[3px] ${ring ?? "ring-line"}`}`
     : `flex h-16 w-full items-center justify-center rounded-xl bg-paper ring-1 ${open ? "ring-2 ring-navy" : "ring-line"}`;
 
   useLayoutEffect(() => {
@@ -500,6 +517,11 @@ function PositionPick({
     const room = up ? above : below;
     setMenuPlace({ up, max: Math.max(160, Math.min(320, room)) });
   }, [open]);
+  const surnameLabel = compact && surname ? (
+    <span className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-10 -translate-x-1/2 text-sm leading-none font-semibold whitespace-nowrap text-ink [text-shadow:0_0_4px_#fff,0_0_4px_#fff]">
+      {surname}
+    </span>
+  ) : null;
   if (!editable) {
     return (
       <>
@@ -507,8 +529,9 @@ function PositionPick({
           aria-label={member ? `${code} ${name}` : code}
           onMouseEnter={(event) => placeName(event.currentTarget)}
           onMouseLeave={() => setNameTip(null)}
-          className={shape}
+          className={`relative ${shape}`}
         >
+          {surnameLabel}
           {face}
         </div>
         {nameTooltip}
@@ -536,8 +559,9 @@ function PositionPick({
         onMouseLeave={() => setNameTip(null)}
         onFocus={(event) => placeName(event.currentTarget)}
         onBlur={() => setNameTip(null)}
-        className={`${shape} ${open ? "outline outline-2 outline-offset-2 outline-navy" : ""}`}
+        className={`relative ${shape} ${open ? "outline outline-2 outline-offset-2 outline-navy" : ""}`}
       >
+        {surnameLabel}
         {face}
       </button>
       {member ? (
@@ -546,7 +570,7 @@ function PositionPick({
           aria-label={t("lineup.clear")}
           title={t("lineup.clear")}
           onClick={onClear}
-          className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-paper text-ink ring-1 ring-line [&_svg]:h-3 [&_svg]:w-3"
+          className="absolute top-0.5 -right-2.5 grid h-4 w-4 place-items-center rounded-full bg-paper text-ink ring-1 ring-line min-[600px]:-top-1.5 min-[600px]:-right-1.5 min-[600px]:h-5 min-[600px]:w-5 [&_svg]:h-2.5 [&_svg]:w-2.5 min-[600px]:[&_svg]:h-3 min-[600px]:[&_svg]:w-3"
         >
           <IconX />
         </button>
@@ -605,7 +629,7 @@ function byPlayerName(left: Member, right: Member): number {
 }
 
 function Rink() {
-  return <Image src="/hockey-rink.png" alt="" width={480} height={500} sizes="(max-width: 768px) 100vw, 480px" className="block h-auto w-full" />;
+  return <Image src="/hockey.png" alt="" width={480} height={500} sizes="(max-width: 768px) 100vw, 480px" className="block h-auto w-full" />;
 }
 
 type LineSide = "black" | "white" | "pool";
@@ -668,9 +692,8 @@ function TrainingLineup({
   return (
     <div className="pb-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg bg-paper px-3 py-2 text-sm ring-1 ring-line">
+        <button type="button" onClick={onBack} aria-label={t("lineup.back")} title={t("lineup.back")} className="grid h-10 w-10 place-items-center rounded-lg bg-paper ring-1 ring-line">
           <IconChevronLeft />
-          {t("lineup.back")}
         </button>
       </div>
       <div className="grid items-stretch gap-3 lg:grid-cols-3">
@@ -892,6 +915,13 @@ function PlayerCard({
 function memberName(member: Member): string {
   const parts = [member.firstName?.trim(), member.lastName?.trim()].filter(Boolean);
   return parts.length ? parts.join(" ") : member.name;
+}
+
+function memberSurname(member: Member): string {
+  const last = member.lastName?.trim();
+  if (last) return last;
+  const parts = member.name.trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? "";
 }
 
 function initials(name: string): string {
