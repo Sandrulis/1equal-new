@@ -335,7 +335,7 @@ function GameLineup({
       {going.length === 0 ? <p className="mb-4 text-sm text-muted">{t("lineup.going.empty")}</p> : null}
 
       <div className="mx-auto w-full max-w-lg">
-        <div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
           <div className="justify-self-start">
             {logoUrl ? <ContentImage src={logoUrl} alt="" className="h-[4.675rem] w-auto max-w-full object-contain object-left" /> : null}
           </div>
@@ -350,7 +350,7 @@ function GameLineup({
             {kitUrl ? <ContentImage src={kitUrl} alt={t(event.home === false ? "event.game.away" : "event.game.home")} className="h-[6.375rem] w-auto max-w-full object-contain object-right" /> : null}
           </div>
         </div>
-        <div className="pt-16">
+        <div className="pt-[69px]">
         <div className="relative">
           <Rink />
           {ICE_SPOTS.map((spot) => {

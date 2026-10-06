@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.4
+
+- Izklājumā starp virsrakstu un laukumu ir mazāka atstarpe, un uzvārdam virs riņķa paliek vieta
+
 ## v0.2.3
 
 - `source-map-js` ir 1.2.2, lai drošības pārbaude vairs nekrīt uz indeksēto source map
