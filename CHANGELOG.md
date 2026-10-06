@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.3
+
+- `source-map-js` ir 1.2.2, lai drošības pārbaude vairs nekrīt uz indeksēto source map
+
 ## v0.2.2
 
 - Spēlei norāda mājas vai izbraukumu, un labojot to var saglabāt
