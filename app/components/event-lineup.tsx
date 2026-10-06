@@ -39,7 +39,7 @@ const GOAL_TONE = { ring: "ring-[#d97706]", fill: "bg-[#d97706]" };
 
 const ICE_SPOTS: { shift: number; index: number; x: string; y: string }[] = [
   { shift: 1, index: 0, x: "16%", y: "5%" },
-  { shift: 1, index: 1, x: "50%", y: "-1%" },
+  { shift: 1, index: 1, x: "50%", y: "5%" },
   { shift: 1, index: 2, x: "84%", y: "5%" },
   { shift: 1, index: 3, x: "30%", y: "22%" },
   { shift: 1, index: 4, x: "70%", y: "22%" },
@@ -350,15 +350,16 @@ function GameLineup({
             {kitUrl ? <ContentImage src={kitUrl} alt={t(event.home === false ? "event.game.away" : "event.game.home")} className="h-[6.375rem] w-auto max-w-full object-contain object-right" /> : null}
           </div>
         </div>
-        <div className="pt-[69px]">
+        <div className="pt-[calc(64px-6.25%)]">
         <div className="relative">
           <Rink />
           {ICE_SPOTS.map((spot) => {
             const slot = LINE_SLOTS[spot.index];
             const id = shiftSlotId(spot.shift, spot.index);
             const x = Number.parseFloat(spot.x);
+            const lift = spot.shift === 1 && spot.index <= 2 ? "10px" : "15px";
             return (
-              <div key={id} className={`absolute ${openSlot === id ? "z-30" : "z-10"}`} style={{ left: spot.x, top: spot.y, transform: "translate(-50%, calc(-50% - 15px))" }}>
+              <div key={id} className={`absolute ${openSlot === id ? "z-30" : "z-10"}`} style={{ left: spot.x, top: spot.y, transform: `translate(-50%, calc(-50% - ${lift}))` }}>
                 <PositionPick
                   slot={id}
                   code={slot.code}

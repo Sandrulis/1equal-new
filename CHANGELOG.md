@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.5
+
+- Pirmās maiņas uzbrucēji ir vienā līmenī, un laukums ir pacelts tiem līdzi
+
 ## v0.2.4
 
 - Izklājumā starp virsrakstu un laukumu ir mazāka atstarpe, un uzvārdam virs riņķa paliek vieta
