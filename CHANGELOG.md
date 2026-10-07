@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.8
+
+- Spēles izklājumā zem trenera apļa ir pozīcijas nosaukums
+
 ## v0.2.7
 
 - `sharp` ir 0.35.5, lai drošības pārbaude vairs nekrīt uz librsvg

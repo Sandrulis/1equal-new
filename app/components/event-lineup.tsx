@@ -272,7 +272,7 @@ function GameLineup({
   editable: boolean;
   positions: PositionCatalogItem[];
 }) {
-  const { t } = useLanguage();
+  const { formatLang, lang, t } = useLanguage();
   const { formatDate, formatTime } = useDisplayFormat();
   const [slots, setSlots] = useState<SlotMap>(saved);
   const [slotBaseline, setSlotBaseline] = useState(() => slotKey(saved));
@@ -433,6 +433,9 @@ function GameLineup({
               </span>
               <span className="grid h-11 w-11 place-items-center rounded-full bg-game-soft text-game ring-2 ring-game">
                 <IconWhistle />
+              </span>
+              <span className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 text-xs leading-none font-medium whitespace-nowrap text-game [text-shadow:0_0_4px_#fff,0_0_4px_#fff]">
+                {trainerPositionName(member, positions, lang, formatLang, t)}
               </span>
             </div>
           ))}
