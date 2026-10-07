@@ -22,6 +22,7 @@ export function DashboardApp({
   openTeamId = null,
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
   sports = [],
   seedDemo = false,
   accountRestored = false,
@@ -34,6 +35,7 @@ export function DashboardApp({
   openTeamId?: string | null;
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
   sports?: Sport[];
   seedDemo?: boolean;
   accountRestored?: boolean;
@@ -59,7 +61,7 @@ export function DashboardApp({
 
   return (
     <TeamCatalogProvider seedDemo={seedDemo}>
-      <TeamDashboard basePath={basePath} account={account} admin={admin} initialTeams={initialTeams} openTeamId={openTeamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} sports={sports} guestSignups={guestSignups} />
+      <TeamDashboard basePath={basePath} account={account} admin={admin} initialTeams={initialTeams} openTeamId={openTeamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={presetEntuziasti} sports={sports} guestSignups={guestSignups} />
     </TeamCatalogProvider>
   );
 }

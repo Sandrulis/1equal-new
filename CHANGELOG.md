@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.12
+
+- Entuziastu saite aizpilda komandas nosaukumu un rāda logo ar abām formām, bet spēlētājam vārdu, numuru, pozīciju, attēlu un statistiku
+- Zem spēlētāja attēla dati ir paslēpti ar pāreju, un ikona tos atver. No Latvijas vai localhost Entuziasti ieslēdzas jau veidojot komandu
+- Publiskajām lapām ir izvēlēts canonical, un funkciju adreses bez `/lv` ved uz latviešu lapu
+
 ## v0.2.11
 
 - Spēles izklājumā trenera aplis ir galvenē starp norises vietu un formu

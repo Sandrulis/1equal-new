@@ -11,8 +11,7 @@ import { isEmailAddress } from "@/app/lib/email/email-address";
 import { emphasize } from "@/app/lib/emphasize";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
-import { ContentImage } from "@/app/components/content-image";
-import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { EhlPlayerLinkPreview } from "@/app/components/ehl-player-preview";
 import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
@@ -45,6 +44,7 @@ export function AccountSettingsDialog({
   const [display, setDisplay] = useState<UserDisplayPreferences>(account.display);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [pending, setPending] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePending, setDeletePending] = useState(false);
@@ -56,8 +56,7 @@ export function AccountSettingsDialog({
   const emailValue = email.trim().toLowerCase();
   const emailChanged = emailValue !== account.email.trim().toLowerCase();
   const dirty = firstName !== account.firstName || lastName !== account.lastName || emailChanged || phone !== account.phone || (showPlayerLink && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display) || (showAvatar && avatarDirty);
-  const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && isEmailAddress(emailValue) && !pending;
-
+  const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && isEmailAddress(emailValue) && !pending && !linkBusy;
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSave) return;
@@ -148,8 +147,8 @@ export function AccountSettingsDialog({
         </div>
         <form onSubmit={(event) => void onSubmit(event)}>
         <div className="mt-6 grid grid-cols-2 gap-3">
-          <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" onChange={setFirstName} />
-          <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" onChange={setLastName} />
+          <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" disabled={pending || linkBusy} onChange={setFirstName} />
+          <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" disabled={pending || linkBusy} onChange={setLastName} />
         </div>
         <div className="mt-3 grid grid-cols-2 items-start gap-3">
           <label className="grid gap-1.5 text-sm font-medium">
@@ -181,6 +180,7 @@ export function AccountSettingsDialog({
           </label>
         </div>
         {showPlayerLink && teamCode ? (
+          <>
           <label className="mt-3 grid gap-1.5 text-sm font-medium">
             <span>
               {t("user.settings.player")}
@@ -202,8 +202,9 @@ export function AccountSettingsDialog({
               className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
             />
             <span className="font-normal text-muted">{t("user.settings.player_hint")}</span>
-            {savedPlayer && playerUrl.trim() === savedUrl ? <PlayerSummary player={savedPlayer} /> : null}
           </label>
+          <EhlPlayerLinkPreview value={playerUrl} seed={savedPlayer} onLoading={setLinkBusy} />
+          </>
         ) : null}
         {showAvatar ? <div className="mt-4"><AvatarCropField ref={avatarRef} existingUrl={account.avatarUrl} disabled={pending} onDirty={setAvatarDirty} /></div> : null}
         <div className="mt-6 border-t border-line pt-5">
@@ -265,27 +266,19 @@ export function AccountSettingsDialog({
   );
 }
 
-function PlayerSummary({ player }: { player: EhlPlayerProfile }) {
-  const bits = [player.name, player.number ? `nr. ${player.number}` : "", player.position, player.team].filter(Boolean);
-  return (
-    <span className="flex items-center gap-2 font-normal text-ink">
-      {player.photoUrl ? <ContentImage src={player.photoUrl} className="h-10 w-10 rounded-lg bg-ice object-contain object-center" /> : null}
-      {bits.join(", ")}
-    </span>
-  );
-}
-
 function NameField({
   label,
   name,
   value,
   autoComplete,
+  disabled = false,
   onChange,
 }: {
   label: string;
   name: string;
   value: string;
   autoComplete: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -296,8 +289,9 @@ function NameField({
         name={name}
         value={value}
         autoComplete={autoComplete}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
+        className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line disabled:opacity-60"
       />
     </label>
   );

@@ -211,6 +211,7 @@ export function TeamDashboard({
   openTeamId = null,
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
   sports = [],
   guestSignups: initialGuestSignups = [],
 }: {
@@ -221,6 +222,7 @@ export function TeamDashboard({
   openTeamId?: string | null;
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
   sports?: Sport[];
   guestSignups?: GuestSignup[];
 }) {
@@ -1490,6 +1492,7 @@ export function TeamDashboard({
         entuziasti={entuziastiOn}
         enabledModules={enabledModules}
         individualModuleKeys={individualModuleKeys}
+        presetEntuziasti={presetEntuziasti}
         sports={sports}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
@@ -1525,7 +1528,7 @@ export function TeamDashboard({
             <GuestSignups tone="paper" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
           </div>
         ) : null}
-        {showStart ? <NoTeamStart sports={sports} enabledModules={teamModules} individualModuleKeys={individualModuleKeys} onCreate={createTeam} onJoin={joinTeam} /> : null}
+        {showStart ? <NoTeamStart sports={sports} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={presetEntuziasti} onCreate={createTeam} onJoin={joinTeam} /> : null}
         {((!moduleVisible && route.view !== "admin") || lineupBlocked) && !showStart && !teamPending ? (
           <p className="rounded-2xl bg-paper px-4 py-8 text-sm text-muted ring-1 ring-line">{t("frontend_modules.disabled")}</p>
         ) : null}
@@ -1582,6 +1585,8 @@ export function TeamDashboard({
             inviteCode={activeTeam.code}
             sourceUrl={activeTeam.sourceUrl}
             logoUrl={activeTeam.logoUrl}
+            homeKitUrl={activeTeam.homeKitUrl}
+            awayKitUrl={activeTeam.awayKitUrl}
             teamId={activeTeam.id ?? null}
             leaderId={activeTeam.leaderId ?? null}
             asLeader={ghostLeader}

@@ -7,6 +7,7 @@ import { ContentImage } from "@/app/components/content-image";
 import { PlayerContact } from "@/app/components/player-contact";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
+import { EhlTeamLinkField, sameEhlTeam, type ResolvedEhlTeam } from "@/app/components/ehl-team-link-field";
 import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { MemberEditDialog } from "@/app/components/member-edit-dialog";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
@@ -27,7 +28,7 @@ import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { votingHours } from "@/app/lib/team-defaults";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { entuziastiForSport } from "@/app/lib/frontend-modules";
-import { teamNamesMatch } from "@/app/lib/ehl-team";
+import { parseEhlTeamUrl, teamNamesMatch } from "@/app/lib/ehl-team";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { IconPencil, IconTipButton, IconTrash, IconX } from "@/app/components/icon-tip-button";
 import { readInviteBannerDismissed, subscribeInviteBanner, writeInviteBannerDismissed, clearInviteBannerDismissed } from "@/app/lib/invite-banner-cookie";
@@ -71,6 +72,8 @@ export function TeamRoster({
   inviteCode,
   sourceUrl = null,
   logoUrl = null,
+  homeKitUrl = null,
+  awayKitUrl = null,
   initialMembers = [],
   teamId = null,
   leaderId = null,
@@ -102,6 +105,8 @@ export function TeamRoster({
   inviteCode: string;
   sourceUrl?: string | null;
   logoUrl?: string | null;
+  homeKitUrl?: string | null;
+  awayKitUrl?: string | null;
   initialMembers?: Member[];
   teamId?: string | null;
   leaderId?: string | null;
@@ -506,6 +511,8 @@ export function TeamRoster({
           name={teamName}
           sourceUrl={sourceUrl}
           logoUrl={logoUrl}
+          homeKitUrl={homeKitUrl}
+          awayKitUrl={awayKitUrl}
           currency={currency}
           sportId={sportId}
           sports={sports}
@@ -729,6 +736,8 @@ function TeamSettingsDialog({
   name,
   sourceUrl,
   logoUrl,
+  homeKitUrl = null,
+  awayKitUrl = null,
   currency,
   trainingHours,
   gameHours,
@@ -743,6 +752,8 @@ function TeamSettingsDialog({
   name: string;
   sourceUrl: string | null;
   logoUrl: string | null;
+  homeKitUrl?: string | null;
+  awayKitUrl?: string | null;
   currency: string | null;
   trainingHours: number;
   gameHours: number;
@@ -757,6 +768,7 @@ function TeamSettingsDialog({
   const brand = useSiteBrand();
   const [draftName, setDraftName] = useState(name);
   const [draftLink, setDraftLink] = useState(sourceUrl ?? "");
+  const [linkBusy, setLinkBusy] = useState(false);
   const [draftCurrency, setDraftCurrency] = useState(currency);
   const [training, setTraining] = useState(String(trainingHours));
   const [game, setGame] = useState(String(gameHours));
@@ -764,6 +776,7 @@ function TeamSettingsDialog({
   const [busy, setBusy] = useState<"lookup" | "save" | null>(null);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const avatarRef = useRef<AvatarCropHandle>(null);
+  const previewRef = useRef<ResolvedEhlTeam | null>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const settingsKey = `${open}|${name}|${sourceUrl ?? ""}|${currency ?? ""}|${trainingHours}|${gameHours}|${sportId ?? ""}`;
   const [seenSettings, setSeenSettings] = useState(settingsKey);
@@ -787,6 +800,10 @@ function TeamSettingsDialog({
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, draftSport);
   const showLink = entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
+  const savedUrl = parseEhlTeamUrl(sourceUrl ?? "")?.toString() ?? "";
+  const storedPreview: ResolvedEhlTeam | null = savedUrl
+    ? { name, url: savedUrl, logoUrl, homeKitUrl: homeKitUrl ?? null, awayKitUrl: awayKitUrl ?? null }
+    : null;
   const linkValue = showLink ? draftLink.trim() : (sourceUrl ?? "");
   const showAvatar = linkValue === "";
   const dirty = draftName.trim() !== name || (showLink && draftLink.trim() !== (sourceUrl ?? "")) || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours || pickedSport !== (sportId ?? null) || (showAvatar && avatarDirty);
@@ -829,23 +846,28 @@ function TeamSettingsDialog({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!draftName.trim() || !hoursOk || !dirty || busy) return;
+    if (!draftName.trim() || !hoursOk || !dirty || busy || linkBusy) return;
+    const cached = sameEhlTeam(linkValue, previewRef.current) ? previewRef.current : null;
     if (!linkValue) {
       const nextLogo = await resolveLogo(null, null);
       if (nextLogo === undefined) return;
       await persist(null, nextLogo);
       return;
     }
-    if (linkValue === (sourceUrl ?? "")) {
+    if (linkValue === (sourceUrl ?? "") && !cached) {
       await persist(sourceUrl, logoUrl);
       return;
     }
-    setBusy("lookup");
-    const result = await lookupEhlTeamName(linkValue);
-    setBusy(null);
-    if (!result.ok) {
-      showFeedback({ message: t(LINK_ERROR[result.error]), variant: "error" });
-      return;
+    let result = cached;
+    if (!result) {
+      setBusy("lookup");
+      const looked = await lookupEhlTeamName(linkValue);
+      setBusy(null);
+      if (!looked.ok) {
+        showFeedback({ message: t(LINK_ERROR[looked.error]), variant: "error" });
+        return;
+      }
+      result = looked;
     }
     if (!teamNamesMatch(draftName, result.name)) {
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
@@ -858,29 +880,27 @@ function TeamSettingsDialog({
     <>
       <AdminDialog open={open && mismatch === null} title={t("team.settings.title")} onClose={onClose}>
         <form onSubmit={(event) => void submit(event)} className="space-y-4">
+          {showLink ? (
+            <EhlTeamLinkField
+              value={draftLink}
+              disabled={busy !== null}
+              seed={storedPreview}
+              inputClassName={fieldClass}
+              onChange={(next) => {
+                setDraftLink(next);
+                if (next.trim()) setAvatarDirty(false);
+              }}
+              onLoading={setLinkBusy}
+              onResolved={(next) => {
+                previewRef.current = next;
+                if (next && next.url !== savedUrl) setDraftName(next.name.slice(0, 80));
+              }}
+            />
+          ) : null}
           <label className="block text-sm">
             <span className="text-muted">{t("team.settings.name")}</span>
-            <input required value={draftName} maxLength={80} disabled={busy !== null} onChange={(event) => setDraftName(event.target.value)} className={fieldClass} />
+            <input required value={draftName} maxLength={80} disabled={busy !== null || linkBusy} onChange={(event) => setDraftName(event.target.value)} className={`${fieldClass} disabled:opacity-60`} />
           </label>
-          {showLink ? (
-          <label className="block text-sm">
-            <span className="text-muted">{t("team.empty.link")}</span>
-            <span className="ml-2 text-muted">{t("team.empty.link_optional")}</span>
-            <input
-              value={draftLink}
-              onChange={(event) => {
-                setDraftLink(event.target.value);
-                if (event.target.value.trim()) setAvatarDirty(false);
-              }}
-              placeholder={t("team.empty.link_placeholder")}
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              disabled={busy !== null}
-              className={fieldClass}
-            />
-          </label>
-          ) : null}
           {showAvatar ? (
             <AvatarCropField
               ref={avatarRef}
@@ -906,7 +926,7 @@ function TeamSettingsDialog({
             <button type="button" onClick={onClose} disabled={busy !== null} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
               {t("actions.cancel")}
             </button>
-            <button type="submit" disabled={!dirty || !hoursOk || busy !== null} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="submit" disabled={!dirty || !hoursOk || busy !== null || linkBusy} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
               {busy === "lookup" ? t("team.empty.checking") : t("actions.save")}
             </button>
           </div>

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { AuthScreen } from "@/app/components/auth-screen";
+import { absolutePublicUrl } from "@/app/lib/public-metadata";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { getPublicTurnstileSiteKey } from "@/app/lib/security/turnstile";
 
 export const metadata: Metadata = {
   title: "Aizmirsi paroli",
+  alternates: { canonical: absolutePublicUrl("/forgot-password") },
   robots: { index: false, follow: false },
 };
 

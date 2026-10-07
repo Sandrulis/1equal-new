@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ContentImage } from "@/app/components/content-image";
+import { EhlPlayerColumns } from "@/app/components/ehl-player-preview";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { BalanceHistory, BalanceRangeFields, useBalanceRange, type BalanceHistoryItem } from "@/app/components/balance-history";
 import type { BalanceEntry, Member, PlayerCharge, Subteam } from "@/app/lib/demo-data";
@@ -188,42 +189,14 @@ export function PlayerBalanceLog({ member, teamId = null, inset = false }: { mem
 
 function PlayerEhl({ profile }: { profile: EhlPlayerProfile }) {
   const { t } = useLanguage();
-  const facts = [
-    ["player.ehl.height", profile.height],
-    ["player.ehl.weight", profile.weight],
-    ["player.ehl.stick", profile.stick],
-    ["player.ehl.birth", profile.birthDate],
-    ["player.ehl.country", profile.country],
-  ].filter((item): item is [MessageKey, string] => Boolean(item[1]));
-  const season = profile.season;
-  const stats = season ? season.columns.filter((column) => season.results[column]).slice(0, 8) : [];
 
   return (
     <section className="rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5">
       <h2 className="text-lg font-semibold">{t("player.ehl.title")}</h2>
       {profile.team ? <p className="mt-1 text-sm text-muted">{profile.team}</p> : null}
-      {facts.length ? (
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-          {facts.map(([key, value]) => (
-            <div key={key} className="rounded-xl bg-ice px-4 py-3">
-              <dt className="text-xs font-medium tracking-wide text-muted uppercase">{t(key)}</dt>
-              <dd className="mt-1 text-sm font-medium">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {season && stats.length ? (
-        <div className="mt-4">
-          <p className="text-xs font-medium tracking-wide text-muted uppercase">{season.label || t("player.ehl.season")}</p>
-          <ul className="mt-2 flex flex-wrap gap-2">
-            {stats.map((column) => (
-              <li key={column} className="rounded-lg bg-ice px-3 py-2 text-sm">
-                <span className="text-muted">{column}</span> <span className="font-semibold tabular-nums">{season.results[column]}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <div className="mt-4">
+        <EhlPlayerColumns profile={profile} />
+      </div>
     </section>
   );
 }

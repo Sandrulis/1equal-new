@@ -1,23 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
+import { EhlPlayerLinkPreview } from "@/app/components/ehl-player-preview";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { saveUserAvatar } from "@/app/lib/auth/actions";
 import type { Member, Subteam } from "@/app/lib/demo-data";
-import { parseEhlPlayerUrl } from "@/app/lib/ehl-player";
+import { parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useLanguage } from "@/app/lib/language";
 import { isEmailAddress } from "@/app/lib/email/email-address";
-import { formatPosition, parseExtraPositions, resolvePositionCode, type PositionCatalogItem } from "@/app/lib/positions";
-import { lookupPlayerLink, saveMemberProfile } from "@/app/lib/team-actions";
+import { formatPosition, parseExtraPositions, positionFromEhlLabel, resolvePositionCode, type PositionCatalogItem } from "@/app/lib/positions";
+import { saveMemberProfile } from "@/app/lib/team-actions";
 
 const fieldClass = "mt-1 w-full rounded-lg bg-ice px-3 py-2 text-ink ring-1 ring-line outline-none focus:ring-train";
 
+function nameParts(name: string): { first: string; last: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return { first: (parts[0] ?? "").slice(0, 80), last: parts.slice(1).join(" ").slice(0, 80) };
+}
+
 function personParts(member: Member): { first: string; last: string } {
   if (member.firstName || member.lastName) return { first: member.firstName ?? "", last: member.lastName ?? "" };
-  const parts = member.name.trim().split(/\s+/).filter(Boolean);
-  return { first: parts[0] ?? "", last: parts.slice(1).join(" ") };
+  return nameParts(member.name);
 }
 
 function sameIds(left: string[], right: string[]): boolean {
@@ -77,6 +82,7 @@ export function MemberEditDialog({
   const [feeExempt, setFeeExempt] = useState(startFee);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [pending, setPending] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   const avatarRef = useRef<AvatarCropHandle>(null);
   const canProfile = canManage || canRoster;
   const showAvatar = canProfile && self && remote && playerUrl.trim() === "";
@@ -91,40 +97,25 @@ export function MemberEditDialog({
         playerUrl.trim() !== (member.ehl?.sourceUrl ?? "") ||
         (showAvatar && avatarDirty))) ||
     (canRoster && (feeExempt !== startFee || !sameIds(selectedIds, startIds)));
-  const fillFromLinkRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    fillFromLinkRef.current = () => {
-      void fillFromLink();
-    };
-  });
-
-  useEffect(() => {
-    const raw = playerUrl.trim();
-    if (!remote || !parseEhlPlayerUrl(raw) || raw === (member.ehl?.sourceUrl ?? "")) return;
-    const handle = window.setTimeout(() => {
-      fillFromLinkRef.current();
-    }, 500);
-    return () => window.clearTimeout(handle);
-  }, [playerUrl, remote, member.ehl?.sourceUrl]);
-
-  async function fillFromLink() {
-    const raw = playerUrl.trim();
-    if (!raw || !remote || pending || raw === (member.ehl?.sourceUrl ?? "")) return;
-    setPending(true);
-    const result = await lookupPlayerLink(raw);
-    setPending(false);
-    if (!result.ok) {
-      showFeedback({ message: t(result.error), variant: "error" });
-      return;
+  function applyLinkedPlayer(profile: EhlPlayerProfile | null) {
+    if (!profile) return;
+    const nextUrl = parseEhlPlayerUrl(profile.sourceUrl)?.toString() ?? "";
+    const savedUrl = parseEhlPlayerUrl(member.ehl?.sourceUrl ?? "")?.toString() ?? "";
+    if (!nextUrl || nextUrl === savedUrl) return;
+    if (canManage) {
+      const person = nameParts(profile.name);
+      setFirstName(person.first);
+      setLastName(person.last);
     }
-    setNumber((current) => (current.trim() ? current : result.number));
-    setPosition((current) => current || resolvePositionCode(result.position, positions));
+    const jersey = (profile.number ?? "").replace(/\D/g, "").slice(0, 2);
+    if (jersey) setNumber(jersey);
+    const nextPosition = positionFromEhlLabel(profile.position, positions);
+    if (nextPosition) setPosition(nextPosition);
   }
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!dirty || pending) return;
+    if (!dirty || pending || linkBusy) return;
     if (canManage && (!firstName.trim() || !lastName.trim())) {
       showFeedback({ message: t("roster.error.name"), variant: "error" });
       return;
@@ -225,15 +216,33 @@ export function MemberEditDialog({
             </button>
           </div>
         ) : null}
+        {entuziasti && canProfile ? (
+          <>
+            <label className="block text-sm">
+              <span className="text-muted">{t("user.settings.player")}</span>
+              <input
+                value={playerUrl}
+                onChange={(event) => {
+                  setPlayerUrl(event.target.value);
+                  if (event.target.value.trim()) setAvatarDirty(false);
+                }}
+                placeholder={t("user.settings.player_placeholder")}
+                disabled={pending}
+                className={`${fieldClass} disabled:opacity-60`}
+              />
+            </label>
+            {remote ? <EhlPlayerLinkPreview value={playerUrl} seed={member.ehl ?? null} onResolved={applyLinkedPlayer} onLoading={setLinkBusy} /> : null}
+          </>
+        ) : null}
         {canManage ? (
           <div className="grid grid-cols-2 gap-3">
             <label className="block min-w-0 text-sm">
               <span className="text-muted">{t("auth.firstName")}</span>
-              <input value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={80} autoComplete="off" className={fieldClass} />
+              <input value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={80} autoComplete="off" disabled={pending || linkBusy} className={`${fieldClass} disabled:opacity-60`} />
             </label>
             <label className="block min-w-0 text-sm">
               <span className="text-muted">{t("auth.lastName")}</span>
-              <input value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={80} autoComplete="off" className={fieldClass} />
+              <input value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={80} autoComplete="off" disabled={pending || linkBusy} className={`${fieldClass} disabled:opacity-60`} />
             </label>
           </div>
         ) : null}
@@ -256,7 +265,7 @@ export function MemberEditDialog({
         <div className="grid grid-cols-2 gap-3">
           <label className="block min-w-0 text-sm">
             <span className="text-muted">{t("roster.fields.number")}</span>
-            <input value={number} onChange={(event) => setNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" className={fieldClass} />
+            <input value={number} onChange={(event) => setNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" disabled={pending || linkBusy} className={`${fieldClass} disabled:opacity-60`} />
           </label>
           {positions.length ? (
           <label className="block min-w-0 text-sm">
@@ -268,7 +277,8 @@ export function MemberEditDialog({
                 setPosition(next);
                 setExtraPositions((current) => current.filter((code) => code !== next));
               }}
-              className={fieldClass}
+              disabled={pending || linkBusy}
+              className={`${fieldClass} disabled:opacity-60`}
             >
               <option value="">{t("roster.fields.position.none")}</option>
               {positions.map((item) => (
@@ -302,21 +312,6 @@ export function MemberEditDialog({
             })}
           </div>
         </fieldset>
-        ) : null}
-        {entuziasti ? (
-        <label className="block text-sm">
-          <span className="text-muted">{t("user.settings.player")}</span>
-          <input
-            value={playerUrl}
-            onChange={(event) => {
-              setPlayerUrl(event.target.value);
-              if (event.target.value.trim()) setAvatarDirty(false);
-            }}
-            onBlur={() => void fillFromLink()}
-            placeholder={t("user.settings.player_placeholder")}
-            className={fieldClass}
-          />
-        </label>
         ) : null}
         {showAvatar ? <AvatarCropField ref={avatarRef} existingUrl={member.ehl?.photoUrl ? null : member.photoUrl} disabled={pending} onDirty={setAvatarDirty} /> : null}
         </>
@@ -364,7 +359,7 @@ export function MemberEditDialog({
           <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed">
             {t("actions.cancel")}
           </button>
-          <button type="submit" disabled={!dirty || pending} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="submit" disabled={!dirty || pending || linkBusy} className="rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
             {t("actions.save")}
           </button>
         </div>

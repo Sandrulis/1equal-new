@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { ResetPasswordForm } from "@/app/components/reset-password-form";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
+import { absolutePublicUrl } from "@/app/lib/public-metadata";
 
 export const metadata: Metadata = {
   title: "Jauna parole",
+  alternates: { canonical: absolutePublicUrl("/reset-password") },
   robots: { index: false, follow: false },
 };
 

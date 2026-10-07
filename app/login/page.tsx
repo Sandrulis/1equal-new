@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { AuthScreen } from "@/app/components/auth-screen";
 import { isGoogleSignInEnabled } from "@/app/lib/auth/google-oauth";
+import { absolutePublicUrl } from "@/app/lib/public-metadata";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { getPublicTurnstileSiteKey } from "@/app/lib/security/turnstile";
 
 export const metadata: Metadata = {
   title: "Ienākt",
+  alternates: { canonical: absolutePublicUrl("/login") },
   robots: { index: false, follow: false },
 };
 

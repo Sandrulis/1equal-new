@@ -57,6 +57,7 @@ export function TopBar({
   entuziasti = true,
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
   sports = [],
 }: {
   onHome: () => void;
@@ -79,6 +80,7 @@ export function TopBar({
   entuziasti?: boolean;
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
   sports?: Sport[];
 }) {
   const { t } = useLanguage();
@@ -129,6 +131,7 @@ export function TopBar({
           sports={sports}
           enabledModules={enabledModules}
           individualModuleKeys={individualModuleKeys}
+          presetEntuziasti={presetEntuziasti}
         />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">

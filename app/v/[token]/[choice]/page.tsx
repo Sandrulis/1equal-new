@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/app/components/landing-page";
 import { VoteLandingNotice } from "@/app/components/vote-landing-notice";
 import { asLang, translate } from "@/app/lib/messages";
+import { absolutePublicUrl } from "@/app/lib/public-metadata";
 import { getPublicI18n } from "@/app/lib/site-admin/repository";
 
 export async function generateMetadata(): Promise<Metadata> {
   const i18n = await getPublicI18n();
   return {
     title: translate(asLang(i18n.defaultCode), "email.vote.thanks"),
+    alternates: { canonical: absolutePublicUrl("/") },
     robots: { index: false, follow: false },
   };
 }

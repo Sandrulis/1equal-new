@@ -145,6 +145,7 @@ export function legacyPathRedirects(): { source: string; destination: string }[]
     rules.push({ source, destination });
   };
   for (const slug of LEGAL_SLUGS) add(`/lv/${slug}`, `/${slug}`);
+  for (const slug of FEATURE_SLUGS) add(`/${slug}`, publicPath("lv", `/${slug}`));
   for (const group of LOCALIZED_GROUPS) {
     const slugs = new Set<string>([...Object.values(group.slugs), ...group.aliases]);
     for (const slug of slugs) {

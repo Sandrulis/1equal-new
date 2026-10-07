@@ -12,6 +12,6 @@ function canOptimize(src: string): boolean {
   }
 }
 
-export function ContentImage({ src, alt = "", className }: { src: string; alt?: string; className?: string }) {
-  return <Image src={src} alt={alt} width={64} height={64} unoptimized={!canOptimize(src)} className={className} />;
+export function ContentImage({ src, alt = "", className, width = 64, height = 64 }: { src: string; alt?: string; className?: string; width?: number; height?: number }) {
+  return <Image src={src} alt={alt} width={width} height={height} unoptimized={!canOptimize(src)} className={className} />;
 }

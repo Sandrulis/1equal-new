@@ -87,6 +87,25 @@ export function resolvePositionCode(value: string | null | undefined, catalog: P
   return "";
 }
 
+export function positionFromEhlLabel(value: string | null | undefined, catalog: PositionCatalogItem[]): string {
+  const resolved = resolvePositionCode(value, catalog);
+  if (resolved) return resolved;
+  const folded = foldPosition(value ?? "");
+  const codes = new Set(catalog.map((item) => item.code));
+  const pick = (code: PositionCode) => (codes.has(code) ? code : "");
+  if (folded.includes("VARTSARG") || folded.includes("GOAL")) return pick("G");
+  if (folded.includes("AIZSARG") || folded.includes("DEFEN")) return pick("D");
+  if (folded.includes("KREIS") || folded.includes("LEFT")) return pick("LW");
+  if (folded.includes("LAB") || folded.includes("RIGHT")) return pick("RW");
+  if (folded.includes("CENTR")) return pick("C");
+  if (folded.includes("UZBRUC") || folded.includes("FORWARD")) return pick("C");
+  const raw = (value ?? "").toLocaleLowerCase("lv");
+  if (raw.includes("напада")) return pick("C");
+  if (raw.includes("защит")) return pick("D");
+  if (raw.includes("вратар")) return pick("G");
+  return "";
+}
+
 export function formatPosition(
   code: string,
   catalog: PositionCatalogItem[],

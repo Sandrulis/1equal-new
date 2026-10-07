@@ -39,6 +39,24 @@ export async function readRequestOrigin(): Promise<OriginSnapshot> {
   return publicSnapshot(await captureRequestAddress());
 }
 
+function isLocalHostHeader(host: string | null): boolean {
+  const value = host?.split(",")[0]?.trim().toLowerCase() ?? "";
+  if (value === "localhost" || value.startsWith("localhost:")) return true;
+  if (value === "127.0.0.1" || value.startsWith("127.0.0.1:")) return true;
+  if (value === "[::1]" || value.startsWith("[::1]:")) return true;
+  return false;
+}
+
+export async function requestCountryCode(): Promise<string> {
+  const headerStore = await headers();
+  if (isLocalHostHeader(headerStore.get("host"))) return "LV";
+  const address = trustedClientAddress(headerStore);
+  const origin = publicSnapshot({ ip: address.ip, countryCode: address.countryCode, publicIp: Boolean(address.ip) && isPublicIp(address.ip) });
+  if (!origin.ip) return "";
+  if (origin.countryCode) return origin.countryCode;
+  return (await resolvedOrigin(origin)).countryCode;
+}
+
 async function lookupCountry(ip: string): Promise<string> {
   try {
     const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country_code`, {

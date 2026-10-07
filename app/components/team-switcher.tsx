@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
+import { EhlTeamLinkField, sameEhlTeam, type ResolvedEhlTeam } from "@/app/components/ehl-team-link-field";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { IconTipButton, IconX } from "@/app/components/icon-tip-button";
 import { TeamMark } from "@/app/components/team-mark";
@@ -13,7 +14,7 @@ import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
-import { FRONTEND_MODULE_KEYS, entuziastiForSport } from "@/app/lib/frontend-modules";
+import { FRONTEND_MODULE_KEYS, entuziastiCreateVisible, entuziastiForSport } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
@@ -39,6 +40,7 @@ export function TeamSwitcher({
   sports = [],
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
 }: {
   team: Pick<IssuedTeam, "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
   teams: IssuedTeam[];
@@ -50,6 +52,7 @@ export function TeamSwitcher({
   sports?: Sport[];
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -191,6 +194,7 @@ export function TeamSwitcher({
         sports={sports}
         enabledModules={enabledModules}
         individualModuleKeys={individualModuleKeys}
+        presetEntuziasti={presetEntuziasti}
         onClose={() => setCreating(false)}
         onCreate={(input) => {
           setCreating(false);
@@ -236,6 +240,7 @@ function CreateTeamDialog({
   sports,
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
   onClose,
   onCreate,
 }: {
@@ -243,6 +248,7 @@ function CreateTeamDialog({
   sports: Sport[];
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
   onClose: () => void;
   onCreate: (input: CreateTeamInput) => void;
 }) {
@@ -251,19 +257,21 @@ function CreateTeamDialog({
   const { showFeedback } = useFeedbackToast();
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
   const [currency, setCurrency] = useState<string | null>(null);
   const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
   const [sportId, setSportId] = useState("");
   const [pending, setPending] = useState(false);
   const avatarRef = useRef<AvatarCropHandle>(null);
+  const previewRef = useRef<ResolvedEhlTeam | null>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const trainingValue = votingHours(trainingHours);
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, sportId);
-  const showLink = !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) && entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
+  const showLink = entuziastiCreateVisible(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null, individualModuleKeys, presetEntuziasti);
   const closedKey = `${open ? 1 : 0}|${brand.trainingVotingHours}|${brand.gameVotingHours}`;
   const [seenClosed, setSeenClosed] = useState(closedKey);
   if (closedKey !== seenClosed) {
@@ -271,6 +279,7 @@ function CreateTeamDialog({
     if (!open) {
       setName("");
       setLink("");
+      setLinkBusy(false);
       setCurrency(null);
       setTrainingHours(String(brand.trainingVotingHours));
       setGameHours(String(brand.gameVotingHours));
@@ -293,18 +302,23 @@ function CreateTeamDialog({
   }
 
   async function submit() {
-    if (!nameReady || !hoursOk || pending) return;
+    if (!nameReady || !hoursOk || pending || linkBusy) return;
     const source = showLink ? link.trim() : "";
     if (!source) {
       await emit(null, null);
       return;
     }
-    setPending(true);
-    const result = await lookupEhlTeamName(source);
-    setPending(false);
-    if (!result.ok) {
-      showFeedback({ message: t(LINK_ERROR[result.error]), variant: "error" });
-      return;
+    const cached = sameEhlTeam(source, previewRef.current) ? previewRef.current : null;
+    let result = cached;
+    if (!result) {
+      setPending(true);
+      const looked = await lookupEhlTeamName(source);
+      setPending(false);
+      if (!looked.ok) {
+        showFeedback({ message: t(LINK_ERROR[looked.error]), variant: "error" });
+        return;
+      }
+      result = looked;
     }
     if (!teamNamesMatch(name, result.name)) {
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
@@ -323,33 +337,30 @@ function CreateTeamDialog({
             void submit();
           }}
         >
+          {showLink ? (
+            <EhlTeamLinkField
+              value={link}
+              disabled={pending}
+              autoFocus
+              onChange={setLink}
+              onLoading={setLinkBusy}
+              onResolved={(next) => {
+                previewRef.current = next;
+                if (next) setName(next.name.slice(0, 80));
+              }}
+            />
+          ) : null}
           <label className="text-sm font-medium">
             {t("catalog.name")}
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={80}
-              autoFocus
-              disabled={pending}
+              autoFocus={!showLink}
+              disabled={pending || linkBusy}
               className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none focus:ring-train disabled:opacity-60"
             />
           </label>
-          {showLink ? (
-          <label className="text-sm font-medium">
-            {t("team.empty.link")}
-            <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
-            <input
-              value={link}
-              onChange={(event) => setLink(event.target.value)}
-              placeholder={t("team.empty.link_placeholder")}
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              disabled={pending}
-              className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
-            />
-          </label>
-          ) : null}
           {showLink && link.trim() !== "" ? null : <AvatarCropField ref={avatarRef} disabled={pending} />}
           {open ? <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} /> : null}
           <MoneyVotingFields
@@ -368,7 +379,7 @@ function CreateTeamDialog({
             <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed disabled:opacity-60">
               {t("actions.cancel")}
             </button>
-            <button type="submit" disabled={!nameReady || !hoursOk || pending} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="submit" disabled={!nameReady || !hoursOk || pending || linkBusy} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
               {pending ? t("team.empty.checking") : t("team.empty.create")}
             </button>
           </div>

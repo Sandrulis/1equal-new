@@ -1,6 +1,6 @@
 "use server";
 
-import { recordTeamOrigin } from "@/app/lib/admin-origin";
+import { recordTeamOrigin, requestCountryCode } from "@/app/lib/admin-origin";
 import { ownAvatarUrl, removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
@@ -58,6 +58,16 @@ async function sportPositionCatalog(client: GateClient, sportId: string | null):
   const rows = await client.from("sport_positions").select("code, sort_order").eq("sport_id", sportId).order("sort_order");
   if (rows.error) return null;
   return ((rows.data ?? []) as { code: string }[]).map((row) => ({ code: row.code }));
+}
+
+async function latviaEntuziastiOn(sportId: string): Promise<boolean> {
+  if ((await requestCountryCode()) !== "LV") return false;
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const moduleRow = await admin.from("site_frontend_modules").select("is_enabled, is_individual").eq("module_key", FRONTEND_MODULE_KEYS.entuziasti).maybeSingle();
+  if (moduleRow.error || !moduleRow.data?.is_enabled || moduleRow.data.is_individual !== true) return false;
+  const link = await admin.from("sport_modules").select("module_key").eq("sport_id", sportId).eq("module_key", FRONTEND_MODULE_KEYS.entuziasti).maybeSingle();
+  return !link.error && Boolean(link.data);
 }
 
 async function rememberActiveTeam(client: GateClient, userId: string, teamId: string) {
@@ -193,7 +203,8 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   const currency = input.currency && isCurrency(input.currency) ? input.currency : null;
   const sport = await attachSport(gate.client, input.sportId);
   if (!sport.ok) return sport;
-  const entuziasti = await moduleEnabledForSport(gate.client, sport.sportId, FRONTEND_MODULE_KEYS.entuziasti);
+  const presetEntuziasti = await latviaEntuziastiOn(sport.sportId);
+  const entuziasti = presetEntuziasti || (await moduleEnabledForSport(gate.client, sport.sportId, FRONTEND_MODULE_KEYS.entuziasti));
   const parsed = input.sourceUrl ? parseEhlTeamUrl(input.sourceUrl) : null;
   if (entuziasti && input.sourceUrl && !parsed) return { ok: false, error: "team.link.invalid" };
   const source = entuziasti && parsed ? parsed.toString() : null;
@@ -212,6 +223,11 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
     }
   }
   if (!teamId) return { ok: false, error: "auth.error.generic" };
+  let moduleKeys: string[] = [];
+  if (presetEntuziasti) {
+    const linked = await gate.client.from("team_modules").upsert({ team_id: teamId, module_key: FRONTEND_MODULE_KEYS.entuziasti }, { onConflict: "team_id,module_key" });
+    if (!linked.error) moduleKeys = [FRONTEND_MODULE_KEYS.entuziasti];
+  }
   await recordTeamOrigin(teamId);
 
   const memberInsert = await gate.client.from("team_members").insert({ team_id: teamId, user_id: gate.account.id }).select(TEAM_MEMBER_COLUMNS).single();
@@ -231,7 +247,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
   refreshTeamData();
   return {
     ok: true,
-    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, homeKitUrl: presentKit(kits?.home_kit_url), awayKitUrl: presentKit(kits?.away_kit_url), leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
+    team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, homeKitUrl: presentKit(kits?.home_kit_url), awayKitUrl: presentKit(kits?.away_kit_url), leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, moduleKeys, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
   };
 }
 

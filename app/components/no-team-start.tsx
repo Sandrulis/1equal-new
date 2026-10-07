@@ -3,13 +3,14 @@
 import { useRef, useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
+import { EhlTeamLinkField, sameEhlTeam, type ResolvedEhlTeam } from "@/app/components/ehl-team-link-field";
 import { MoneyVotingFields } from "@/app/components/money-voting-fields";
 import { SportField } from "@/app/components/sport-switch";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
-import { FRONTEND_MODULE_KEYS, entuziastiForSport } from "@/app/lib/frontend-modules";
+import { entuziastiCreateVisible } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { useLanguage } from "@/app/lib/language";
@@ -26,12 +27,14 @@ export function NoTeamStart({
   sports = [],
   enabledModules = null,
   individualModuleKeys = [],
+  presetEntuziasti = false,
   onCreate,
   onJoin,
 }: {
   sports?: Sport[];
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
+  presetEntuziasti?: boolean;
   onCreate: (input: CreateTeamInput) => void;
   onJoin: (code: string) => void;
 }) {
@@ -42,12 +45,14 @@ export function NoTeamStart({
   const [pending, setPending] = useState(false);
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
   const [currency, setCurrency] = useState<string | null>(null);
   const [trainingHours, setTrainingHours] = useState(String(brand.trainingVotingHours));
   const [gameHours, setGameHours] = useState(String(brand.gameVotingHours));
   const [sportId, setSportId] = useState("");
   const [code, setCode] = useState("");
   const avatarRef = useRef<AvatarCropHandle>(null);
+  const previewRef = useRef<ResolvedEhlTeam | null>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const codeReady = normalizeInviteCode(code).length > 0;
@@ -55,7 +60,7 @@ export function NoTeamStart({
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, sportId);
-  const showLink = !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) && entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
+  const showLink = entuziastiCreateVisible(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null, individualModuleKeys, presetEntuziasti);
 
   async function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;
@@ -72,18 +77,23 @@ export function NoTeamStart({
   }
 
   async function submitCreate() {
-    if (!nameReady || !hoursOk || pending) return;
+    if (!nameReady || !hoursOk || pending || linkBusy) return;
     const source = showLink ? link.trim() : "";
     if (!source) {
       await emit(null, null);
       return;
     }
-    setPending(true);
-    const result = await lookupEhlTeamName(source);
-    setPending(false);
-    if (!result.ok) {
-      showFeedback({ message: t(LINK_ERROR[result.error]), variant: "error" });
-      return;
+    const cached = sameEhlTeam(source, previewRef.current) ? previewRef.current : null;
+    let result = cached;
+    if (!result) {
+      setPending(true);
+      const looked = await lookupEhlTeamName(source);
+      setPending(false);
+      if (!looked.ok) {
+        showFeedback({ message: t(LINK_ERROR[looked.error]), variant: "error" });
+        return;
+      }
+      result = looked;
     }
     if (!teamNamesMatch(name, result.name)) {
       setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
@@ -109,33 +119,32 @@ export function NoTeamStart({
               void submitCreate();
             }}
           >
+            {showLink ? (
+              <div className="text-left">
+                <EhlTeamLinkField
+                  value={link}
+                  disabled={pending}
+                  autoFocus
+                  onChange={setLink}
+                  onLoading={setLinkBusy}
+                  onResolved={(next) => {
+                    previewRef.current = next;
+                    if (next) setName(next.name.slice(0, 80));
+                  }}
+                />
+              </div>
+            ) : null}
             <label className="text-left text-sm font-medium">
               {t("catalog.name")}
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={80}
-                autoFocus
-                disabled={pending}
+                autoFocus={!showLink}
+                disabled={pending || linkBusy}
                 className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none focus:ring-train disabled:opacity-60"
               />
             </label>
-            {showLink ? (
-            <label className="text-left text-sm font-medium">
-              {t("team.empty.link")}
-              <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
-              <input
-                value={link}
-                onChange={(event) => setLink(event.target.value)}
-                placeholder={t("team.empty.link_placeholder")}
-                inputMode="url"
-                autoComplete="off"
-                spellCheck={false}
-                disabled={pending}
-              className="mt-1.5 w-full rounded-lg bg-ice px-3 py-2.5 text-sm font-normal text-ink ring-1 ring-line outline-none placeholder:text-muted focus:ring-train disabled:opacity-60"
-            />
-          </label>
-            ) : null}
           {showLink && link.trim() !== "" ? null : (
             <div className="text-left">
               <AvatarCropField ref={avatarRef} disabled={pending} />
@@ -164,6 +173,7 @@ export function NoTeamStart({
                   setCreating(false);
                   setName("");
                   setLink("");
+                  previewRef.current = null;
                   setMismatch(null);
                 }}
                 className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed disabled:opacity-60"
@@ -172,7 +182,7 @@ export function NoTeamStart({
               </button>
               <button
                 type="submit"
-                disabled={!nameReady || !hoursOk || pending}
+                disabled={!nameReady || !hoursOk || pending || linkBusy}
                 className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? t("team.empty.checking") : t("team.empty.create")}
