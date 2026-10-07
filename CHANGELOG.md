@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.10
+
+- Mobilās izvēlnes atvērums vairs netiek rakstīts renderēšanas laikā, un lint iziet
+
 ## v0.2.9
 
 - Notikumu nevar izveidot bez laukuma, un bez finanšu cron komandas izdevums noņem no bilances uzreiz

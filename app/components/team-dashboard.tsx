@@ -2271,8 +2271,10 @@ function MobileDock({
   const measureRef = useRef<HTMLDivElement>(null);
   const hideRef = useRef(0);
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreOpenRef = useRef(moreOpen);
-  moreOpenRef.current = moreOpen;
+  const moreOpenRef = useRef(false);
+  useEffect(() => {
+    moreOpenRef.current = moreOpen;
+  }, [moreOpen]);
   useExclusiveMobileMenu("more", moreOpen, () => setMoreOpen(false));
   const [inlineExtras, setInlineExtras] = useState(false);
   const hasExtras = (canManage && (showGuests || showSubteams || showVenues)) || showSettings;
