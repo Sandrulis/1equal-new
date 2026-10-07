@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.7
+
+- `sharp` ir 0.35.5, lai drošības pārbaude vairs nekrīt uz librsvg
+
 ## v0.2.6
 
 - Treneris treniņā paliek vidū, spēlē ir laukuma malā, un tas pats spēlētājs var būt vairākās pozīcijās
