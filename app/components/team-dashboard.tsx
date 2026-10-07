@@ -240,6 +240,7 @@ export function TeamDashboard({
   const [profile, setProfile] = useState(account);
   const [guestSignups, setGuestSignups] = useState(initialGuestSignups);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [teamSettingsOpen, setTeamSettingsOpen] = useState(false);
   const needsTeam = Boolean(account) && !ownedTeam;
   const [demoBundle, setDemoBundle] = useState<DemoBundle | null>(null);
   useEffect(() => {
@@ -867,6 +868,10 @@ export function TeamDashboard({
   async function addEvent(input: NewEventInput) {
     if (savingEvent) return;
     const editing = editingEvent;
+    if (!editing && venueCount === 0) {
+      showFeedback({ message: t("event.add.need_venue"), variant: "info" });
+      return;
+    }
     if (basePath === "/demo" || !ownedTeam?.id) {
       if (editing) {
         const nextEvent = eventFromInput(editing.id, input, editing);
@@ -909,7 +914,7 @@ export function TeamDashboard({
         showFeedback({ message: t(created.error), variant: "error" });
         return;
       }
-      savedTeam = { ...ownedTeam, events: [...(ownedTeam.events ?? []), created.event] };
+      savedTeam = { ...ownedTeam, events: [...(ownedTeam.events ?? []), created.event], balance: created.teamBalance };
     }
     setCurrentTeam(savedTeam);
     setOwnedTeam(savedTeam);
@@ -1068,6 +1073,19 @@ export function TeamDashboard({
     });
   }
 
+  function openTeamSettings() {
+    if (view === "team") {
+      setTeamSettingsOpen(true);
+      return;
+    }
+    collapseIfNarrow();
+    navigate("team", () => {
+      softGo(`${basePath}/team`);
+      window.scrollTo({ top: 0 });
+      setTeamSettingsOpen(true);
+    });
+  }
+
   function moduleOn(key: string) {
     if (!enabledModules) return true;
     if (!enabledModules.includes(key)) return false;
@@ -1097,6 +1115,14 @@ export function TeamDashboard({
   const subteamCount = showStart ? 0 : filterSubteams.length;
   const venueSource = showStart ? [] : activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.venues ?? []) : venues;
   const venueCount = venueSource.filter((item) => !item.hidden).length;
+  function beginAddEvent() {
+    if (venueCount === 0) {
+      showFeedback({ message: t("event.add.need_venue"), variant: "info" });
+      return;
+    }
+    if (view !== "home" || lineup) showHome("kalendars");
+    setAddingEvent(true);
+  }
   const adminCounts: Partial<Record<AdminSection, number>> = admin
     ? {
         users: admin.usersLoaded ? admin.users.length : admin.userCount,
@@ -1133,8 +1159,8 @@ export function TeamDashboard({
   }
   useEffect(() => {
     if (basePath !== "/demo") return;
-    settleDemoCharges(calendarEvents, now);
-  }, [basePath, calendarEvents, now]);
+    settleDemoCharges(calendarEvents);
+  }, [basePath, calendarEvents]);
   const voteTraining = activeTeam?.trainingVotingHours ?? brand.trainingVotingHours;
   const voteGame = activeTeam?.gameVotingHours ?? brand.gameVotingHours;
   const selfMember = !activeTeam || showStart
@@ -1306,6 +1332,7 @@ export function TeamDashboard({
     profile && activeTeam && !activeTeam.demo && (ghostLeader || activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
   );
   const canManageTeam = basePath === "/demo" || managesTeam;
+  const showTeamSettings = Boolean(managesTeam && !showStart && !teamPending && activeTeam?.id);
   const pondOn = moduleOn(FRONTEND_MODULE_KEYS.pond) && basePath !== "/demo";
   const pondEvent = Boolean(openEvent && pondOn && openEvent.type === "training" && !openEvent.withCoach);
   const eventGuests = pondEvent ? (ownedTeam?.guests ?? []).filter((guest) => guest.eventId === openEvent?.id) : [];
@@ -1363,6 +1390,7 @@ export function TeamDashboard({
           {showGuests ? <SideItem label={t("pond.guests")} count={guestCount} icon={<IconGuest />} active={view === "guests"} busy={pendingNav === "guests"} compact={sidebarCollapsed} onClick={() => showView("guests")} /> : null}
           {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} busy={pendingNav === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
           {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
+          {showTeamSettings ? <SideItem label={t("nav.team_settings")} icon={<IconGear />} compact={sidebarCollapsed} onClick={openTeamSettings} /> : null}
         </nav>
         {needsTeam && guestSignups.length > 0 && !sidebarCollapsed ? (
           <div className="hidden max-h-72 shrink-0 overflow-y-auto border-t border-white/15 py-3 pr-4 pl-2.5 min-[600px]:block">
@@ -1389,6 +1417,7 @@ export function TeamDashboard({
         guestsLabel={t("pond.guests")}
         subteamsLabel={t("nav.subteams")}
         venuesLabel={t("nav.venues")}
+        settingsLabel={t("nav.team_settings")}
         addLabel={t("event.add")}
         closeLabel={t("event.close")}
         view={view}
@@ -1396,6 +1425,7 @@ export function TeamDashboard({
         showGuests={showGuests && !showStart}
         showSubteams={canManageTeam && !showStart && moduleOn(FRONTEND_MODULE_KEYS.subteams)}
         showVenues={canManageTeam && !showStart}
+        showSettings={showTeamSettings}
         canAdd={Boolean(canManageTeam && !showStart)}
         homeBusy={pendingNav === "home"}
         teamBusy={pendingNav === "team"}
@@ -1407,10 +1437,8 @@ export function TeamDashboard({
         onGuests={() => showView("guests")}
         onSubteams={() => showView("subteams")}
         onVenues={() => showView("venues")}
-        onAdd={() => {
-          if (view !== "home" || lineup) showHome("kalendars");
-          setAddingEvent(true);
-        }}
+        onSettings={openTeamSettings}
+        onAdd={beginAddEvent}
       />
       {account && menuPresence.mounted ? (
         <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] min-[600px]:hidden">
@@ -1566,6 +1594,8 @@ export function TeamDashboard({
             enabledModules={teamModules}
             attendanceOn={moduleOn(FRONTEND_MODULE_KEYS.playerEventStats)}
             onTeamSaved={rememberTeam}
+            externalSettingsOpen={teamSettingsOpen}
+            onExternalSettingsClose={() => setTeamSettingsOpen(false)}
             initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.watching ? (activeTeam.members ?? []).filter((member) => member.id !== profile.id) : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
               if (!delta) return member;
@@ -1920,7 +1950,7 @@ export function TeamDashboard({
 
           <div className={showPoll ? "hidden" : "contents xl:sticky xl:top-5 xl:flex xl:flex-col xl:gap-3 xl:order-2"}>
           {canManageTeam ? (
-            <button type="button" onClick={() => setAddingEvent(true)} className="order-1 hidden w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white min-[600px]:inline-flex xl:order-none">
+            <button type="button" onClick={beginAddEvent} className="order-1 hidden w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white min-[600px]:inline-flex xl:order-none">
               <IconPlus />
               {t("event.add")}
             </button>
@@ -2082,7 +2112,7 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
-      <div className="order-4 bg-paper max-[599px]:pb-[calc(5rem+env(safe-area-inset-bottom))]">
+      <div data-dock-pad className="order-4 bg-paper max-[599px]:pb-[calc(5rem+env(safe-area-inset-bottom))]">
         <SiteFooter />
       </div>
       </div>
@@ -2183,6 +2213,7 @@ function MobileDock({
   guestsLabel,
   subteamsLabel,
   venuesLabel,
+  settingsLabel,
   addLabel,
   closeLabel,
   view,
@@ -2190,6 +2221,7 @@ function MobileDock({
   showGuests,
   showSubteams,
   showVenues,
+  showSettings,
   canAdd,
   homeBusy,
   teamBusy,
@@ -2201,6 +2233,7 @@ function MobileDock({
   onGuests,
   onSubteams,
   onVenues,
+  onSettings,
   onAdd,
 }: {
   sectionsLabel: string;
@@ -2210,6 +2243,7 @@ function MobileDock({
   guestsLabel: string;
   subteamsLabel: string;
   venuesLabel: string;
+  settingsLabel: string;
   addLabel: string;
   closeLabel: string;
   view: "home" | "team" | "guests" | "subteams" | "venues" | "admin";
@@ -2217,6 +2251,7 @@ function MobileDock({
   showGuests: boolean;
   showSubteams: boolean;
   showVenues: boolean;
+  showSettings: boolean;
   canAdd: boolean;
   homeBusy: boolean;
   teamBusy: boolean;
@@ -2228,14 +2263,19 @@ function MobileDock({
   onGuests: () => void;
   onSubteams: () => void;
   onVenues: () => void;
+  onSettings: () => void;
   onAdd: () => void;
 }) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const hideRef = useRef(0);
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreOpenRef = useRef(moreOpen);
+  moreOpenRef.current = moreOpen;
   useExclusiveMobileMenu("more", moreOpen, () => setMoreOpen(false));
   const [inlineExtras, setInlineExtras] = useState(false);
-  const hasExtras = canManage && (showGuests || showSubteams || showVenues);
+  const hasExtras = (canManage && (showGuests || showSubteams || showVenues)) || showSettings;
   const moreActive = !inlineExtras && (view === "guests" || view === "subteams" || view === "venues");
 
   useLayoutEffect(() => {
@@ -2257,7 +2297,60 @@ function MobileDock({
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [hasExtras, canAdd, homeLabel, teamLabel, guestsLabel, subteamsLabel, venuesLabel, showGuests, showSubteams, showVenues]);
+  }, [hasExtras, canAdd, homeLabel, teamLabel, guestsLabel, subteamsLabel, venuesLabel, settingsLabel, showGuests, showSubteams, showVenues, showSettings]);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    let last = window.scrollY;
+    let swallow = false;
+    function paint(offset: number) {
+      hideRef.current = offset;
+      if (!bar) return;
+      bar.style.transform = offset > 0 ? `translate3d(0, ${offset}px, 0)` : "";
+    }
+    function syncFooterGap(fullyHidden: boolean) {
+      const wrap = document.querySelector("[data-dock-pad]");
+      if (!(wrap instanceof HTMLElement)) return;
+      const want = fullyHidden && window.innerWidth < 600 ? "calc(0.75rem + env(safe-area-inset-bottom))" : "";
+      if (wrap.style.paddingBottom === want) return;
+      swallow = true;
+      wrap.style.paddingBottom = want;
+      last = window.scrollY;
+      requestAnimationFrame(() => {
+        last = window.scrollY;
+        swallow = false;
+      });
+    }
+    function onScroll() {
+      if (swallow) {
+        last = window.scrollY;
+        return;
+      }
+      const y = window.scrollY;
+      const delta = y - last;
+      last = y;
+      if (!bar || delta === 0) return;
+      if (window.innerWidth >= 600) {
+        if (hideRef.current !== 0) paint(0);
+        syncFooterGap(false);
+        return;
+      }
+      const limit = bar.offsetHeight + 16;
+      const next = y <= 0 ? 0 : Math.min(limit, Math.max(0, hideRef.current + delta));
+      if (next === hideRef.current) return;
+      paint(next);
+      syncFooterGap(next >= limit);
+      if (next > 0 && moreOpenRef.current) setMoreOpen(false);
+    }
+    paint(0);
+    syncFooterGap(false);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      const wrap = document.querySelector("[data-dock-pad]");
+      if (wrap instanceof HTMLElement) wrap.style.paddingBottom = "";
+    };
+  }, [view]);
 
   function pick(run: () => void) {
     setMoreOpen(false);
@@ -2270,13 +2363,14 @@ function MobileDock({
         {showGuests ? <DockItem label={guestsLabel} icon={<IconGuest />} active={view === "guests"} busy={guestsBusy} onClick={() => pick(onGuests)} /> : null}
         {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} active={view === "subteams"} busy={subteamsBusy} onClick={() => pick(onSubteams)} /> : null}
         {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} active={view === "venues"} busy={venuesBusy} onClick={() => pick(onVenues)} /> : null}
+        {showSettings ? <DockItem label={settingsLabel} icon={<IconGear />} onClick={() => pick(onSettings)} /> : null}
       </>
     );
   }
 
   return (
     <>
-    <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-end justify-center gap-3 px-4 min-[600px]:hidden">
+    <div ref={shellRef} className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 px-4 min-[600px]:hidden">
       {hasExtras ? (
         <div ref={measureRef} aria-hidden="true" inert className="pointer-events-none invisible absolute top-0 left-0 flex h-14 gap-1.5 p-[7px]">
           <DockItem label={homeLabel} icon={<IconCalendar />} onClick={() => undefined} />
@@ -2284,6 +2378,7 @@ function MobileDock({
           {showGuests ? <DockItem label={guestsLabel} icon={<IconGuest />} onClick={() => undefined} /> : null}
           {showSubteams ? <DockItem label={subteamsLabel} icon={<IconLayers />} onClick={() => undefined} /> : null}
           {showVenues ? <DockItem label={venuesLabel} icon={<IconPin />} onClick={() => undefined} /> : null}
+          {showSettings ? <DockItem label={settingsLabel} icon={<IconGear />} onClick={() => undefined} /> : null}
         </div>
       ) : null}
       {moreOpen ? <button type="button" aria-label={closeLabel} className="pointer-events-auto fixed inset-0" onClick={() => setMoreOpen(false)} /> : null}
@@ -2307,8 +2402,15 @@ function MobileDock({
               {venuesLabel}
             </button>
           ) : null}
+          {showSettings ? (
+            <button type="button" onClick={() => pick(onSettings)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-ice">
+              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5"><IconGear /></span>
+              {settingsLabel}
+            </button>
+          ) : null}
         </div>
       ) : null}
+      <div ref={barRef} className="flex items-end justify-center gap-3">
       <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex h-14 items-stretch gap-1.5 rounded-2xl bg-navy p-[7px] text-white shadow-lg">
         <DockItem label={homeLabel} icon={<IconCalendar />} active={view === "home"} busy={homeBusy} onClick={() => pick(onHome)} />
         <DockItem label={teamLabel} icon={<IconUsers />} active={view === "team"} busy={teamBusy} onClick={() => pick(onTeam)} />
@@ -2327,6 +2429,7 @@ function MobileDock({
           <span className="[&_svg]:size-6"><IconPlus /></span>
         </button>
       ) : null}
+      </div>
     </div>
     {canAdd ? (
       <button type="button" aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto fixed right-6 bottom-6 z-50 hidden size-14 place-items-center rounded-full bg-navy text-white shadow-lg min-[600px]:grid">

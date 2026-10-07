@@ -627,7 +627,7 @@ export async function createOwnedEvent(input: {
   expense: number | null;
   withCoach: boolean;
   home: "home" | "away" | null;
-}): Promise<{ ok: true; event: TeamEvent } | { ok: false; error: MessageKey }> {
+}): Promise<{ ok: true; event: TeamEvent; teamBalance: number } | { ok: false; error: MessageKey }> {
   const gate = await requireUserAdmin();
   if (!gate) return { ok: false, error: "auth.error.generic" };
   if (!(await managesTeam(gate.client, input.teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
@@ -660,9 +660,29 @@ export async function createOwnedEvent(input: {
     .single();
   if (inserted.error || !inserted.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(inserted.data);
+  const chargeNow = !(await financeCronEnabled(gate.client));
+  let teamBalance: number;
+  if (chargeNow) {
+    const next = await applyEventSettlement(gate.client, input.teamId, { ...event, expense: event.expense ?? null }, null, true);
+    if (next == null) {
+      await gate.client.from("team_events").delete().eq("id", event.id);
+      return { ok: false, error: "auth.error.generic" };
+    }
+    const fresh = await gate.client.from("team_events").select("settled_at").eq("id", event.id).maybeSingle();
+    if (fresh.error || ((event.expense ?? 0) > 0 && !fresh.data?.settled_at)) {
+      await gate.client.from("team_events").delete().eq("id", event.id);
+      return { ok: false, error: "auth.error.generic" };
+    }
+    event.settled = Boolean(fresh.data?.settled_at);
+    teamBalance = next;
+  } else {
+    const team = await gate.client.from("teams").select("balance").eq("id", input.teamId).maybeSingle();
+    if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+    teamBalance = roundMoney(Number(team.data.balance ?? 0));
+  }
   await notifyNewEvent(event, input.teamId, gate.account.id);
   refreshTeamData();
-  return { ok: true, event };
+  return { ok: true, event, teamBalance };
 }
 
 function roundMoney(value: number): number {
@@ -690,21 +710,28 @@ async function bumpBalance(client: NonNullable<Awaited<ReturnType<typeof require
   return roundMoney(Number(bumped.data));
 }
 
+async function financeCronEnabled(client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"]): Promise<boolean> {
+  const flag = await client.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
+  return !flag.error && flag.data?.enabled === true;
+}
+
 async function applyEventSettlement(
   client: NonNullable<Awaited<ReturnType<typeof requireUserAdmin>>>["client"],
   teamId: string,
   event: { id: string; date: string; start: string; end: string; type: "game" | "training"; expense: number | null },
   settledAt: string | null,
+  chargeNow = false,
 ): Promise<number | null> {
   const team = await client.from("teams").select("balance").eq("id", teamId).maybeSingle();
   if (team.error || !team.data) return null;
   const balance = roundMoney(Number(team.data.balance ?? 0));
   const expense = event.expense != null ? roundMoney(event.expense) : 0;
   const ended = eventHasEnded(event);
+  const due = chargeNow || ended;
   const line = await client.from("team_ledger").select("id, amount").eq("event_id", event.id).maybeSingle();
   if (line.error) return null;
   const charged = line.data ? Math.abs(Number(line.data.amount)) : 0;
-  if (settledAt && line.data && (!ended || expense <= 0)) {
+  if (settledAt && line.data && (expense <= 0 || (!chargeNow && !ended))) {
     const next = await bumpBalance(client, teamId, charged);
     if (next == null) return null;
     await client.from("team_ledger").delete().eq("id", line.data.id);
@@ -717,7 +744,7 @@ async function applyEventSettlement(
     await client.from("team_ledger").update({ amount: -expense, event_date: event.date, event_type: event.type }).eq("id", line.data.id);
     return next;
   }
-  if (!settledAt && ended && expense > 0) {
+  if (!settledAt && due && expense > 0) {
     const claimed = await client.from("team_events").update({ settled_at: new Date().toISOString() }).eq("id", event.id).is("settled_at", null).select("id");
     if (claimed.error || !claimed.data?.length) return balance;
     const inserted = await client.from("team_ledger").insert({
@@ -786,7 +813,8 @@ export async function updateOwnedEvent(input: {
     .single();
   if (updated.error || !updated.data) return { ok: false, error: "auth.error.generic" };
   const event = eventFromRow(updated.data);
-  const teamBalance = await applyEventSettlement(gate.client, input.teamId, { ...event, expense: event.expense ?? null }, existing.data.settled_at);
+  const chargeNow = !(await financeCronEnabled(gate.client));
+  const teamBalance = await applyEventSettlement(gate.client, input.teamId, { ...event, expense: event.expense ?? null }, existing.data.settled_at, chargeNow);
   if (teamBalance == null) return { ok: false, error: "auth.error.generic" };
   const fresh = await gate.client.from("team_events").select("settled_at").eq("id", event.id).maybeSingle();
   if (fresh.error) return { ok: false, error: "auth.error.generic" };

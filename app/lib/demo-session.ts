@@ -1,5 +1,4 @@
 import type { TeamEvent } from "@/app/lib/demo-data";
-import { eventHasEnded } from "@/app/lib/event-voting";
 import type { TeamLedgerLine } from "@/app/lib/invite-code";
 
 export type DemoRsvp = "going" | "absent" | "pending";
@@ -42,14 +41,14 @@ export function updateDemoSession(change: (current: DemoSession) => DemoSession)
 
 type ChargeEvent = { id: string; date: string; start: string; end?: string; type: "game" | "training"; expense?: number | null };
 
-export function settleDemoCharges(events: ChargeEvent[], now: number) {
+export function settleDemoCharges(events: ChargeEvent[]) {
   let charges = session.charges;
   let team = session.team;
   let changed = false;
   for (const event of events) {
     const cost = event.expense != null ? Math.round(event.expense * 100) / 100 : 0;
     const existing = charges.find((line) => line.eventId === event.id);
-    if (!eventHasEnded(event, now) || cost <= 0) {
+    if (cost <= 0) {
       if (!existing) continue;
       charges = charges.filter((line) => line !== existing);
       team = Math.round((team - existing.amount) * 100) / 100;

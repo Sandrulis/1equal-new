@@ -95,6 +95,8 @@ export function TeamRoster({
   teamHolds = [],
   memberHolds = {},
   attendanceOn = false,
+  externalSettingsOpen = false,
+  onExternalSettingsClose,
 }: {
   teamName: string;
   inviteCode: string;
@@ -124,6 +126,8 @@ export function TeamRoster({
   teamHolds?: BalanceHold[];
   memberHolds?: Record<string, BalanceHold[]>;
   attendanceOn?: boolean;
+  externalSettingsOpen?: boolean;
+  onExternalSettingsClose?: () => void;
 }) {
   const { t, lang, languages } = useLanguage();
   const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
@@ -152,7 +156,9 @@ export function TeamRoster({
   const [openHolds, setOpenHolds] = useState<BalanceHold[] | null>(null);
   const [teamEntries, setTeamEntries] = useState<TeamEntry[]>([]);
   const [adjusting, setAdjusting] = useState<Member | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  function closeTeamSettings() {
+    if (externalSettingsOpen) onExternalSettingsClose?.();
+  }
   const [appointing, setAppointing] = useState(false);
   const isLeader = Boolean(teamId && accountId && (asLeader || (leaderId && leaderId === accountId)));
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
@@ -265,14 +271,7 @@ export function TeamRoster({
         <div className="flex min-w-0 items-center gap-3 min-[600px]:gap-4">
           <TeamMark name={teamName} logoUrl={teamLogoUrl(logoUrl, entuziasti)} textClassName="text-lg" className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl min-[600px]:h-14 min-[600px]:w-14" />
           <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1">
-              <h1 className="truncate text-xl font-semibold tracking-tight min-[600px]:text-2xl">{teamName}</h1>
-              {canAdjust && teamId ? (
-                <IconTipButton label={t("actions.edit")} tone="muted" onClick={() => setSettingsOpen(true)}>
-                  <IconPencil />
-                </IconTipButton>
-              ) : null}
-            </div>
+            <h1 className="truncate text-xl font-semibold tracking-tight min-[600px]:text-2xl">{teamName}</h1>
             {entuziasti && sourceUrl ? (
               <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block max-w-full truncate text-sm text-train">
                 {sourceUrl}
@@ -502,7 +501,7 @@ export function TeamRoster({
       />
       {teamId ? (
         <TeamSettingsDialog
-          open={settingsOpen}
+          open={externalSettingsOpen}
           teamId={teamId}
           name={teamName}
           sourceUrl={sourceUrl}
@@ -513,7 +512,7 @@ export function TeamRoster({
           enabledModules={enabledModules}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
-          onClose={() => setSettingsOpen(false)}
+          onClose={closeTeamSettings}
           onSave={async (next) => {
             const result = await updateOwnedTeam({ teamId, ...next, sportId: next.sportId });
             if (!result.ok) {

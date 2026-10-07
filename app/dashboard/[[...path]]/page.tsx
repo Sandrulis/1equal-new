@@ -54,7 +54,7 @@ export default async function DashboardPage({
         await recordUserOrigin(account.id, clientAddress);
         if (ledTeamIds.length > 0) await recordMissingTeamOrigins(ledTeamIds, clientAddress);
       })(),
-      settleIds.length ? settleFinishedEvents(settleIds) : Promise.resolve(),
+      settleIds.length ? settleFinishedEvents(settleIds, false) : Promise.resolve(),
     ]);
   });
   const [admin, enabledModules, individualModuleKeys, sports] = await Promise.all([

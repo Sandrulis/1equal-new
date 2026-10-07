@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.9
+
+- Notikumu nevar izveidot bez laukuma, un bez finanšu cron komandas izdevums noņem no bilances uzreiz
+- Vadītājam un administratoram Komandas uzstādījumi ir sānjoslā un mobilajā izvēlnē
+- Telefonā apakšējā josla aizslīd ritinot, un paslēptai joslai kājenes atstarpe ir mazāka
+
 ## v0.2.8
 
 - Spēles izklājumā zem trenera apļa ir pozīcijas nosaukums

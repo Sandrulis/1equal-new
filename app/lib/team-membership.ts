@@ -165,10 +165,10 @@ export function memberFromRow(row: MemberRow, subteamIds: string[] = []): Member
   };
 }
 
-export async function settleFinishedEvents(teamIds: string[]): Promise<void> {
+export async function settleFinishedEvents(teamIds: string[], onlyStarted = true): Promise<void> {
   const admin = createAdminClient();
   if (!admin || teamIds.length === 0) return;
-  await admin.rpc("settle_finished_events", { team_ids: teamIds });
+  await admin.rpc("settle_finished_events", { team_ids: teamIds, only_started: onlyStarted });
 }
 
 function pickDetailTeamId(rows: { id: string }[], activeTeamId: string | null | undefined, watchOnly: Set<string>): string | null {
@@ -235,6 +235,10 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   }
   const teamIds = [...new Set([...memberIds, ...watchIds])];
   if (teamIds.length === 0) return [];
+  const cronFlag = await admin.from("cron_jobs").select("enabled").eq("job_key", "finance").maybeSingle();
+  if (!cronFlag.error && cronFlag.data?.enabled !== true) {
+    await admin.rpc("settle_finished_events", { team_ids: teamIds, only_started: false });
+  }
   const memberIdSet = new Set(memberIds);
   const watchOnly = new Set(watchIds.filter((id) => !memberIdSet.has(id)));
   const today = rigaStamp().slice(0, 10);
