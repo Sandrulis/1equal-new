@@ -289,7 +289,7 @@ export async function listIntegrations(): Promise<IntegrationStatus[]> {
     byKey.set(key, {
       key,
       clientId: row.client_id ?? "",
-      replyTo: key === "resend" ? (row.configured_account_email ?? "") : "",
+      replyTo: key === "resend" || key === "umami" ? (row.configured_account_email ?? "") : "",
       hasSecret: Boolean(row.client_secret?.trim()),
       configured: row.is_configured,
       enabled: row.is_enabled,

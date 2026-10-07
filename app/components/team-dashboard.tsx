@@ -59,6 +59,7 @@ import type { AccountProfile } from "@/app/lib/auth/profile";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
+import { parseUmamiShareUrl } from "@/app/lib/umami-share";
 import { historySince } from "@/app/lib/history-window";
 import { softPush, softReplace } from "@/app/lib/soft-nav";
 import { eventAudienceIncludes, eventHasEnded, eventVotingDeadline } from "@/app/lib/event-voting";
@@ -70,6 +71,7 @@ import { useTeamCatalog } from "@/app/lib/team-catalog";
 const AdminCronPage = dynamic(() => import("@/app/components/admin-cron-page").then((mod) => mod.AdminCronPage));
 const AdminSportsPage = dynamic(() => import("@/app/components/admin-sports-page").then((mod) => mod.AdminSportsPage));
 const AdminIntegrationsPage = dynamic(() => import("@/app/components/admin-integrations-page").then((mod) => mod.AdminIntegrationsPage));
+const AdminUmamiPage = dynamic(() => import("@/app/components/admin-umami-page").then((mod) => mod.AdminUmamiPage));
 const AdminModulesPage = dynamic(() => import("@/app/components/admin-modules-page").then((mod) => mod.AdminModulesPage));
 const AdminLanguagesForm = dynamic(() => import("@/app/components/admin-languages-form").then((mod) => mod.AdminLanguagesForm));
 const AdminSettingsForm = dynamic(() => import("@/app/components/admin-settings-form").then((mod) => mod.AdminSettingsForm));
@@ -1139,6 +1141,9 @@ export function TeamDashboard({
         todo: admin.todos.filter((item) => !item.isDone).length,
       }
     : {};
+  const umamiIntegration = admin?.integrations.find((item) => item.key === "umami");
+  const showUmami = Boolean(umamiIntegration?.enabled && umamiIntegration.configured && parseUmamiShareUrl(umamiIntegration.replyTo));
+  const adminNav = ADMIN_NAV.filter((item) => item.section !== "umami" || showUmami);
 
   function showAdmin(section: AdminSection) {
     collapseIfNarrow();
@@ -1714,6 +1719,7 @@ export function TeamDashboard({
             {route.section === "integrations" && admin ? (
               <AdminIntegrationsPage integrations={admin.integrations} googleRedirectUrl={admin.googleRedirectUrl} />
             ) : null}
+            {route.section === "umami" && admin ? <AdminUmamiPage /> : null}
             {route.section === "settings" && admin ? <AdminSettingsForm initial={admin.brand} languages={admin.languages} /> : null}
             {route.section === "languages" && admin ? <AdminLanguagesForm initialLanguages={admin.languages} /> : null}
             {route.section === "translations" && admin && !admin.translationsLoaded ? <AdminSectionPending label={t("admin.loading")} /> : null}
@@ -2126,7 +2132,7 @@ export function TeamDashboard({
           <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${adminPresence.shown ? "opacity-100" : "opacity-0"}`} />
           <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col bg-navy text-white shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
             <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-              {ADMIN_NAV.map((item) => (
+              {adminNav.map((item) => (
                 <SideItem
                   key={item.section}
                   label={t(item.label)}
@@ -2152,7 +2158,7 @@ export function TeamDashboard({
           className="group/admin z-40 hidden flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60"
         >
           <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(1rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
-            {ADMIN_NAV.map((item) => (
+            {adminNav.map((item) => (
               <SideItem
                 key={item.section}
                 label={t(item.label)}
@@ -2186,6 +2192,7 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   modules: "nav.admin.modules",
   sports: "nav.admin.sports",
   integrations: "nav.admin.integrations",
+  umami: "nav.admin.umami",
   languages: "nav.admin.languages",
   translations: "nav.admin.translations",
   email: "nav.admin.email",
@@ -2202,6 +2209,7 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "modules", label: ADMIN_LABEL.modules, icon: <IconModules /> },
   { section: "sports", label: ADMIN_LABEL.sports, icon: <IconSport /> },
   { section: "integrations", label: ADMIN_LABEL.integrations, icon: <IconPlug /> },
+  { section: "umami", label: ADMIN_LABEL.umami, icon: <IconChart /> },
   { section: "languages", label: ADMIN_LABEL.languages, icon: <IconLanguages /> },
   { section: "translations", label: ADMIN_LABEL.translations, icon: <IconTranslations /> },
   { section: "email", label: ADMIN_LABEL.email, icon: <IconMail /> },
@@ -2763,6 +2771,15 @@ function IconModules() {
       <path d="M14 10h4a2 2 0 0 1 2 2v2h-6v-2a2 2 0 0 1 2-2z" />
       <path d="M4 16h6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2z" />
       <path d="M12 8v2M8 14v2M18 14v2" />
+    </svg>
+  );
+}
+
+function IconChart() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M4 19V5M4 19h16" />
+      <path d="M8 15l3-4 3 2 4-6" />
     </svg>
   );
 }

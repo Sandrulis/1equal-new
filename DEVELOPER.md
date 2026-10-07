@@ -69,6 +69,7 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 | `/dashboard/admin/settings` | Nosaukums, logotips, favicon, slogans katrai valodai un apkopes slēdzis. Tukšs slogans e-pasta kājenē nerādās. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding`. Apkope izslēdz sistēmu: `/login` paliek, un ielogoties var tikai `users.is_admin` |
 | `/maintenance` | Apkopes lapa, kad `site_settings.maintenance` ir ieslēgts. Bez apkopes ved uz `/` |
 | `/dashboard/admin/integrations` | Turnstile, Google auth, Resend, Umami, Sentry |
+| `/dashboard/admin/umami` | Umami pārskats no saglabātās EU koplietošanas saites. Saite sānjoslā redzama tikai tad, ja Umami integrācija ir ieslēgta un saite ir saglabāta |
 | `/dashboard/admin/languages` | Valodas: aktīva, noklusējums, nosaukums. Noklusējumu nevar izslēgt vai dzēst |
 | `/dashboard/admin/translations` | Visas `messages.ts` atslēgas plus DB rindas. Labo visas valodas vienā logā |
 
@@ -83,7 +84,7 @@ Tabula `site_integrations`. Secret lauki klientam atpakaļ netiek sūtīti, tika
 | `turnstile` | Site Key, Secret Key | Ienākšana, reģistrācija, Google pieslēgums un aizmirstā parole prasa pārbaudi. Skripts saņem lapas CSP nonce |
 | `google_oauth` | Client ID, Client Secret, Redirect URI ir publiskais hosts plus `/auth/callback` | Login un reģistrācija rāda Google pogu. Google e-pasts tiek uzskatīts par apstiprinātu. Kontam bez paroles jaunu var uzlikt bez pašreizējās |
 | `resend` | From, Reply-To, API Key | Reģistrācijas, paroles, e-pasta maiņas, notikumu un konta dzēšanas vēstules ar vienotu izkārtojumu. Dzēšanas apstiprinājums, uzsākšana un pabeigšana nāk no `email_templates`. Kājene rāda valodas sloganu. Saite zem pogas ir tā pati, kas pogai. Tekstā garā domuzīme ir defise. Bez šīs integrācijas jaunu kontu ar paroli izveidot nevar |
-| `umami` | Website ID, Script URL tikai `https://cloud.umami.is` | Skripts ielādējas tikai ar statistikas sīkdatņu piekrišanu |
+| `umami` | Website ID, Script URL tikai `https://cloud.umami.is`, neobligāta EU koplietošanas saite `https://cloud.umami.is/analytics/eu/share/…` | Skripts ielādējas tikai ar statistikas sīkdatņu piekrišanu. Saglabāta saite un ieslēgta integrācija rāda admina lapu `/dashboard/admin/umami` |
 | `sentry` | Environment, DSN | Pārlūka un servera kļūdas. Sesiju replay ir izslēgts. Kļūdu replay maskē tekstu un ievadi |
 
 ## Sīkdatnes

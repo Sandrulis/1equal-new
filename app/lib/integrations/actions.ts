@@ -7,6 +7,7 @@ import { getAccountProfile } from "@/app/lib/auth/session";
 import type { MessageKey } from "@/app/lib/messages";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { INTEGRATION_KEYS, type IntegrationKey } from "@/app/lib/site-admin/types";
+import { parseUmamiShareUrl } from "@/app/lib/umami-share";
 
 const DEFAULT_UMAMI_SCRIPT_URL = "https://cloud.umami.is/script.js";
 
@@ -81,8 +82,14 @@ export async function saveIntegration(
     if (!isEmail(replyTo)) return { ok: false, error: "integrations.resend.error.reply_to" };
     if (!secret) return { ok: false, error: "integrations.resend.error.api_key" };
   }
+  let umamiShare = "";
   if (key === "umami") {
     if (!clientId) return { ok: false, error: "integrations.umami.error.website_id" };
+    if (replyTo) {
+      const share = parseUmamiShareUrl(replyTo);
+      if (!share) return { ok: false, error: "integrations.umami.error.share" };
+      umamiShare = share.url;
+    }
   }
   if (key === "sentry") {
     if (!isHttpsUrl(secret)) return { ok: false, error: "integrations.sentry.error.dsn" };
@@ -96,7 +103,7 @@ export async function saveIntegration(
       integration_key: key,
       client_id: clientId,
       client_secret: sealIntegrationSecret(storedSecret),
-      configured_account_email: key === "resend" ? replyTo : "",
+      configured_account_email: key === "resend" ? replyTo : umamiShare,
       is_configured: true,
       updated_at: new Date().toISOString(),
     },

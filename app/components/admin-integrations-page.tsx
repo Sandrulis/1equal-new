@@ -228,6 +228,7 @@ function Fields({
       <>
         <TextField id="umami-website" label={t("integrations.umami.website_id")} value={draft.clientId} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" mono disabled={disabled} onChange={(clientId) => onChange({ ...draft, clientId })} />
         <TextField id="umami-script" label={t("integrations.umami.script_url")} value={draft.secret} placeholder={status.hasSecret ? secretPlaceholder : "https://cloud.umami.is/script.js"} mono disabled={disabled} onChange={(secret) => onChange({ ...draft, secret })} />
+        <TextField id="umami-share" label={t("integrations.umami.share_url")} hint={t("integrations.umami.share_url_hint")} value={draft.replyTo} placeholder="https://cloud.umami.is/analytics/eu/share/…" disabled={disabled} onChange={(replyTo) => onChange({ ...draft, replyTo })} />
       </>
     );
   }
