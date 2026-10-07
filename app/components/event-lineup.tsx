@@ -8,7 +8,7 @@ import { memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { IconChevronLeft, IconChevronRight, IconX } from "@/app/components/icon-tip-button";
 import type { Member, TeamEvent } from "@/app/lib/demo-data";
 import { formatJersey } from "@/app/lib/format-jersey";
-import { normalizePositionCode, type PositionCode } from "@/app/lib/positions";
+import { isTrainerMember, normalizePositionCode, trainerPositionName, type PositionCatalogItem, type PositionCode } from "@/app/lib/positions";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
@@ -120,6 +120,7 @@ export function EventLineup({
   onBack,
   onUnsaved,
   editable = false,
+  positions = [],
 }: {
   event: TeamEvent;
   members: Member[];
@@ -136,8 +137,10 @@ export function EventLineup({
   onBack: () => void;
   onUnsaved?: (unsaved: boolean) => void;
   editable?: boolean;
+  positions?: PositionCatalogItem[];
 }) {
   const going = useMemo(() => goingMembers(event, members, rsvp, knownRsvp), [event, members, rsvp, knownRsvp]);
+  const skaters = going.filter((member) => !isTrainerMember(member, positions));
   if (event.type === "game") {
     return (
       <GameLineup
@@ -147,22 +150,24 @@ export function EventLineup({
         subteamName={subteamName}
         logoUrl={logoUrl}
         kitUrl={kitUrl}
-        saved={pruneSlots(savedSlots, going)}
+        saved={pruneSlots(savedSlots, skaters)}
         onSave={onSaveSlots}
         onBack={onBack}
         onUnsaved={onUnsaved}
         editable={editable}
+        positions={positions}
       />
     );
   }
   return (
     <TrainingLineup
       going={going}
-      saved={pruneSides(savedSides, going)}
+      saved={pruneSides(savedSides, skaters)}
       onSave={onSaveSides}
       onBack={onBack}
       onUnsaved={onUnsaved}
       editable={editable}
+      positions={positions}
     />
   );
 }
@@ -252,6 +257,7 @@ function GameLineup({
   onBack,
   onUnsaved,
   editable,
+  positions,
 }: {
   event: TeamEvent;
   going: Member[];
@@ -264,6 +270,7 @@ function GameLineup({
   onBack: () => void;
   onUnsaved?: (unsaved: boolean) => void;
   editable: boolean;
+  positions: PositionCatalogItem[];
 }) {
   const { t } = useLanguage();
   const { formatDate, formatTime } = useDisplayFormat();
@@ -274,7 +281,24 @@ function GameLineup({
   const [query, setQuery] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const byId = new Map(going.map((member) => [member.id, member]));
+  const coachIds = new Set(going.filter((member) => isTrainerMember(member, positions)).map((member) => member.id));
+  const coaches = going.filter((member) => coachIds.has(member.id));
+  const players = going.filter((member) => !coachIds.has(member.id));
   useLiveSave(slots, slotKey(slots), editable, onSave, onUnsaved);
+
+  function placed(id: string | undefined): Member | undefined {
+    if (!id || coachIds.has(id)) return undefined;
+    return byId.get(id);
+  }
+
+  function usedElsewhere(slot: number): Set<string> {
+    const ids = new Set<string>();
+    for (const [key, memberId] of Object.entries(slots)) {
+      if (Number(key) === slot || !memberId || coachIds.has(memberId)) continue;
+      ids.add(memberId);
+    }
+    return ids;
+  }
 
   useEffect(() => {
     if (openSlot == null) return;
@@ -300,14 +324,7 @@ function GameLineup({
   }, [openSlot]);
 
   function assign(slot: number, memberId: string) {
-    setSlots((map) => {
-      const next = { ...map };
-      for (const key of Object.keys(next)) {
-        if (next[Number(key)] === memberId) delete next[Number(key)];
-      }
-      next[slot] = memberId;
-      return next;
-    });
+    setSlots((map) => ({ ...map, [slot]: memberId }));
     setOpenSlot(null);
     setQuery("");
   }
@@ -368,8 +385,9 @@ function GameLineup({
                   ring={SHIFT_TONE[spot.shift].ring}
                   fill={SHIFT_TONE[spot.shift].fill}
                   compact
-                  member={byId.get(slots[id] ?? "")}
-                  going={going}
+                  member={placed(slots[id])}
+                  going={players}
+                  takenIds={usedElsewhere(id)}
                   query={query}
                   open={editable && openSlot === id}
                   editable={editable}
@@ -391,8 +409,9 @@ function GameLineup({
               ring={GOAL_TONE.ring}
               fill={GOAL_TONE.fill}
               compact
-              member={byId.get(slots[GOAL_SLOT] ?? "")}
-              going={going}
+              member={placed(slots[GOAL_SLOT])}
+              going={players}
+              takenIds={usedElsewhere(GOAL_SLOT)}
               query={query}
               open={editable && openSlot === GOAL_SLOT}
               editable={editable}
@@ -403,6 +422,20 @@ function GameLineup({
               onPick={(memberId) => assign(GOAL_SLOT, memberId)}
             />
           </div>
+          {coaches.map((member, index) => (
+            <div
+              key={member.id}
+              className="pointer-events-none absolute z-20"
+              style={{ left: "8%", top: coaches.length === 1 ? "50%" : `${38 + index * 14}%`, transform: "translate(-50%, calc(-50% + 5px))" }}
+            >
+              <span className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 text-sm leading-none font-semibold whitespace-nowrap text-ink [text-shadow:0_0_4px_#fff,0_0_4px_#fff]">
+                {memberSurname(member)}
+              </span>
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-game-soft text-game ring-2 ring-game">
+                <IconWhistle />
+              </span>
+            </div>
+          ))}
         </div>
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">
@@ -432,6 +465,7 @@ function PositionPick({
   compact = false,
   member,
   going,
+  takenIds,
   query,
   open,
   editable,
@@ -450,6 +484,7 @@ function PositionPick({
   compact?: boolean;
   member: Member | undefined;
   going: Member[];
+  takenIds: Set<string>;
   query: string;
   open: boolean;
   editable: boolean;
@@ -593,11 +628,11 @@ function PositionPick({
           <div className="overflow-y-auto" style={{ maxHeight: Math.max(96, menuPlace.max - 64) }}>
             {recommended.length > 0 ? <p className="px-2 py-1 text-xs font-semibold text-muted">{t("lineup.recommended")}</p> : null}
             {recommended.map((item) => (
-              <PlayerOption key={item.id} member={item} onPick={() => onPick(item.id)} />
+              <PlayerOption key={item.id} member={item} taken={takenIds.has(item.id)} onPick={() => onPick(item.id)} />
             ))}
             {others.length > 0 ? <p className="px-2 py-1 text-xs font-semibold text-muted">{t("lineup.others")}</p> : null}
             {others.map((item) => (
-              <PlayerOption key={item.id} member={item} onPick={() => onPick(item.id)} />
+              <PlayerOption key={item.id} member={item} taken={takenIds.has(item.id)} onPick={() => onPick(item.id)} />
             ))}
             {recommended.length === 0 && others.length === 0 ? (
               <p className="px-2 py-2 text-sm text-muted">{going.length === 0 ? t("lineup.going.empty") : t("lineup.search.empty")}</p>
@@ -611,11 +646,11 @@ function PositionPick({
   );
 }
 
-function PlayerOption({ member, onPick }: { member: Member; onPick: () => void }) {
+function PlayerOption({ member, taken = false, onPick }: { member: Member; taken?: boolean; onPick: () => void }) {
   const name = memberName(member);
   const jersey = formatJersey(member.number);
   return (
-    <button type="button" onClick={onPick} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-ice">
+    <button type="button" onClick={onPick} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left ${taken ? "bg-game-soft hover:bg-[#f6d4d1]" : "hover:bg-ice"}`}>
       <PlayerFace member={member} compact />
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block truncate text-sm">{name}</span>
@@ -642,6 +677,7 @@ function TrainingLineup({
   onBack,
   onUnsaved,
   editable,
+  positions,
 }: {
   going: Member[];
   saved: SideMap;
@@ -649,6 +685,7 @@ function TrainingLineup({
   onBack: () => void;
   onUnsaved?: (unsaved: boolean) => void;
   editable: boolean;
+  positions: PositionCatalogItem[];
 }) {
   const { t } = useLanguage();
   const [sides, setSides] = useState<SideMap>(saved);
@@ -658,11 +695,15 @@ function TrainingLineup({
   const dragRef = useRef<string | null>(null);
   const [over, setOver] = useState<LineSide | null>(null);
   useLiveSave(sides, sideKey(sides), editable, onSave, onUnsaved);
-  const black = going.filter((member) => sides[member.id] === "black");
-  const white = going.filter((member) => sides[member.id] === "white");
-  const pool = going.filter((member) => !sides[member.id]);
+  const coaches = going.filter((member) => isTrainerMember(member, positions));
+  const skaters = going.filter((member) => !isTrainerMember(member, positions));
+  const black = skaters.filter((member) => sides[member.id] === "black");
+  const white = skaters.filter((member) => sides[member.id] === "white");
+  const pool = [...skaters.filter((member) => !sides[member.id]), ...coaches];
 
   function move(memberId: string, side: LineSide) {
+    const member = going.find((item) => item.id === memberId);
+    if (member && isTrainerMember(member, positions) && side !== "pool") return;
     setSides((current) => {
       const next = { ...current };
       if (side === "pool") delete next[memberId];
@@ -706,6 +747,7 @@ function TrainingLineup({
           hot={over === "black"}
           dragId={dragId}
           editable={editable}
+          positions={positions}
           onAssign={move}
           onHot={setOver}
           onDragStart={beginDrag}
@@ -721,6 +763,7 @@ function TrainingLineup({
           hot={over === "pool"}
           dragId={dragId}
           editable={editable}
+          positions={positions}
           onAssign={move}
           onHot={setOver}
           onDragStart={beginDrag}
@@ -735,6 +778,7 @@ function TrainingLineup({
           hot={over === "white"}
           dragId={dragId}
           editable={editable}
+          positions={positions}
           onAssign={move}
           onHot={setOver}
           onDragStart={beginDrag}
@@ -762,6 +806,7 @@ function LineupColumn({
   hot,
   dragId,
   editable,
+  positions,
   onAssign,
   onHot,
   onDragStart,
@@ -776,6 +821,7 @@ function LineupColumn({
   hot: boolean;
   dragId: string | null;
   editable: boolean;
+  positions: PositionCatalogItem[];
   onAssign: (id: string, side: LineSide) => void;
   onHot: (side: LineSide | null) => void;
   onDragStart: (id: string) => void;
@@ -816,6 +862,7 @@ function LineupColumn({
               member={member}
               side={side}
               editable={editable}
+              positions={positions}
               dragging={dragId === member.id}
               onAssign={onAssign}
               onDragStart={onDragStart}
@@ -832,6 +879,7 @@ function PlayerCard({
   member,
   side,
   editable,
+  positions,
   dragging,
   onAssign,
   onDragStart,
@@ -840,16 +888,19 @@ function PlayerCard({
   member: Member;
   side: LineSide;
   editable: boolean;
+  positions: PositionCatalogItem[];
   dragging: boolean;
   onAssign: (id: string, side: LineSide) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }) {
-  const { t } = useLanguage();
+  const { formatLang, lang, t } = useLanguage();
   const name = memberName(member);
   const jersey = formatJersey(member.number);
-  const showLeft = editable && side !== "black";
-  const showRight = editable && side !== "white";
+  const coach = isTrainerMember(member, positions);
+  const coachLabel = coach ? trainerPositionName(member, positions, lang, formatLang, t) : "";
+  const showLeft = editable && !coach && side !== "black";
+  const showRight = editable && !coach && side !== "white";
   const info = (
     <>
       <PlayerFace member={member} />
@@ -861,7 +912,8 @@ function PlayerCard({
   );
 
   return (
-    <li className={`flex min-h-12 overflow-hidden rounded-lg bg-paper text-ink ring-1 ring-line ${dragging ? "opacity-40" : ""}`}>
+    <li className={`overflow-hidden rounded-lg text-ink ring-1 ${coach ? "bg-game-soft ring-game" : "bg-paper ring-line"} ${dragging ? "opacity-40" : ""}`}>
+      <div className="flex min-h-12">
       {showLeft ? (
         <button
           type="button"
@@ -875,7 +927,7 @@ function PlayerCard({
           </span>
         </button>
       ) : null}
-      {editable ? (
+      {editable && !coach ? (
         <div
           draggable
           title={t("lineup.drag")}
@@ -909,7 +961,18 @@ function PlayerCard({
           </span>
         </button>
       ) : null}
+      </div>
+      {coach ? <p className="px-3 pb-2 text-xs font-medium text-game">{coachLabel}</p> : null}
     </li>
+  );
+}
+
+function IconWhistle() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="7.2" r="3.1" />
+      <path d="M5.8 19.4c.7-3.5 3-5.2 6.2-5.2s5.5 1.7 6.2 5.2H5.8Z" />
+    </svg>
   );
 }
 

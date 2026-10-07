@@ -846,6 +846,7 @@ export const messages = {
   "position.rw": { lv: "Labais uzbrucējs", en: "Right wing", ru: "Правый нападающий" },
   "position.d": { lv: "Aizsargs", en: "Defender", ru: "Защитник" },
   "position.g": { lv: "Vārtsargs", en: "Goalie", ru: "Вратарь" },
+  "position.coach": { lv: "Treneris", en: "Coach", ru: "Тренер" },
   "roster.fields.phone": { lv: "Tālrunis", en: "Phone", ru: "Телефон" },
   "roster.saved": { lv: "Dalībnieks ir saglabāts.", en: "Member saved.", ru: "Участник сохранён." },
   "roster.email.sent": {

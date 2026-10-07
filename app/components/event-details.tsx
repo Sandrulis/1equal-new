@@ -13,6 +13,7 @@ import { useFormatMoney } from "@/app/components/currency-provider";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { formatWeekday, hoursBetween } from "@/app/lib/format";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
+import { isTrainerMember, type PositionCatalogItem } from "@/app/lib/positions";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
 import { inviteTrainingGuests } from "@/app/lib/training-guests";
@@ -156,6 +157,7 @@ export function EventDetails({
   onCopyGuestLink,
   onRemoveGuest,
   teamId = null,
+  positions = [],
 }: {
   event: TeamEvent;
   members: Member[];
@@ -184,6 +186,7 @@ export function EventDetails({
   onCopyGuestLink?: () => void;
   onRemoveGuest?: (userId: string) => void;
   teamId?: string | null;
+  positions?: PositionCatalogItem[];
 }) {
   const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -325,6 +328,7 @@ export function EventDetails({
                 votingOpen={votingOpen}
                 ended={ended}
                 reservedLabel={reservedByUser && (reservedByUser[member.id] ?? 0) > 0 ? t("finance.reserved", { amount: formatMoney(reservedByUser[member.id] ?? 0) }) : null}
+                positions={positions}
                 onRsvp={onRsvp}
               />
             ))}
@@ -399,6 +403,7 @@ function PersonRow({
   votingOpen,
   ended = false,
   reservedLabel = null,
+  positions = [],
   onRsvp,
 }: {
   member: Member;
@@ -408,22 +413,25 @@ function PersonRow({
   votingOpen: boolean;
   ended?: boolean;
   reservedLabel?: string | null;
+  positions?: PositionCatalogItem[];
   onRsvp: (memberId: string, status: Rsvp) => void;
 }) {
   const { t } = useLanguage();
   const mine = Boolean(actorId && member.id === actorId);
   const managed = Boolean(actorId);
+  const coach = status === "going" && isTrainerMember(member, positions);
+  const rowClass = coach ? "bg-game-soft" : "";
   if (managed && !mine && !leader) {
     return (
-      <li className="flex items-center justify-between gap-3 px-3 py-2">
+      <li className={`flex items-center justify-between gap-3 px-3 py-2 ${rowClass}`}>
         <PersonName member={member} reserved={reservedLabel} />
       </li>
     );
   }
-  const locked = ended || (managed && !leader && !votingOpen);
+  const locked = !leader && (ended || (managed && !votingOpen));
   const actionsClass = !managed || mine ? "flex shrink-0 gap-1" : "hidden shrink-0 gap-1 group-hover/player:flex max-[599px]:flex";
   return (
-    <li className="group/player flex items-center justify-between gap-3 px-3 py-2">
+    <li className={`group/player flex items-center justify-between gap-3 px-3 py-2 ${rowClass}`}>
       <PersonName member={member} reserved={reservedLabel} />
       <span className={actionsClass}>
         <Choice

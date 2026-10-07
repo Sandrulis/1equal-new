@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.6
+
+- Treneris treniņā paliek vidū, spēlē ir laukuma malā, un tas pats spēlētājs var būt vairākās pozīcijās
+- Vadītājs un administrators var labot ierašanos arī pēc notikuma
+
 ## v0.2.5
 
 - Pirmās maiņas uzbrucēji ir vienā līmenī, un laukums ir pacelts tiem līdzi

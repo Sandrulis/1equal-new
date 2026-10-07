@@ -42,6 +42,7 @@ import { usePresence } from "@/app/lib/use-presence";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import type { MessageKey } from "@/app/lib/messages";
 import type { Sport } from "@/app/lib/sports";
+import { catalogForSport } from "@/app/lib/positions";
 import { EventDetails, LineupOpenButton, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
@@ -734,7 +735,7 @@ export function TeamDashboard({
     const eventId = targetEventId ?? openEventId;
     if (!eventId) return;
     const voted = calendarEvents.find((item) => item.id === eventId);
-    if (voted && eventHasEnded(voted)) return;
+    if (voted && eventHasEnded(voted) && !(basePath === "/demo" || managesTeam)) return;
     const previous = rsvp[eventId]?.[memberId] ?? getDemoSession().rsvp[eventId]?.[memberId] ?? "pending";
     updateDemoSession((current) => ({
       ...current,
@@ -1542,6 +1543,7 @@ export function TeamDashboard({
             onBack={() => guardLeave(() => softGo(eventHref(basePath, lineupEvent.id)))}
             onUnsaved={rememberLineupUnsaved}
             editable={canEditLineup}
+            positions={catalogForSport(activeTeam?.demo ? null : activeTeam?.sportId, sports)}
           />
         ) : null}
         {view === "team" && !showStart && !teamPending && activeTeam && moduleVisible ? (
@@ -2020,7 +2022,7 @@ export function TeamDashboard({
             voteDeadline={eventVotingDeadline(openEvent, voteTraining, voteGame)}
             knownRsvp={knownRsvp}
             actorId={profile && activeTeam && !activeTeam.demo ? profile.id : null}
-            leader={managesTeam}
+            leader={canManageTeam}
             votingOpen={eventVotingOpen(openEvent, voteTraining, voteGame)}
             rsvp={rsvp[openEvent.id]}
             reservedByUser={financeReserve ? Object.fromEntries(reservations.filter((row) => row.eventId === openEvent.id).map((row) => [row.userId, row.amount])) : null}
@@ -2039,6 +2041,7 @@ export function TeamDashboard({
             onAllowGuests={(allowed) => void setGuestsAllowed(allowed)}
             onCopyGuestLink={copyGuestLink}
             teamId={ownedTeam?.id ?? null}
+            positions={catalogForSport(activeTeam?.demo ? null : activeTeam?.sportId, sports)}
             onRemoveGuest={managesTeam ? (userId) => void removeGuest(userId) : undefined}
           />
         ) : null}

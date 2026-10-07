@@ -36,7 +36,7 @@ const ALIASES: Record<string, PositionCode> = {
   VARTSARGS: "G",
 };
 
-const RETIRED_POSITION = /^(TR|TRENERIS|COACH|TRAINER)$/;
+const RETIRED_POSITION = /^(TR|TRENER|TRENERIS|COACH|TRAINER)$/;
 
 function foldPosition(value: string): string {
   return value
@@ -107,6 +107,29 @@ export function formatPosition(
   const fallbackName = positionName(resolved, t);
   const name = named || (fallbackName !== resolved ? fallbackName : "");
   return { code: resolved, name: name || resolved, label: name ? `${resolved} ${name}` : resolved };
+}
+
+export function isTrainerMember(member: { role?: string; position?: string }, catalog: PositionCatalogItem[] = []): boolean {
+  if (member.role === "coach") return true;
+  const folded = foldPosition(member.position ?? "");
+  if (folded && RETIRED_POSITION.test(folded)) return true;
+  const code = cleanPositionCode(member.position ?? "");
+  const item = catalog.find((entry) => entry.code === code);
+  if (!item) return false;
+  return Object.values(item.names ?? {}).some((name) => /trener|coach|тренер/i.test(name));
+}
+
+export function trainerPositionName(
+  member: { position?: string },
+  catalog: PositionCatalogItem[],
+  lang: string,
+  fallbackLang: string,
+  t: (key: MessageKey) => string,
+): string {
+  const formatted = formatPosition(member.position ?? "", catalog, lang, fallbackLang, t);
+  if (formatted.name && formatted.name !== formatted.code) return formatted.name;
+  if (formatted.name && /trener|coach|тренер/i.test(formatted.name)) return formatted.name;
+  return t("position.coach");
 }
 
 export function memberUsesCode(position: string, extras: string, code: string): boolean {

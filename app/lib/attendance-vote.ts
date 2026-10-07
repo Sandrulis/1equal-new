@@ -41,7 +41,7 @@ export async function castMemberVote(
     subteamId: "",
     venueId: event.data.venue_id,
   };
-  if (eventHasEnded(votingEvent)) return { ok: false, error: "event.vote.closed" };
+  if (input.enforceDeadline && eventHasEnded(votingEvent)) return { ok: false, error: "event.vote.closed" };
   if (input.enforceDeadline && !eventVotingOpen(votingEvent, team.data.training_voting_hours ?? DEFAULT_TRAINING_VOTING_HOURS, team.data.game_voting_hours ?? DEFAULT_GAME_VOTING_HOURS)) {
     return { ok: false, error: "event.vote.closed" };
   }
