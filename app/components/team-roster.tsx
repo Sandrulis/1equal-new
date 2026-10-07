@@ -16,7 +16,7 @@ import type { Member, Subteam } from "@/app/lib/demo-data";
 import type { TeamLedgerLine } from "@/app/lib/invite-code";
 import { formatJersey } from "@/app/lib/format-jersey";
 import { InviteEmailFields, listedEmails } from "@/app/components/invite-email-fields";
-import { adjustMemberBalance, inviteTeamPlayer, removeOwnedMember, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
+import { adjustMemberBalance, deleteTeamInvite, inviteTeamPlayer, listTeamInvites, removeOwnedMember, resendTeamInvite, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useDisplayFormat } from "@/app/components/display-preferences";
@@ -156,6 +156,14 @@ export function TeamRoster({
   const [removing, setRemoving] = useState<Member | null>(null);
   const [removePending, setRemovePending] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [inviteScope, setInviteScope] = useState(teamId ?? "");
+  const [pendingInvites, setPendingInvites] = useState<{ email: string; sentAt: string }[]>([]);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  if ((teamId ?? "") !== inviteScope) {
+    setInviteScope(teamId ?? "");
+    setPendingInvites([]);
+    setPendingOpen(false);
+  }
   const [balancing, setBalancing] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
   const [openHolds, setOpenHolds] = useState<BalanceHold[] | null>(null);
@@ -167,6 +175,16 @@ export function TeamRoster({
   const [appointing, setAppointing] = useState(false);
   const isLeader = Boolean(teamId && accountId && (asLeader || (leaderId && leaderId === accountId)));
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
+  useEffect(() => {
+    if (!teamId || !canAdjust) return;
+    let active = true;
+    void listTeamInvites(teamId).then((rows) => {
+      if (active) setPendingInvites(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [teamId, canAdjust]);
   const showAttendance = attendanceOn && (canAdjust || members.some((member) => member.attendance));
   const sportKeys = sportId ? (sports.find((item) => item.id === sportId)?.moduleKeys ?? null) : null;
   const positionCatalog = catalogForSport(sportId, sports);
@@ -349,7 +367,7 @@ export function TeamRoster({
       </div>
       ) : null}
 
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-paper px-3 py-2.5 ring-1 ring-line focus-within:ring-train">
           <IconSearch />
           <span className="sr-only">{t("roster.searchLabel")}</span>
@@ -360,6 +378,11 @@ export function TeamRoster({
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
         </label>
+        {canAdjust && pendingInvites.length > 0 ? (
+          <button type="button" onClick={() => setPendingOpen(true)} className="h-9 shrink-0 rounded-lg bg-paper px-4 text-sm font-medium text-ink ring-1 ring-line hover:bg-ice">
+            {t("roster.invites.button", { count: pendingInvites.length })}
+          </button>
+        ) : null}
         {!teamId || canAdjust ? (
           <button type="button" onClick={() => setInviting(true)} className="h-9 shrink-0 rounded-lg bg-navy px-4 text-sm font-medium text-white hover:bg-navy/90">
             {t("roster.invite")}
@@ -502,8 +525,19 @@ export function TeamRoster({
         open={inviting}
         teamId={teamId}
         onClose={() => setInviting(false)}
-        onDone={(count) => showFeedback({ message: t(count > 1 ? "roster.invite.saved.many" : "roster.invite.saved"), variant: "success" })}
+        onDone={(count) => {
+          showFeedback({ message: t(count > 1 ? "roster.invite.saved.many" : "roster.invite.saved"), variant: "success" });
+          if (teamId && canAdjust) void listTeamInvites(teamId).then(setPendingInvites);
+        }}
       />
+      {teamId && pendingOpen ? (
+        <PendingInvitesDialog
+          invites={pendingInvites}
+          teamId={teamId}
+          onClose={() => setPendingOpen(false)}
+          onChange={setPendingInvites}
+        />
+      ) : null}
       {teamId ? (
         <TeamSettingsDialog
           open={externalSettingsOpen}
@@ -644,6 +678,96 @@ function InvitePlayerDialog({ open, teamId, onClose, onDone }: { open: boolean; 
           </button>
         </div>
       </form>
+    </AdminDialog>
+  );
+}
+
+function PendingInvitesDialog({
+  invites,
+  teamId,
+  onClose,
+  onChange,
+}: {
+  invites: { email: string; sentAt: string }[];
+  teamId: string;
+  onClose: () => void;
+  onChange: (next: { email: string; sentAt: string }[]) => void;
+}) {
+  const { t } = useLanguage();
+  const { showFeedback } = useFeedbackToast();
+  const { formatDateTime } = useDisplayFormat();
+  const [busyEmail, setBusyEmail] = useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+
+  async function resend(email: string) {
+    if (busyEmail) return;
+    setBusyEmail(email);
+    const result = await resendTeamInvite(teamId, email);
+    setBusyEmail(null);
+    if (!result.ok) {
+      if (result.error === "roster.invites.joined") onChange(invites.filter((item) => item.email !== email));
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    onChange(invites.map((item) => (item.email === email ? { ...item, sentAt: result.sentAt } : item)));
+    showFeedback({ message: t("roster.invites.resent"), variant: "success" });
+  }
+
+  async function remove(email: string) {
+    if (busyEmail) return;
+    setBusyEmail(email);
+    const result = await deleteTeamInvite(teamId, email);
+    setBusyEmail(null);
+    setConfirmEmail(null);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    onChange(invites.filter((item) => item.email !== email));
+    showFeedback({ message: t("roster.invites.deleted"), variant: "success" });
+  }
+
+  return (
+    <AdminDialog open closeButton title={t("roster.invites.title")} lead={t("roster.invites.lead")} onClose={() => { if (!busyEmail) onClose(); }}>
+      {invites.length === 0 ? <p className="text-sm text-muted">{t("roster.invites.empty")}</p> : (
+      <ul className="space-y-2">
+        {invites.map((item) => (
+          <li key={item.email} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ice px-3 py-2.5">
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-ink">{item.email}</span>
+              <span className="block text-xs text-muted">{t("roster.invites.sent", { when: formatDateTime(item.sentAt) })}</span>
+            </span>
+            {confirmEmail === item.email ? (
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="text-sm text-muted">{t("roster.invites.delete_confirm")}</span>
+                <button type="button" disabled={busyEmail !== null} onClick={() => setConfirmEmail(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-paper disabled:cursor-not-allowed">
+                  {t("actions.cancel")}
+                </button>
+                <button type="button" disabled={busyEmail !== null} onClick={() => void remove(item.email)} className="inline-flex items-center gap-2 rounded-lg bg-game px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+                  {busyEmail === item.email ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+                  {t("actions.delete")}
+                </button>
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-2">
+                <button type="button" disabled={busyEmail !== null} onClick={() => setConfirmEmail(item.email)} className="rounded-lg px-3 py-2 text-sm font-medium text-game hover:bg-paper disabled:cursor-not-allowed">
+                  {t("actions.delete")}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyEmail !== null}
+                  onClick={() => void resend(item.email)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {busyEmail === item.email ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+                  {t("roster.invites.resend")}
+                </button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      )}
     </AdminDialog>
   );
 }

@@ -50,11 +50,11 @@ function safeImageUrl(value: string | null | undefined): string | null {
   }
 }
 
-function markCell(name: string, imageUrl: string | null | undefined, fit: "cover" | "contain", size = 40): string {
+function markCell(name: string, imageUrl: string | null | undefined, fit: "cover" | "contain", size = 40, background = "#ffffff"): string {
   const image = safeImageUrl(imageUrl);
   const radius = size >= 64 ? 16 : 10;
   if (image) {
-    return `<img src="${escapeHtml(image)}" alt="" width="${size}" height="${size}" style="display:block;width:${size}px;height:${size}px;border:0;border-radius:${radius}px;object-fit:${fit};background-color:#ffffff;" />`;
+    return `<img src="${escapeHtml(image)}" alt="" width="${size}" height="${size}" style="display:block;width:${size}px;height:${size}px;border:0;border-radius:${radius}px;object-fit:${fit};background-color:${background};" />`;
   }
   return `<div style="width:${size}px;height:${size}px;border-radius:${radius}px;background-color:#102433;color:#ffffff;font-size:${size >= 64 ? 18 : 13}px;font-weight:700;line-height:${size}px;text-align:center;">${escapeHtml(initials(name))}</div>`;
 }
@@ -93,6 +93,7 @@ export function buildEmailHtml(options: {
     detail?: string;
     imageUrl?: string | null;
     imageFit?: "cover" | "contain";
+    imageSize?: number;
     aside?: { label: string; name: string; imageUrl?: string | null };
   };
   vote?: {
@@ -119,10 +120,11 @@ export function buildEmailHtml(options: {
         ${options.card?.detail?.trim() ? `<div style="margin-top:8px;font-size:14px;line-height:1.5;color:#68736d;">${escapeHtml(options.card.detail.trim()).replaceAll("\n", "<br />")}</div>` : ""}`
     : "";
   const cardImage = safeImageUrl(options.card?.imageUrl);
+  const imageSize = options.card?.imageSize && options.card.imageSize >= 40 ? options.card.imageSize : 72;
   const cardBody = options.card?.aside && cardTitle
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="email-card-side" valign="middle" width="50%" style="padding-right:8px;">${identityRow(options.card.aside.label, options.card.aside.name, options.card.aside.imageUrl, "cover")}</td><td class="email-card-side" valign="middle" width="50%" style="padding-left:8px;">${identityRow(options.card.label, cardTitle, options.card.imageUrl, "contain")}</td></tr></table>`
     : cardImage && cardText
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="bottom" width="72" style="width:72px;padding:0 14px 0 0;font-size:0;line-height:0;">${markCell(cardTitle, cardImage, options.card?.imageFit ?? "cover", 72)}</td><td valign="bottom">${cardText}</td></tr></table>`
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="bottom" width="${imageSize}" style="width:${imageSize}px;padding:0 14px 0 0;font-size:0;line-height:0;">${markCell(cardTitle, cardImage, options.card?.imageFit ?? "cover", imageSize, PAGE)}</td><td valign="bottom">${cardText}</td></tr></table>`
       : cardText;
   const card = cardBody
     ? `<div style="margin-top:28px;padding:${options.card?.aside ? "16px" : "20px"};background-color:${PAGE};border-radius:12px;">${cardBody}</div>`

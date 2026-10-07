@@ -47,7 +47,7 @@ export function TeamSwitcher({
   canSwitch: boolean;
   onHome: () => void;
   onSelect: (code: string) => void;
-  onCreate: (input: CreateTeamInput) => void;
+  onCreate: (input: CreateTeamInput) => boolean | Promise<boolean>;
   onUnwatch?: (teamId: string) => void | Promise<void>;
   sports?: Sport[];
   enabledModules?: string[] | null;
@@ -196,9 +196,10 @@ export function TeamSwitcher({
         individualModuleKeys={individualModuleKeys}
         presetEntuziasti={presetEntuziasti}
         onClose={() => setCreating(false)}
-        onCreate={(input) => {
-          setCreating(false);
-          onCreate(input);
+        onCreate={async (input) => {
+          const ok = await onCreate(input);
+          if (ok) setCreating(false);
+          return ok;
         }}
       />
     </div>
@@ -248,7 +249,7 @@ function CreateTeamDialog({
   individualModuleKeys?: string[];
   presetEntuziasti?: boolean;
   onClose: () => void;
-  onCreate: (input: CreateTeamInput) => void;
+  onCreate: (input: CreateTeamInput) => boolean | Promise<boolean>;
 }) {
   const { t } = useLanguage();
   const brand = useSiteBrand();
@@ -263,6 +264,7 @@ function CreateTeamDialog({
   const [pending, setPending] = useState(false);
   const avatarRef = useRef<AvatarCropHandle>(null);
   const previewRef = useRef<ResolvedEhlTeam | null>(null);
+  const busyRef = useRef(false);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const nameReady = name.trim().length > 0;
   const trainingValue = votingHours(trainingHours);
@@ -270,11 +272,16 @@ function CreateTeamDialog({
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, sportId);
   const showLink = entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
+  useEffect(() => {
+    if (!open) busyRef.current = false;
+  }, [open]);
+
   const closedKey = `${open ? 1 : 0}|${brand.trainingVotingHours}|${brand.gameVotingHours}`;
   const [seenClosed, setSeenClosed] = useState(closedKey);
   if (closedKey !== seenClosed) {
     setSeenClosed(closedKey);
     if (!open) {
+      setPending(false);
       setName("");
       setLink("");
       setLinkBusy(false);
@@ -285,49 +292,71 @@ function CreateTeamDialog({
     }
   }
 
-  async function emit(sourceUrl: string | null, logoUrl: string | null) {
-    if (trainingValue == null || gameValue == null) return;
+  async function emit(sourceUrl: string | null, logoUrl: string | null): Promise<boolean> {
+    if (trainingValue == null || gameValue == null) return false;
     let avatarFile: File | null = null;
     if (!sourceUrl) {
       const crop = await avatarRef.current?.result();
       if (crop?.changed && !crop.remove && !crop.file) {
         showFeedback({ message: t("avatar.error.file"), variant: "error" });
-        return;
+        return false;
       }
       avatarFile = crop?.file ?? null;
     }
-    onCreate({ name: name.trim(), sourceUrl, logoUrl, avatarFile, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue, sportId: chosenSportId(sports, sportId) });
+    return Boolean(await onCreate({ name: name.trim(), sourceUrl, logoUrl, avatarFile, currency, trainingVotingHours: trainingValue, gameVotingHours: gameValue, sportId: chosenSportId(sports, sportId) }));
   }
 
   async function submit() {
-    if (!nameReady || !hoursOk || pending || linkBusy) return;
-    const source = showLink ? link.trim() : "";
-    if (!source) {
-      await emit(null, null);
-      return;
-    }
-    const cached = sameEhlTeam(source, previewRef.current) ? previewRef.current : null;
-    let result = cached;
-    if (!result) {
-      setPending(true);
-      const looked = await lookupEhlTeamName(source);
-      setPending(false);
-      if (!looked.ok) {
-        showFeedback({ message: t(LINK_ERROR[looked.error]), variant: "error" });
+    if (!nameReady || !hoursOk || busyRef.current || linkBusy) return;
+    busyRef.current = true;
+    setPending(true);
+    let hold = false;
+    try {
+      const source = showLink ? link.trim() : "";
+      if (!source) {
+        hold = await emit(null, null);
         return;
       }
-      result = looked;
+      const cached = sameEhlTeam(source, previewRef.current) ? previewRef.current : null;
+      let result = cached;
+      if (!result) {
+        const looked = await lookupEhlTeamName(source);
+        if (!looked.ok) {
+          showFeedback({ message: t(LINK_ERROR[looked.error]), variant: "error" });
+          return;
+        }
+        result = looked;
+      }
+      if (!teamNamesMatch(name, result.name)) {
+        setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
+        return;
+      }
+      hold = await emit(result.url, result.logoUrl);
+    } finally {
+      if (!hold) {
+        busyRef.current = false;
+        setPending(false);
+      }
     }
-    if (!teamNamesMatch(name, result.name)) {
-      setMismatch({ remote: result.name, url: result.url, logoUrl: result.logoUrl });
-      return;
-    }
-    await emit(result.url, result.logoUrl);
+  }
+
+  function confirmMismatch() {
+    if (busyRef.current || !mismatch) return;
+    const url = mismatch.url;
+    const logoUrl = mismatch.logoUrl;
+    setMismatch(null);
+    busyRef.current = true;
+    setPending(true);
+    void emit(url, logoUrl).then((ok) => {
+      if (ok) return;
+      busyRef.current = false;
+      setPending(false);
+    });
   }
 
   return (
     <>
-      <AdminDialog open={open && mismatch === null} title={t("team.switch.add")} onClose={onClose}>
+      <AdminDialog open={open && mismatch === null} title={t("team.switch.add")} onClose={() => { if (!pending) onClose(); }}>
         <form
           className="grid gap-3"
           onSubmit={(event) => {
@@ -377,8 +406,9 @@ function CreateTeamDialog({
             <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed disabled:opacity-60">
               {t("actions.cancel")}
             </button>
-            <button type="submit" disabled={!nameReady || !hoursOk || pending || linkBusy} className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
-              {pending ? t("team.empty.checking") : t("team.empty.create")}
+            <button type="submit" disabled={!nameReady || !hoursOk || pending || linkBusy} aria-busy={pending} className="inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60">
+              {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+              {pending ? t("team.empty.creating") : t("team.empty.create")}
             </button>
           </div>
         </form>
@@ -387,23 +417,21 @@ function CreateTeamDialog({
         open={mismatch !== null}
         title={t("team.name.mismatch.title")}
         lead={mismatch ? t("team.name.mismatch.lead", { remote: mismatch.remote, entered: name.trim() }) : undefined}
-        onClose={() => setMismatch(null)}
+        onClose={() => { if (!pending) setMismatch(null); }}
       >
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setMismatch(null)} className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice">
+          <button type="button" disabled={pending} onClick={() => setMismatch(null)} className="rounded-lg px-4 py-2.5 text-sm font-medium text-muted hover:bg-ice disabled:cursor-not-allowed disabled:opacity-60">
             {t("actions.cancel")}
           </button>
           <button
             type="button"
-            onClick={() => {
-              const url = mismatch?.url ?? null;
-              const logoUrl = mismatch?.logoUrl ?? null;
-              setMismatch(null);
-              void emit(url, logoUrl);
-            }}
-            className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90"
+            disabled={pending}
+            aria-busy={pending}
+            onClick={confirmMismatch}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t("team.empty.create")}
+            {pending ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" /> : null}
+            {pending ? t("team.empty.creating") : t("team.empty.create")}
           </button>
         </div>
       </AdminDialog>

@@ -2,7 +2,11 @@ import { createHash, randomBytes } from "node:crypto";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { castMemberVote } from "@/app/lib/attendance-vote";
+import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
 import { buildEmailHtml, fillEmailText, plainDash } from "@/app/lib/email/build-email-html";
+import { teamLogoUrl } from "@/app/lib/entuziasti-view";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { eventHref } from "@/app/lib/dashboard-path";
 import { eventVotingOpen } from "@/app/lib/event-voting";
 import { formatClock, formatDisplayDate, formatMoney } from "@/app/lib/format";
@@ -54,8 +58,10 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string, skipUserI
     const language = await client.from("site_languages").select("code").eq("is_default", true).maybeSingle();
     const lang = mailLang(language.data?.code);
     const template = await client.from("email_templates").select("subject, body, button_label").eq("kind", "event").eq("language_code", lang).maybeSingle();
-    const team = await client.from("teams").select("name, currency").eq("id", teamId).maybeSingle();
+    const team = await client.from("teams").select("name, currency, logo_url, sport_id").eq("id", teamId).maybeSingle();
     if (!team.data) return;
+    const entuziasti = await moduleEnabledForSport(client, team.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, teamId);
+    const imageUrl = teamLogoUrl(team.data.logo_url, entuziasti);
     const venue = await client.from("venues").select("name, price_per_hour").eq("id", event.venueId).maybeSingle();
     const currency: CurrencyCode = isCurrency(team.data.currency) ? team.data.currency : brand.currency;
     const price = Number(venue.data?.price_per_hour ?? 0);
@@ -124,6 +130,9 @@ export async function notifyNewEvent(event: TeamEvent, teamId: string, skipUserI
               label: translate(lang, "admin.users.team"),
               title: params.team,
               detail: `${params.date} ${params.time}\n${params.type}\n${params.venue}`,
+              imageUrl,
+              imageFit: isOwnAvatarUrl(imageUrl) ? "cover" : "contain",
+              imageSize: 104,
             },
             vote: {
               hint: translate(lang, "email.vote.hint"),

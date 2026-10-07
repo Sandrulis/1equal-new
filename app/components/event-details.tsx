@@ -335,12 +335,12 @@ export function EventDetails({
           </AttendanceGroup>
           <AttendanceGroup title={t("event.absent")} count={absent.length} tone="absent" empty={t("event.none")}>
             {absent.map((member) => (
-              <PersonRow key={member.id} member={member} status="absent" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="absent" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} positions={positions} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
           <AttendanceGroup title={t("event.pending")} count={pending.length} tone="pending" empty={t("event.none")}>
             {pending.map((member) => (
-              <PersonRow key={member.id} member={member} status="pending" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} onRsvp={onRsvp} />
+              <PersonRow key={member.id} member={member} status="pending" actorId={actorId} leader={leader} votingOpen={votingOpen} ended={ended} positions={positions} onRsvp={onRsvp} />
             ))}
           </AttendanceGroup>
         </div>
@@ -419,7 +419,7 @@ function PersonRow({
   const { t } = useLanguage();
   const mine = Boolean(actorId && member.id === actorId);
   const managed = Boolean(actorId);
-  const coach = status === "going" && isTrainerMember(member, positions);
+  const coach = isTrainerMember(member, positions);
   const rowClass = coach ? "bg-game-soft" : "";
   if (managed && !mine && !leader) {
     return (

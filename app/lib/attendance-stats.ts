@@ -103,7 +103,7 @@ export function tallyAttendance(members: AudienceMember[], events: EventLite[], 
   return stats;
 }
 
-async function eachPage<T>(
+export async function eachPage<T>(
   load: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[] | null> {
   const rows: T[] = [];

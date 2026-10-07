@@ -16,6 +16,7 @@ import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
 import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
+import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
 import type { Member } from "@/app/lib/demo-data";
 import { CURRENT_USER_ID } from "@/app/lib/demo-constants";
 import { useFormatMoney } from "@/app/components/currency-provider";
@@ -55,6 +56,7 @@ export function TopBar({
   reservedHolds = [],
   calendarIntegration = false,
   entuziasti = true,
+  player = null,
   enabledModules = null,
   individualModuleKeys = [],
   presetEntuziasti = false,
@@ -66,7 +68,7 @@ export function TopBar({
   teams?: IssuedTeam[];
   onSelectTeam?: (code: string) => void;
   onUnwatchTeam?: (teamId: string) => void | Promise<void>;
-  onCreateTeam?: (input: CreateTeamInput) => void;
+  onCreateTeam?: (input: CreateTeamInput) => boolean | Promise<boolean>;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
   onAccountChange?: (account: AccountProfile) => void;
@@ -78,6 +80,7 @@ export function TopBar({
   reservedHolds?: BalanceHold[];
   calendarIntegration?: boolean;
   entuziasti?: boolean;
+  player?: EhlPlayerProfile | null;
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
   presetEntuziasti?: boolean;
@@ -101,7 +104,7 @@ export function TopBar({
   }, [account]);
   const name = profile ? accountName(profile) : demoName;
 
-  const linkedPhoto = entuziasti ? (teamPlayer(profile, team?.code)?.photoUrl ?? null) : null;
+  const linkedPhoto = entuziasti ? (player?.photoUrl ?? teamPlayer(profile, team?.code)?.photoUrl ?? null) : null;
   const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [holdsOpen, setHoldsOpen] = useState(false);
@@ -127,7 +130,7 @@ export function TopBar({
           onHome={onHome}
           onSelect={onSelectTeam ?? (() => onHome())}
           onUnwatch={onUnwatchTeam}
-          onCreate={onCreateTeam ?? (() => undefined)}
+          onCreate={onCreateTeam ?? (async () => false)}
           sports={sports}
           enabledModules={enabledModules}
           individualModuleKeys={individualModuleKeys}
@@ -169,6 +172,7 @@ export function TopBar({
           onSaved={saveAccount}
           calendarIntegration={calendarIntegration}
           entuziasti={entuziasti}
+          player={player}
         />
         <IconTipButton label={t("user.logout")} tone="game" onClick={() => void signOut()}>
           <IconLogout />
@@ -196,6 +200,7 @@ function UserMenu({
   onSaved,
   calendarIntegration = false,
   entuziasti = true,
+  player = null,
 }: {
   name: string;
   account: AccountProfile | null;
@@ -207,6 +212,7 @@ function UserMenu({
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; hasPassword?: boolean }) => void;
   calendarIntegration?: boolean;
   entuziasti?: boolean;
+  player?: EhlPlayerProfile | null;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -322,7 +328,7 @@ function UserMenu({
         </>
       ) : null}
       {settingsOpen && account ? (
-        <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
+        <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} player={entuziasti ? player : null} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
       ) : null}
       {passwordOpen && account ? (
         <ChangePasswordDialog

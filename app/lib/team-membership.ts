@@ -3,6 +3,7 @@ import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { rigaDayEndExclusiveIso, rigaDayStartIso, rigaStamp } from "@/app/lib/balance-range";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
+import { eachPage } from "@/app/lib/attendance-stats";
 import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
@@ -51,6 +52,7 @@ type TeamRow = {
   sport_id: string | null;
   balance: number | string | null;
   updated_at: string;
+  content_updated_at?: string | null;
 };
 
 type EventRow = {
@@ -213,6 +215,35 @@ async function listTrainingGuests(admin: NonNullable<ReturnType<typeof createAdm
     .sort((left, right) => `${right.date} ${right.start}`.localeCompare(`${left.date} ${left.start}`));
 }
 
+type RsvpListRow = { team_id?: string; event_id: string; user_id: string; status: string; is_guest?: boolean };
+
+function voteKey(row: { event_id: string; user_id: string }) {
+  return `${row.event_id}:${row.user_id}`;
+}
+
+async function loadTeamRsvps(admin: SupabaseClient, teamId: string, fromDate: string, toDate: string | null, userId: string | null): Promise<RsvpListRow[]> {
+  const page = (onlyUser: string | null) => eachPage<RsvpListRow>((start, end) => {
+    const query = admin
+      .from("team_event_rsvps")
+      .select("team_id, event_id, user_id, status, is_guest, team_events!inner(event_date)")
+      .eq("team_id", teamId)
+      .gte("team_events.event_date", fromDate);
+    const dated = toDate ? query.lte("team_events.event_date", toDate) : query;
+    const scoped = onlyUser ? dated.eq("user_id", onlyUser) : dated;
+    return scoped.order("event_id").order("user_id").range(start, end);
+  });
+  const [paged, mine] = await Promise.all([page(null), userId ? page(userId) : Promise.resolve([] as RsvpListRow[])]);
+  const rows = [...(paged ?? [])];
+  const seen = new Set(rows.map(voteKey));
+  for (const row of mine ?? []) {
+    const key = voteKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  return rows;
+}
+
 function displayName(row: { name?: string | null; first_name?: string | null; last_name?: string | null }): string {
   const parts = [row.first_name, row.last_name].map((part) => (part ?? "").trim()).filter(Boolean);
   if (parts.length) return parts.join(" ");
@@ -251,12 +282,12 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     admin.from("team_member_subteams").select("team_id, user_id, subteam_id").eq("team_id", id),
     admin.rpc("member_balance_totals", { team_ids: [id] }),
     admin.from("venues").select("id, team_id, name, price_per_hour, hidden, updated_at").eq("team_id", id),
-    admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", id).gte("event_date", since).order("event_date").order("start_time"),
+    eachPage<EventRow>((from, to) => admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", id).gte("event_date", since).order("event_date").order("start_time").order("id").range(from, to)),
     admin.from("finance_reservations").select("team_id, event_id, user_id, amount, team_events!inner(event_date, start_time)").eq("team_id", id).gte("team_events.event_date", today),
     admin.from("team_modules").select("team_id, module_key").eq("team_id", id),
   ]);
   const [teamRows, prefetched] = await Promise.all([
-    admin.from("teams").select("id, name, invite_code, source_url, logo_url, home_kit_url, away_kit_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
+    admin.from("teams").select("id, name, invite_code, source_url, logo_url, home_kit_url, away_kit_url, leader_id, training_voting_hours, game_voting_hours, currency, sport_id, balance, updated_at, content_updated_at").in("id", teamIds).order("updated_at", { ascending: false }),
     hinted ? loadDetail(hinted) : Promise.resolve(null),
   ]);
   if (teamRows.error || !teamRows.data?.length) return [];
@@ -271,7 +302,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     }
   }
   if (!detailId) return [];
-  const [cron, members, groups, links, totals, places, events, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
+  const [cron, members, groups, links, totals, places, eventRows, holds, moduleLinks] = prefetched && detailId === hinted ? prefetched : await loadDetail(detailId);
   const financeReserve = cron.data?.enabled === true;
   const nowStamp = rigaStamp();
   const activeHolds = ((holds.data ?? []) as { team_id: string; event_id: string; user_id: string; amount: number | string; team_events: { event_date: string; start_time: string } | { event_date: string; start_time: string }[] | null }[]).filter((row) => {
@@ -280,9 +311,9 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     return `${String(event.event_date).slice(0, 10)} ${String(event.start_time).slice(0, 5)}` > nowStamp;
   });
   if (members.error || !members.data) return [];
-  const splitRsvps = members.data.length * (events.data ?? []).length > RSVP_SPLIT_CELLS;
+  const splitRsvps = members.data.length * (eventRows ?? []).length > RSVP_SPLIT_CELLS;
   const rsvpSince = splitRsvps ? rsvpHotSince() : since;
-  const rsvps = await admin.from("team_event_rsvps").select("team_id, event_id, user_id, status, is_guest, team_events!inner(event_date)").eq("team_id", detailId).gte("team_events.event_date", rsvpSince);
+  const rsvpRows = await loadTeamRsvps(admin, detailId, rsvpSince, null, userId);
   const guests = await listTrainingGuests(admin, detailId);
   const idsByMember = new Map<string, string[]>();
   for (const link of (links.data ?? []) as { team_id: string; user_id: string; subteam_id: string }[]) {
@@ -342,7 +373,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     venuesByTeam.set(row.team_id, list);
   }
   const eventsByTeam = new Map<string, TeamEvent[]>();
-  for (const row of (events.data ?? []) as EventRow[]) {
+  for (const row of eventRows ?? []) {
     const list = eventsByTeam.get(row.team_id) ?? [];
     list.push(eventFromRow(row));
     eventsByTeam.set(row.team_id, list);
@@ -375,6 +406,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
         sportId: team.sport_id,
         balance: Number(team.balance ?? 0),
         watching: watchOnly.has(team.id),
+        contentUpdatedAt: team.content_updated_at ?? team.updated_at,
         financeReserve,
         loaded: detail,
         ...(detail && splitRsvps ? { rsvpSince } : {}),
@@ -382,7 +414,7 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
           ? {
               moduleKeys: moduleKeysByTeam.get(team.id) ?? [],
               guests,
-              rsvps: ((rsvps.data ?? []) as { team_id: string; event_id: string; user_id: string; status: string; is_guest?: boolean }[])
+              rsvps: rsvpRows
                 .filter((row) => row.is_guest !== true && (row.status === "going" || row.status === "absent"))
                 .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
               members: byTeam.get(team.id) ?? [],
@@ -486,13 +518,13 @@ type TeamLedgerRow = {
 export async function listTeamHistory(teamId: string, from: string, to: string): Promise<{ events: TeamEvent[]; rsvps: { eventId: string; userId: string; status: "going" | "absent" }[] }> {
   const admin = createAdminClient();
   if (!admin) return { events: [], rsvps: [] };
-  const [events, rsvps] = await Promise.all([
-    admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", teamId).gte("event_date", from).lte("event_date", to).order("event_date").order("start_time"),
-    admin.from("team_event_rsvps").select("event_id, user_id, status, is_guest, team_events!inner(event_date)").eq("team_id", teamId).gte("team_events.event_date", from).lte("team_events.event_date", to),
+  const [events, rsvpRows] = await Promise.all([
+    eachPage<EventRow>((start, end) => admin.from("team_events").select(TEAM_EVENT_COLUMNS).eq("team_id", teamId).gte("event_date", from).lte("event_date", to).order("event_date").order("start_time").order("id").range(start, end)),
+    loadTeamRsvps(admin, teamId, from, to, null),
   ]);
   return {
-    events: ((events.data ?? []) as EventRow[]).map((row) => eventFromRow(row)),
-    rsvps: ((rsvps.data ?? []) as { event_id: string; user_id: string; status: string; is_guest?: boolean }[])
+    events: (events ?? []).map((row) => eventFromRow(row)),
+    rsvps: rsvpRows
       .filter((row) => row.is_guest !== true && (row.status === "going" || row.status === "absent"))
       .map((row) => ({ eventId: row.event_id, userId: row.user_id, status: row.status as "going" | "absent" })),
   };

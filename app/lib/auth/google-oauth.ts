@@ -227,6 +227,13 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
     return fail();
   }
 
+  const authUser = await admin.auth.admin.getUserById(userId);
+  const meta = authUser.data.user?.app_metadata ?? {};
+  if (meta.password_set !== true) {
+    const marked = await admin.auth.admin.updateUserById(userId, { app_metadata: { ...meta, password_set: false } });
+    if (marked.error) return fail();
+  }
+
   const link = await admin.auth.admin.generateLink({ type: "magiclink", email: profile.email });
   const tokenHash = link.data?.properties?.hashed_token?.trim() ?? "";
   if (link.error || !tokenHash) return fail();

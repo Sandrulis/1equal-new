@@ -18,6 +18,7 @@ import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
+import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -327,9 +328,11 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const teamOk = /^[A-Z0-9]{4,16}$/.test(teamCode);
   let player: EhlPlayerProfile | null = null;
   let savePlayer = false;
+  let playerTeamId: string | null = null;
   if (includePlayer && teamOk) {
     const team = await admin.from("teams").select("id, sport_id").eq("invite_code", teamCode).maybeSingle();
     if (team.error) return { error: "auth.error.generic" };
+    playerTeamId = team.data?.id ?? null;
     savePlayer = await moduleEnabledForSport(admin, team.data?.sport_id, FRONTEND_MODULE_KEYS.entuziasti, team.data?.id);
     if (savePlayer) {
       const raw = readField(formData, "playerUrl");
@@ -377,6 +380,11 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const saved = await admin.from("users").update(profile).eq("id", user.id);
   if (saved.error) return { error: "auth.error.generic" };
   await admin.from("team_members").update({ phone, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+  if (savePlayer && playerTeamId) {
+    const linked = await admin.from("team_members").update({ ehl_player: player, updated_at: new Date().toISOString() }).eq("team_id", playerTeamId).eq("user_id", user.id);
+    if (linked.error) return { error: "auth.error.generic" };
+    refreshTeamData();
+  }
 
   await supabase.auth.updateUser({ data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}` } });
   let emailSent = false;

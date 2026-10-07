@@ -338,6 +338,8 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
   }
 
   await gate.client.from("team_members").upsert({ team_id: found.data.id, user_id: gate.account.id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
+  const joinedEmail = gate.account.email.trim().toLowerCase();
+  if (joinedEmail) await gate.client.from("team_player_invites").delete().eq("team_id", found.data.id).eq("email", joinedEmail);
   const members = await gate.client
     .from("team_members")
     .select(TEAM_MEMBER_USER_COLUMNS)
@@ -956,6 +958,71 @@ export async function deleteOwnedSubteam(teamId: string, subteamId: string): Pro
   return { ok: true };
 }
 
+async function teamMemberEmails(client: GateClient, teamId: string): Promise<Set<string> | null> {
+  const members = await client.from("team_members").select("user_id").eq("team_id", teamId);
+  if (members.error) return null;
+  const ids = (members.data ?? []).map((row) => row.user_id).filter(Boolean);
+  if (!ids.length) return new Set();
+  const people = await client.from("users").select("email").in("id", ids);
+  if (people.error) return null;
+  return new Set((people.data ?? []).map((row) => String(row.email ?? "").trim().toLowerCase()).filter(Boolean));
+}
+
+async function storePendingInvite(client: GateClient, teamId: string, email: string, invitedBy: string, members: Set<string> | null): Promise<void> {
+  if (members?.has(email)) {
+    await client.from("team_player_invites").delete().eq("team_id", teamId).eq("email", email);
+    return;
+  }
+  await client.from("team_player_invites").upsert(
+    { team_id: teamId, email, invited_by: invitedBy, sent_at: new Date().toISOString() },
+    { onConflict: "team_id,email" },
+  );
+}
+
+export async function listTeamInvites(teamId: string): Promise<{ email: string; sentAt: string }[]> {
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return [];
+  const gate = await requireUserAdmin();
+  if (!gate) return [];
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return [];
+  const invites = await gate.client.from("team_player_invites").select("email, sent_at").eq("team_id", teamId).order("sent_at", { ascending: false });
+  if (invites.error || !invites.data) return [];
+  const members = await teamMemberEmails(gate.client, teamId);
+  const pending = invites.data.filter((row) => !members?.has(row.email));
+  const joined = members ? invites.data.filter((row) => members.has(row.email)).map((row) => row.email) : [];
+  if (joined.length) await gate.client.from("team_player_invites").delete().eq("team_id", teamId).in("email", joined);
+  return pending.map((row) => ({ email: row.email, sentAt: row.sent_at }));
+}
+
+export async function deleteTeamInvite(teamId: string, rawEmail: string): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!/^[0-9a-f-]{36}$/i.test(teamId) || !isEmailAddress(email)) return { ok: false, error: "roster.error.email" };
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
+  const removed = await gate.client.from("team_player_invites").delete().eq("team_id", teamId).eq("email", email);
+  if (removed.error) return { ok: false, error: "auth.error.generic" };
+  return { ok: true };
+}
+
+export async function resendTeamInvite(teamId: string, rawEmail: string): Promise<{ ok: true; sentAt: string } | { ok: false; error: MessageKey }> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!/^[0-9a-f-]{36}$/i.test(teamId) || !isEmailAddress(email)) return { ok: false, error: "roster.error.email" };
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
+  const existing = await gate.client.from("team_player_invites").select("email").eq("team_id", teamId).eq("email", email).maybeSingle();
+  if (existing.error || !existing.data) return { ok: false, error: "auth.error.generic" };
+  const members = await teamMemberEmails(gate.client, teamId);
+  if (members?.has(email)) {
+    await gate.client.from("team_player_invites").delete().eq("team_id", teamId).eq("email", email);
+    return { ok: false, error: "roster.invites.joined" };
+  }
+  const sent = await inviteTeamPlayer(teamId, [email]);
+  if (!sent.ok) return sent;
+  const row = await gate.client.from("team_player_invites").select("sent_at").eq("team_id", teamId).eq("email", email).maybeSingle();
+  return { ok: true, sentAt: row.data?.sent_at ?? new Date().toISOString() };
+}
+
 export async function inviteTeamPlayer(teamId: string, rawEmails: string[]): Promise<{ ok: true; count: number } | { ok: false; error: MessageKey }> {
   if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { ok: false, error: "auth.error.generic" };
   const emails = [...new Set(rawEmails.map((item) => item.trim().toLowerCase()).filter(Boolean))];
@@ -969,6 +1036,7 @@ export async function inviteTeamPlayer(teamId: string, rawEmails: string[]): Pro
   const entuziasti = await moduleEnabledForSport(gate.client, team.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, teamId);
   const imageUrl = teamLogoUrl(team.data.logo_url, entuziasti);
   const inviter = [gate.account.firstName, gate.account.lastName].map((part) => part.trim()).filter(Boolean).join(" ") || gate.account.email;
+  const members = await teamMemberEmails(gate.client, teamId);
   let sent = 0;
   for (const email of emails) {
     if (await rateLimit(`invite:${teamId}:${email}`, 5, 15 * 60 * 1000)) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.error.rate" };
@@ -982,6 +1050,7 @@ export async function inviteTeamPlayer(teamId: string, rawEmails: string[]): Pro
       imageFit: isOwnAvatarUrl(imageUrl) ? "cover" : "contain",
     });
     if (!ok) return sent ? { ok: true, count: sent } : { ok: false, error: "auth.email.unavailable" };
+    await storePendingInvite(gate.client, teamId, email, gate.account.id, members);
     sent += 1;
   }
   await writeAudit("team.invite", "teams", teamId);

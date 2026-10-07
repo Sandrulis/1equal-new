@@ -240,7 +240,7 @@ export function TeamDashboard({
   const creating = useRef(false);
   const [ownedTeam, setOwnedTeam] = useState<IssuedTeam | null>(() => (account ? preferredTeam(initialTeams, account.activeTeamId) : null));
   const [teams, setTeams] = useState<IssuedTeam[]>(() => (account ? initialTeams : []));
-  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}:${item.home === true ? 1 : item.home === false ? 0 : ""}:${item.allowGuests ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}:${(team.guests ?? []).map((guest) => `${guest.eventId}:${guest.userId}:${guest.date}:${guest.email}:${guest.phone}:${guest.note}`).join(",")}`).join("|");
+  const serverTeams = initialTeams.map((team) => `${team.id ?? ""}:${team.contentUpdatedAt ?? ""}:${team.watching ? 1 : 0}:${team.leaderId ?? ""}:${team.code}:${team.sportId ?? ""}:${team.balance ?? 0}:${(team.rsvps ?? []).map((row) => `${row.eventId}:${row.userId}:${row.status}`).join(",")}:${(team.members ?? []).map((member) => `${member.id}:${member.updatedAt}:${member.balance}:${(member.ledger ?? []).map((entry) => entry.id).join(".")}:${member.feeExempt ? 1 : 0}:${member.teamAdmin ? 1 : 0}:${member.originCountry ?? ""}:${member.originIp ?? ""}:${(member.extraPositions ?? []).join(".")}:${(member.subteamIds ?? []).join(".")}`).join(",")}:${(team.subteams ?? []).map((item) => `${item.id}:${item.name}:${item.color}`).join(",")}:${(team.venues ?? []).map((item) => `${item.id}:${item.name}:${item.pricePerHour}:${item.hidden ? 1 : 0}`).join(",")}:${team.currency ?? ""}:${team.trainingVotingHours ?? 24}:${team.gameVotingHours ?? 72}:${(team.ledger ?? []).map((line) => `${line.id}:${line.amount}`).join(",")}:${(team.events ?? []).map((item) => `${item.id}:${item.date}:${item.start}:${item.expense ?? ""}:${item.type}:${item.venueId}:${item.subteamId}:${item.withCoach ? 1 : 0}:${item.home === true ? 1 : item.home === false ? 0 : ""}:${item.allowGuests ? 1 : 0}`).join(",")}:${team.financeReserve ? 1 : 0}:${team.rsvpSince ?? ""}:${(team.reservations ?? []).map((row) => `${row.eventId}:${row.userId}:${row.amount}`).join(",")}:${(team.moduleKeys ?? []).join(".")}:${(team.guests ?? []).map((guest) => `${guest.eventId}:${guest.userId}:${guest.date}:${guest.email}:${guest.phone}:${guest.note}`).join(",")}`).join("|");
   const [profile, setProfile] = useState(account);
   const [guestSignups, setGuestSignups] = useState(initialGuestSignups);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -336,8 +336,8 @@ export function TeamDashboard({
   const sectionMotion = sectionSlide === "left" ? "section-slide-left" : sectionSlide === "right" ? "section-slide-right" : "";
   const showStart = needsTeam && (view === "home" || view === "team" || view === "guests" || view === "subteams" || view === "venues");
 
-  async function createTeam(input: CreateTeamInput) {
-    if (creating.current) return;
+  async function createTeam(input: CreateTeamInput): Promise<boolean> {
+    if (creating.current) return false;
     creating.current = true;
     const { avatarFile, ...rest } = input;
     let result: Awaited<ReturnType<typeof createOwnedTeam>>;
@@ -346,12 +346,12 @@ export function TeamDashboard({
     } catch {
       creating.current = false;
       showFeedback({ message: t("auth.error.generic"), variant: "error" });
-      return;
+      return false;
     }
     if (!result.ok) {
       creating.current = false;
       showFeedback({ message: t(result.error), variant: "error" });
-      return;
+      return false;
     }
     let team = result.team;
     let avatarError: string | null = null;
@@ -386,6 +386,7 @@ export function TeamDashboard({
     showFeedback(avatarError ? { message: avatarError, variant: "error" } : { message: t("team.created"), variant: "success" });
     softGo(teamHref(basePath));
     router.refresh();
+    return true;
   }
 
   function selectTeam(code: string) {
@@ -425,6 +426,22 @@ export function TeamDashboard({
     const next = { ...ownedTeam, ...patch };
     setCurrentTeam(next);
     setOwnedTeam(next);
+    setTeams(listMyTeams());
+  }
+
+  function applyAccount(next: AccountProfile) {
+    setProfile(next);
+    if (!ownedTeam?.members || !ownedTeam.code) return;
+    const ehl = next.ehlPlayers[ownedTeam.code] ?? null;
+    const name = [next.firstName, next.lastName].filter(Boolean).join(" ");
+    const members = ownedTeam.members.map((member) =>
+      member.id === next.id
+        ? { ...member, firstName: next.firstName, lastName: next.lastName, name: name || member.name, phone: next.phone, ehl, photoUrl: ehl?.photoUrl ?? next.avatarUrl ?? null }
+        : member,
+    );
+    const updated = { ...ownedTeam, members };
+    setCurrentTeam(updated);
+    setOwnedTeam(updated);
     setTeams(listMyTeams());
   }
 
@@ -668,6 +685,34 @@ export function TeamDashboard({
       active = false;
     };
   }, [basePath, ownedTeam?.id, ownedTeam?.loaded]);
+  useEffect(() => {
+    if (basePath === "/demo" || !ownedTeam?.id || ownedTeam.loaded === false || !ownedTeam.contentUpdatedAt) return;
+    const teamId = ownedTeam.id;
+    const known = Date.parse(ownedTeam.contentUpdatedAt);
+    if (Number.isNaN(known)) return;
+    let active = true;
+    void fetch(`/api/teams/${teamId}/revision`, { cache: "no-store" })
+      .then(async (response) => (response.ok ? ((await response.json()) as { ok?: boolean; revision?: string }) : null))
+      .then(async (body) => {
+        const revision = body?.revision ? Date.parse(body.revision) : Number.NaN;
+        if (!active || !body?.ok || Number.isNaN(revision) || revision <= known || lineupUnsavedRef.current) return;
+        const response = await fetch(`/api/teams/${teamId}`, { cache: "no-store" });
+        if (!active || !response.ok) return;
+        const payload = (await response.json()) as { ok?: boolean; team?: IssuedTeam };
+        if (!active || !payload.ok || !payload.team || payload.team.loaded === false || payload.team.id !== teamId) return;
+        const team = payload.team;
+        setCurrentTeam(team);
+        setOwnedTeam((current) => (current?.id === teamId ? team : current));
+        setTeams(listMyTeams());
+        const seeded: Record<string, Record<string, Rsvp>> = {};
+        for (const row of team.rsvps ?? []) seeded[row.eventId] = { ...(seeded[row.eventId] ?? {}), [row.userId]: row.status };
+        setRsvp(seeded);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [view, basePath, ownedTeam?.id, ownedTeam?.loaded, ownedTeam?.contentUpdatedAt]);
   const pendingAnchor = useRef<string | null>(null);
 
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
@@ -1476,7 +1521,8 @@ export function TeamDashboard({
         onCreateTeam={createTeam}
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
-        onAccountChange={setProfile}
+        onAccountChange={applyAccount}
+        player={entuziastiOn ? selfMember?.ehl ?? null : null}
         menuOpen={menuOpen}
         adminOpen={adminOpen}
         onOpenMenu={account ? () => {

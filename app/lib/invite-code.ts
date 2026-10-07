@@ -59,6 +59,7 @@ export type IssuedTeam = {
   guests?: TrainingGuest[];
   loaded?: boolean;
   rsvpSince?: string;
+  contentUpdatedAt?: string;
 };
 
 const issuedTeams = new Map<string, IssuedTeam>();

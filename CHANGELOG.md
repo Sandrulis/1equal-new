@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.15
+
+- Balsojums vairs nepazūd lielai komandai, un sadaļas maiņa pārlādē datus, ja kopš ielādes kaut kas ir mainījies
+- Vadītājs redz neapstiprinātos uzaicinājumus un var tos nosūtīt vēlreiz vai dzēst. Kalendāru pievieno ar Apple un Google saiti
+- Google kontam izvēlnē ir Uzstādīt paroli, kamēr parole nav uzlikta. Notikuma e-pastā ir komandas logo, pēc balsošanas cilne aizveras ar atskaiti, un trenerim ir sarkanīgs fons arī pie Nebūs
+
 ## v0.2.14
 
 - Jaunam lietotājam Entuziastu saite komandas izveidē aizpilda nosaukumu un rāda logo ar abām formām, arī ja saitei ir sezonas numurs

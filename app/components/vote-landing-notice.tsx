@@ -33,11 +33,12 @@ export function VoteLandingNotice({
 }) {
   const { t } = useLanguage();
   const [payload, setPayload] = useState<VotePayload | null>(choice ? null : { state: "invalid", summary: "", current: null, dashboardUrl: "/dashboard" });
+  const [closeAt, setCloseAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!token || !choice) return;
     const ac = new AbortController();
-    let timer = 0;
     void (async () => {
       try {
         const response = await fetch("/api/email-vote", {
@@ -49,7 +50,11 @@ export function VoteLandingNotice({
         const data = (await response.json()) as VotePayload;
         if (ac.signal.aborted) return;
         setPayload(data);
-        if (data.state === "going" || data.state === "absent") timer = window.setTimeout(() => window.close(), 3000);
+        if (data.state === "going" || data.state === "absent") {
+          const stamp = Date.now();
+          setNow(stamp);
+          setCloseAt(stamp + 3000);
+        }
       } catch (error) {
         if (ac.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
         setPayload({ state: "error", summary: "", current: null, dashboardUrl: "/dashboard" });
@@ -57,12 +62,25 @@ export function VoteLandingNotice({
     })();
     return () => {
       ac.abort();
-      window.clearTimeout(timer);
     };
   }, [choice, token]);
 
+  useEffect(() => {
+    if (!closeAt) return;
+    const timer = window.setInterval(() => {
+      const next = Date.now();
+      setNow(next);
+      if (next >= closeAt) {
+        window.clearInterval(timer);
+        window.close();
+      }
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, [closeAt]);
+
   const state = payload?.state ?? "going";
   const saved = state === "going" || state === "absent";
+  const secondsLeft = closeAt ? Math.max(0, Math.ceil((closeAt - now) / 1000)) : 0;
   const title = t(TITLE[state]);
   const summary = payload?.summary ?? "";
   const current = payload?.current === "going" || payload?.current === "absent" ? payload.current : null;
@@ -79,8 +97,11 @@ export function VoteLandingNotice({
       <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="vote-title">
         <div className="absolute inset-0 bg-ink/40 backdrop-blur-md" />
         <div className="relative w-full max-w-lg rounded-2xl bg-paper p-6 ring-1 ring-line">
-          <div className={`mb-4 grid h-11 w-11 place-items-center rounded-full [&_svg]:h-5 [&_svg]:w-5 ${saved ? "bg-train-soft text-train" : "bg-game-soft text-game"}`}>
-            {saved ? <IconCheck /> : <IconX />}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className={`grid h-11 w-11 place-items-center rounded-full [&_svg]:h-5 [&_svg]:w-5 ${saved ? "bg-train-soft text-train" : "bg-game-soft text-game"}`}>
+              {saved ? <IconCheck /> : <IconX />}
+            </div>
+            {saved && closeAt ? <p className="pt-2 text-sm tabular-nums text-muted">{t("email.vote.tab_closes", { seconds: secondsLeft })}</p> : null}
           </div>
           <h1 id="vote-title" className="text-lg font-semibold tracking-tight">
             {title}

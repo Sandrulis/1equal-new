@@ -12,6 +12,7 @@ import { emphasize } from "@/app/lib/emphasize";
 import { teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
 import { userDisplayEqual, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { EhlPlayerLinkPreview } from "@/app/components/ehl-player-preview";
+import { parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { useIsClient } from "@/app/lib/use-is-client";
 import { useLanguage } from "@/app/lib/language";
 
@@ -20,6 +21,7 @@ export function AccountSettingsDialog({
   teamCode = null,
   teamName = null,
   entuziasti = true,
+  player = null,
   onClose,
   onSaved,
 }: {
@@ -27,6 +29,7 @@ export function AccountSettingsDialog({
   teamCode?: string | null;
   teamName?: string | null;
   entuziasti?: boolean;
+  player?: EhlPlayerProfile | null;
   onClose: () => void;
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display" | "phone">) => void;
 }) {
@@ -34,7 +37,7 @@ export function AccountSettingsDialog({
   const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
   const titleId = useId();
-  const savedPlayer = teamPlayer(account, teamCode);
+  const savedPlayer = player ?? teamPlayer(account, teamCode);
   const mounted = useIsClient();
   const [firstName, setFirstName] = useState(account.firstName);
   const [lastName, setLastName] = useState(account.lastName);
@@ -57,6 +60,15 @@ export function AccountSettingsDialog({
   const emailChanged = emailValue !== account.email.trim().toLowerCase();
   const dirty = firstName !== account.firstName || lastName !== account.lastName || emailChanged || phone !== account.phone || (showPlayerLink && playerUrl.trim() !== savedUrl) || !userDisplayEqual(display, account.display) || (showAvatar && avatarDirty);
   const canSave = dirty && firstName.trim() !== "" && lastName.trim() !== "" && isEmailAddress(emailValue) && !pending && !linkBusy;
+  function applyLinkedPlayer(profile: EhlPlayerProfile | null) {
+    if (!profile) return;
+    const nextUrl = parseEhlPlayerUrl(profile.sourceUrl)?.toString() ?? "";
+    const saved = parseEhlPlayerUrl(savedUrl)?.toString() ?? "";
+    if (!nextUrl || nextUrl === saved) return;
+    const parts = profile.name.trim().split(/\s+/).filter(Boolean);
+    setFirstName((parts[0] ?? "").slice(0, 80));
+    setLastName(parts.slice(1).join(" ").slice(0, 80));
+  }
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSave) return;
@@ -146,7 +158,34 @@ export function AccountSettingsDialog({
           </button>
         </div>
         <form onSubmit={(event) => void onSubmit(event)}>
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        {showPlayerLink && teamCode ? (
+          <>
+          <label className="mt-6 grid gap-1.5 text-sm font-medium">
+            <span>
+              {t("user.settings.player")}
+              {teamName ? <span className="ml-2 font-normal text-muted">{teamName}</span> : null}
+              <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
+            </span>
+            <input type="hidden" name="teamCode" value={teamCode} />
+            <input
+              name="playerUrl"
+              value={playerUrl}
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={t("user.settings.player_placeholder")}
+              onChange={(event) => {
+                setPlayerUrl(event.target.value);
+                if (event.target.value.trim()) setAvatarDirty(false);
+              }}
+              className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
+            />
+            <span className="font-normal text-muted">{t("user.settings.player_hint")}</span>
+          </label>
+          <EhlPlayerLinkPreview value={playerUrl} seed={savedPlayer} onResolved={applyLinkedPlayer} onLoading={setLinkBusy} />
+          </>
+        ) : null}
+        <div className={`${showPlayerLink && teamCode ? "mt-3" : "mt-6"} grid grid-cols-2 gap-3`}>
           <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" disabled={pending || linkBusy} onChange={setFirstName} />
           <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" disabled={pending || linkBusy} onChange={setLastName} />
         </div>
@@ -179,33 +218,6 @@ export function AccountSettingsDialog({
             />
           </label>
         </div>
-        {showPlayerLink && teamCode ? (
-          <>
-          <label className="mt-3 grid gap-1.5 text-sm font-medium">
-            <span>
-              {t("user.settings.player")}
-              {teamName ? <span className="ml-2 font-normal text-muted">{teamName}</span> : null}
-              <span className="ml-2 font-normal text-muted">{t("team.empty.link_optional")}</span>
-            </span>
-            <input type="hidden" name="teamCode" value={teamCode} />
-            <input
-              name="playerUrl"
-              value={playerUrl}
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={t("user.settings.player_placeholder")}
-              onChange={(event) => {
-                setPlayerUrl(event.target.value);
-                if (event.target.value.trim()) setAvatarDirty(false);
-              }}
-              className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
-            />
-            <span className="font-normal text-muted">{t("user.settings.player_hint")}</span>
-          </label>
-          <EhlPlayerLinkPreview value={playerUrl} seed={savedPlayer} onLoading={setLinkBusy} />
-          </>
-        ) : null}
         {showAvatar ? <div className="mt-4"><AvatarCropField ref={avatarRef} existingUrl={account.avatarUrl} disabled={pending} onDirty={setAvatarDirty} /></div> : null}
         <div className="mt-6 border-t border-line pt-5">
           <DisplayPreferencesFields idPrefix="user-display" values={display} onChange={setDisplay} system={brand.display} allowSystemDefault />
