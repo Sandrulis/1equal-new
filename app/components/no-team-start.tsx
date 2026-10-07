@@ -10,7 +10,7 @@ import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
-import { entuziastiCreateVisible } from "@/app/lib/frontend-modules";
+import { entuziastiForSport } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import { useLanguage } from "@/app/lib/language";
@@ -26,8 +26,6 @@ const LINK_ERROR: Record<"invalid" | "not_found" | "failed", MessageKey> = {
 export function NoTeamStart({
   sports = [],
   enabledModules = null,
-  individualModuleKeys = [],
-  presetEntuziasti = false,
   onCreate,
   onJoin,
 }: {
@@ -60,7 +58,7 @@ export function NoTeamStart({
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, sportId);
-  const showLink = entuziastiCreateVisible(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null, individualModuleKeys, presetEntuziasti);
+  const showLink = entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
 
   async function emit(sourceUrl: string | null, logoUrl: string | null) {
     if (trainingValue == null || gameValue == null) return;

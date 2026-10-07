@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.14
+
+- Jaunam lietotājam Entuziastu saite komandas izveidē aizpilda nosaukumu un rāda logo ar abām formām, arī ja saitei ir sezonas numurs
+
 ## v0.2.13
 
 - Administratora panelī Umami rāda koplietošanas saites statistiku, un saite sānjoslā ir tikai tad, ja integrācija ir ieslēgta un saite ir saglabāta

@@ -1,5 +1,5 @@
 const HOSTS = new Set(["ehl.entuziasti.com", "www.ehl.entuziasti.com", "entuziasti.lv", "www.entuziasti.lv"]);
-const TEAM_PATH = /^\/komandas\/[a-z0-9-]+\/\d+\/?$/i;
+const TEAM_PATH = /^\/komandas\/[a-z0-9-]+\/\d+(?:\/\d+)?\/?$/i;
 
 export function parseEhlTeamUrl(raw: string): URL | null {
   let url: URL;

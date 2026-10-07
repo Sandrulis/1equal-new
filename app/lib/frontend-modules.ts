@@ -36,14 +36,3 @@ export function moduleOnForSport(enabledModules: readonly string[] | null | unde
 export function entuziastiForSport(enabledModules: readonly string[] | null | undefined, sportModuleKeys: readonly string[] | null | undefined): boolean {
   return moduleOnForSport(enabledModules, FRONTEND_MODULE_KEYS.entuziasti, sportModuleKeys);
 }
-
-export function entuziastiCreateVisible(
-  enabledModules: readonly string[] | null | undefined,
-  sportModuleKeys: readonly string[] | null | undefined,
-  individualModuleKeys: readonly string[],
-  preset: boolean,
-): boolean {
-  if (!entuziastiForSport(enabledModules, sportModuleKeys)) return false;
-  if (!individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti)) return true;
-  return preset;
-}

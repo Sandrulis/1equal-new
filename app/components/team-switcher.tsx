@@ -14,7 +14,7 @@ import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { teamNamesMatch } from "@/app/lib/ehl-team";
 import { votingHours, type CreateTeamInput } from "@/app/lib/team-defaults";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
-import { FRONTEND_MODULE_KEYS, entuziastiCreateVisible, entuziastiForSport } from "@/app/lib/frontend-modules";
+import { FRONTEND_MODULE_KEYS, entuziastiForSport } from "@/app/lib/frontend-modules";
 import { chosenSportId, type Sport } from "@/app/lib/sports";
 import { lookupEhlTeamName } from "@/app/lib/ehl-team-lookup";
 import type { IssuedTeam } from "@/app/lib/invite-code";
@@ -239,8 +239,6 @@ function CreateTeamDialog({
   open,
   sports,
   enabledModules = null,
-  individualModuleKeys = [],
-  presetEntuziasti = false,
   onClose,
   onCreate,
 }: {
@@ -271,7 +269,7 @@ function CreateTeamDialog({
   const gameValue = votingHours(gameHours);
   const hoursOk = trainingValue != null && gameValue != null;
   const pickedSport = chosenSportId(sports, sportId);
-  const showLink = entuziastiCreateVisible(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null, individualModuleKeys, presetEntuziasti);
+  const showLink = entuziastiForSport(enabledModules, pickedSport ? (sports.find((item) => item.id === pickedSport)?.moduleKeys ?? null) : null);
   const closedKey = `${open ? 1 : 0}|${brand.trainingVotingHours}|${brand.gameVotingHours}`;
   const [seenClosed, setSeenClosed] = useState(closedKey);
   if (closedKey !== seenClosed) {
