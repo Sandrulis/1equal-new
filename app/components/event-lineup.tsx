@@ -352,20 +352,40 @@ function GameLineup({
       {going.length === 0 ? <p className="mb-4 text-sm text-muted">{t("lineup.going.empty")}</p> : null}
 
       <div className="mx-auto w-full max-w-lg">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <div className="justify-self-start">
-            {logoUrl ? <ContentImage src={logoUrl} alt="" className="h-[4.675rem] w-auto max-w-full object-contain object-left" /> : null}
-          </div>
-          <div className="min-w-0 text-center">
+        <div
+          className="grid items-center"
+          style={{ gridTemplateColumns: `repeat(${1 + Number(Boolean(logoUrl)) + Number(coaches.length > 0) + Number(Boolean(kitUrl))}, minmax(0, 1fr))` }}
+        >
+          {logoUrl ? (
+            <div className="flex justify-center">
+              <ContentImage src={logoUrl} alt="" className="h-[4.675rem] w-auto max-w-full object-contain" />
+            </div>
+          ) : null}
+          <div className="min-w-0 px-1 text-center">
             <h1 className="truncate text-xl font-semibold tracking-tight">{subteamName}</h1>
             <p className="truncate text-sm text-muted">
               {formatDate(event.date)} {formatTime(event.start)}
             </p>
             <p className="truncate text-sm text-muted">{venueName}</p>
           </div>
-          <div className="justify-self-end">
-            {kitUrl ? <ContentImage src={kitUrl} alt={t(event.home === false ? "event.game.away" : "event.game.home")} className="h-[6.375rem] w-auto max-w-full object-contain object-right" /> : null}
-          </div>
+          {coaches.length > 0 ? (
+            <div className="flex justify-center gap-3">
+              {coaches.map((member) => (
+                <div key={member.id} className="flex flex-col items-center">
+                  <span className="mb-1 max-w-full truncate text-sm leading-none font-semibold text-ink">{memberSurname(member)}</span>
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-game-soft text-game ring-2 ring-game">
+                    <IconWhistle />
+                  </span>
+                  <span className="mt-1 max-w-full truncate text-xs leading-none font-medium text-game">{trainerPositionName(member, positions, lang, formatLang, t)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {kitUrl ? (
+            <div className="flex justify-center">
+              <ContentImage src={kitUrl} alt={t(event.home === false ? "event.game.away" : "event.game.home")} className="h-[6.375rem] w-auto max-w-full object-contain" />
+            </div>
+          ) : null}
         </div>
         <div className="pt-[calc(64px-6.25%)]">
         <div className="relative">
@@ -422,23 +442,6 @@ function GameLineup({
               onPick={(memberId) => assign(GOAL_SLOT, memberId)}
             />
           </div>
-          {coaches.map((member, index) => (
-            <div
-              key={member.id}
-              className="pointer-events-none absolute z-20"
-              style={{ left: "8%", top: coaches.length === 1 ? "50%" : `${38 + index * 14}%`, transform: "translate(-50%, calc(-50% + 5px))" }}
-            >
-              <span className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 text-sm leading-none font-semibold whitespace-nowrap text-ink [text-shadow:0_0_4px_#fff,0_0_4px_#fff]">
-                {memberSurname(member)}
-              </span>
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-game-soft text-game ring-2 ring-game">
-                <IconWhistle />
-              </span>
-              <span className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 text-xs leading-none font-medium whitespace-nowrap text-game [text-shadow:0_0_4px_#fff,0_0_4px_#fff]">
-                {trainerPositionName(member, positions, lang, formatLang, t)}
-              </span>
-            </div>
-          ))}
         </div>
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">

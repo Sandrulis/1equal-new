@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.11
+
+- Spēles izklājumā trenera aplis ir galvenē starp norises vietu un formu
+- Logo, norise, treneris un forma dala rindu vienādi, un trūkstošā vieta nepaliek tukša
+
 ## v0.2.10
 
 - Mobilās izvēlnes atvērums vairs netiek rakstīts renderēšanas laikā, un lint iziet
