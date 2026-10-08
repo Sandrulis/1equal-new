@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.17
+
+- Telefonā apakšējā josla paliek redzama, rāda tikai ikonas un sēž pie apakšas
+- Tie paši linki ar nosaukumiem ir kreisajā izvēlnē, un tā izvēlne neritinās
+
 ## v0.2.16
 
 - Komandas sastāvā apmeklētība ielādējas kopā ar komandu, nevis tukša kolonna ar „—”
