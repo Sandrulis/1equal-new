@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.16
+
+- Komandas sastāvā apmeklētība ielādējas kopā ar komandu, nevis tukša kolonna ar „—”
+- Telefonā darbībās ir ⋮ ar labās puses paneli: paslēptie dati un Labot / Noņemt
+
 ## v0.2.15
 
 - Balsojums vairs nepazūd lielai komandai, un sadaļas maiņa pārlādē datus, ja kopš ielādes kaut kas ir mainījies

@@ -38,6 +38,7 @@ import { useLanguage } from "@/app/lib/language";
 import { catalogForSport, formatPosition } from "@/app/lib/positions";
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 import type { MessageKey } from "@/app/lib/messages";
+import { usePresence } from "@/app/lib/use-presence";
 
 function initials(name: string): string {
   return name
@@ -148,9 +149,31 @@ export function TeamRoster({
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [memberSeed, setMemberSeed] = useState(initialMembers);
-  if (members.length === 0 && initialMembers.length > 0 && memberSeed !== initialMembers) {
+  const [rosterTeamId, setRosterTeamId] = useState(teamId ?? "");
+  const [detailMember, setDetailMember] = useState<Member | null>(null);
+  if ((teamId ?? "") !== rosterTeamId) {
+    setRosterTeamId(teamId ?? "");
     setMemberSeed(initialMembers);
     setMembers(initialMembers);
+    setDetailMember(null);
+  } else if (members.length === 0 && initialMembers.length > 0 && memberSeed !== initialMembers) {
+    setMemberSeed(initialMembers);
+    setMembers(initialMembers);
+  } else if (
+    members.length > 0 &&
+    initialMembers.some((member) => member.attendance) &&
+    !members.some((member) => member.attendance)
+  ) {
+    const byId = new Map(initialMembers.map((member) => [member.id, member]));
+    const next = members.map((member) => {
+      const fresh = byId.get(member.id);
+      return fresh?.attendance ? { ...member, attendance: fresh.attendance } : member;
+    });
+    setMembers(next);
+    if (detailMember) {
+      const refreshed = next.find((member) => member.id === detailMember.id);
+      if (refreshed) setDetailMember(refreshed);
+    }
   }
   const [editing, setEditing] = useState<Member | null>(null);
   const [removing, setRemoving] = useState<Member | null>(null);
@@ -410,7 +433,7 @@ export function TeamRoster({
                 <th className="px-4 py-3 font-medium">{t("roster.member")}</th>
                 <th className="hidden px-4 py-3 text-center font-medium min-[768px]:table-cell">{t("roster.details")}</th>
                 {showAttendance ? (
-                  <th className="px-4 py-3 font-medium" aria-describedby="attendance-legend">
+                  <th className="hidden px-4 py-3 font-medium min-[768px]:table-cell" aria-describedby="attendance-legend">
                     {t("roster.attendance")}
                     <AttendanceMark />
                   </th>
@@ -456,7 +479,7 @@ export function TeamRoster({
                         <MemberMark member={member} groups={groupList} positions={positionCatalog} />
                       </td>
                       {showAttendance ? (
-                        <td className="px-4 py-3">
+                        <td className="hidden px-4 py-3 min-[768px]:table-cell">
                           {member.attendance ? <AttendanceLines stats={member.attendance} /> : <span className="text-muted">—</span>}
                         </td>
                       ) : null}
@@ -475,6 +498,7 @@ export function TeamRoster({
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                         <MemberActions
+                          onMore={() => setDetailMember(member)}
                           onEdit={!teamId || canAdjust || accountId === member.id ? () => setEditing(member) : undefined}
                           onRemove={!teamId || canAdjust || accountId === member.id ? () => setRemoving(member) : undefined}
                         />
@@ -485,8 +509,46 @@ export function TeamRoster({
             </tbody>
           </table>
         </div>
-        {showAttendance ? <AttendanceLegend always /> : null}
+        {showAttendance ? <AttendanceLegend /> : null}
       </div>
+      <MemberMobileSheet
+        member={detailMember}
+        leader={Boolean(detailMember && detailMember.id === leaderId)}
+        groups={groupList}
+        positions={positionCatalog}
+        finance={finance}
+        attendanceOn={showAttendance}
+        holds={detailMember ? memberHolds[detailMember.id] ?? [] : []}
+        onHolds={(holds) => setOpenHolds(holds)}
+        onAdjust={
+          detailMember && canAdjust
+            ? () => {
+                const target = detailMember;
+                setDetailMember(null);
+                setAdjusting(target);
+              }
+            : undefined
+        }
+        onEdit={
+          detailMember && (!teamId || canAdjust || accountId === detailMember.id)
+            ? () => {
+                const target = detailMember;
+                setDetailMember(null);
+                setEditing(target);
+              }
+            : undefined
+        }
+        onRemove={
+          detailMember && (!teamId || canAdjust || accountId === detailMember.id)
+            ? () => {
+                const target = detailMember;
+                setDetailMember(null);
+                setRemoving(target);
+              }
+            : undefined
+        }
+        onClose={() => setDetailMember(null)}
+      />
       {editing ? (
         <MemberEditDialog
           member={editing}
@@ -1484,22 +1546,169 @@ function MemberDates({ member }: { member: Member }) {
   );
 }
 
-function MemberActions({ onEdit, onRemove }: { onEdit?: () => void; onRemove?: () => void }) {
+function MemberActions({
+  onMore,
+  onEdit,
+  onRemove,
+}: {
+  onMore?: () => void;
+  onEdit?: () => void;
+  onRemove?: () => void;
+}) {
   const { t } = useLanguage();
-  if (!onEdit && !onRemove) return null;
+  if (!onMore && !onEdit && !onRemove) return null;
   return (
     <div className="flex gap-1">
+      {onMore ? (
+        <span className="min-[768px]:hidden">
+          <IconTipButton label={t("roster.more")} tone="muted" onClick={onMore}>
+            <IconMoreVertical />
+          </IconTipButton>
+        </span>
+      ) : null}
       {onEdit ? (
-        <IconTipButton label={t("roster.edit")} tone="train" onClick={onEdit}>
-          <IconPencil />
-        </IconTipButton>
+        <span className="hidden min-[768px]:inline-flex">
+          <IconTipButton label={t("roster.edit")} tone="train" onClick={onEdit}>
+            <IconPencil />
+          </IconTipButton>
+        </span>
       ) : null}
       {onRemove ? (
-        <IconTipButton label={t("roster.remove")} tone="game" onClick={onRemove}>
-          <IconTrash />
-        </IconTipButton>
+        <span className="hidden min-[768px]:inline-flex">
+          <IconTipButton label={t("roster.remove")} tone="game" onClick={onRemove}>
+            <IconTrash />
+          </IconTipButton>
+        </span>
       ) : null}
     </div>
+  );
+}
+
+function MemberMobileSheet({
+  member,
+  leader,
+  groups,
+  positions,
+  finance,
+  attendanceOn,
+  holds,
+  onHolds,
+  onAdjust,
+  onEdit,
+  onRemove,
+  onClose,
+}: {
+  member: Member | null;
+  leader: boolean;
+  groups: Subteam[];
+  positions: ReturnType<typeof catalogForSport>;
+  finance: boolean;
+  attendanceOn: boolean;
+  holds: BalanceHold[];
+  onHolds: (holds: BalanceHold[]) => void;
+  onAdjust?: () => void;
+  onEdit?: () => void;
+  onRemove?: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  const open = member !== null;
+  const presence = usePresence(open);
+  if (!presence.mounted || !member) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] min-[768px]:hidden">
+      <button
+        type="button"
+        aria-label={t("roster.sheet.close")}
+        onClick={onClose}
+        className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${presence.shown ? "opacity-100" : "opacity-0"}`}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={member.name}
+        className={`absolute top-0 right-0 bottom-0 z-10 flex w-[min(100%,22rem)] flex-col bg-paper shadow-xl ring-1 ring-line transition-transform duration-200 ${presence.shown ? "translate-x-0" : "translate-x-full"}`}
+      >
+        <div className="flex items-center gap-3 border-b border-line px-4 py-4">
+          <MemberFace member={member} size="lg" />
+          <div className="flex h-14 min-w-0 flex-1 flex-col justify-center leading-none">
+            <p className="truncate text-sm font-semibold text-ink">
+              {member.name}
+              {leader ? <span className="ml-1 font-normal text-muted">· {t("team.leader")}</span> : null}
+              {member.teamAdmin ? <span className="ml-1 font-normal text-muted">· {t("roles.admin")}</span> : null}
+            </p>
+            {member.email.trim() ? <p className="mt-0.5 truncate text-xs text-muted">{member.email.trim()}</p> : null}
+            {member.phone.trim() ? <p className="mt-0.5 truncate text-xs text-muted">{member.phone.trim()}</p> : null}
+          </div>
+          <IconTipButton label={t("roster.sheet.close")} tone="muted" onClick={onClose}>
+            <IconX />
+          </IconTipButton>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <section>
+            <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{t("roster.details")}</h3>
+            <MemberMark member={member} groups={groups} positions={positions} row />
+          </section>
+
+          {attendanceOn ? (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{t("roster.attendance")}</h3>
+              {member.attendance ? <AttendanceLines stats={member.attendance} /> : <p className="text-sm text-muted">—</p>}
+            </section>
+          ) : null}
+
+          {finance ? (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{t("roster.balance")}</h3>
+              <MemberBalance member={member} holds={holds} onHolds={onHolds} onAdjust={onAdjust} />
+            </section>
+          ) : null}
+
+          <section>
+            <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{t("roster.joined")}</h3>
+            <MemberDates member={member} />
+          </section>
+
+          {onEdit || onRemove ? (
+            <section className="space-y-2 border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{t("roster.actions")}</h3>
+              {onEdit ? (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-train-soft px-4 py-3 text-sm font-medium text-train"
+                >
+                  <IconPencil />
+                  {t("roster.edit")}
+                </button>
+              ) : null}
+              {onRemove ? (
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-game-soft px-4 py-3 text-sm font-medium text-game"
+                >
+                  <IconTrash />
+                  {t("roster.remove")}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function IconMoreVertical() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.75" />
+      <circle cx="12" cy="12" r="1.75" />
+      <circle cx="12" cy="19" r="1.75" />
+    </svg>
   );
 }
 

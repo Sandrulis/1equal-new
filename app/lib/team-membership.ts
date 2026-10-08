@@ -3,13 +3,15 @@ import { getAccountProfile } from "@/app/lib/auth/session";
 import type { BalanceEntry, Member, TeamEvent, Venue } from "@/app/lib/demo-data";
 import { rigaDayEndExclusiveIso, rigaDayStartIso, rigaStamp } from "@/app/lib/balance-range";
 import { BALANCE_ENTRY_SELECT, mapBalanceEntry, type BalanceEntryRow } from "@/app/lib/balance-entry";
-import { eachPage } from "@/app/lib/attendance-stats";
+import { eachPage, loadTeamAttendance } from "@/app/lib/attendance-stats";
+import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { historySince, RSVP_SPLIT_CELLS, rsvpHotSince } from "@/app/lib/history-window";
 import { readStoredEhlPlayer } from "@/app/lib/ehl-player";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
 import type { IssuedTeam, TeamLedgerLine, TrainingGuest } from "@/app/lib/invite-code";
 import type { Subteam } from "@/app/lib/demo-data";
 import { displayPosition, parseExtraPositions } from "@/app/lib/positions";
+import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { listUserOrigins } from "@/app/lib/admin-origin";
 import { fetchEhlTeamKits } from "@/app/lib/ehl-team-lookup";
@@ -313,8 +315,6 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
   if (members.error || !members.data) return [];
   const splitRsvps = members.data.length * (eventRows ?? []).length > RSVP_SPLIT_CELLS;
   const rsvpSince = splitRsvps ? rsvpHotSince() : since;
-  const rsvpRows = await loadTeamRsvps(admin, detailId, rsvpSince, null, userId);
-  const guests = await listTrainingGuests(admin, detailId);
   const idsByMember = new Map<string, string[]>();
   for (const link of (links.data ?? []) as { team_id: string; user_id: string; subteam_id: string }[]) {
     const key = `${link.team_id}:${link.user_id}`;
@@ -322,6 +322,32 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     list.push(link.subteam_id);
     idsByMember.set(key, list);
   }
+  const memberRows = members.data as MemberRow[];
+  const maySeeAttendance =
+    userRow.data?.is_admin === true ||
+    detailTeam?.leader_id === userId ||
+    memberRows.some((row) => row.user_id === userId && row.is_team_admin === true);
+  const [rsvpRows, guests, attendanceStats, origins] = await Promise.all([
+    loadTeamRsvps(admin, detailId, rsvpSince, null, userId),
+    listTrainingGuests(admin, detailId),
+    maySeeAttendance
+      ? moduleEnabledForSport(admin, detailTeam?.sport_id, FRONTEND_MODULE_KEYS.playerEventStats, detailId).then((enabled) =>
+          enabled
+            ? loadTeamAttendance(
+                admin,
+                detailId,
+                memberRows.map((row) => {
+                  const ids = idsByMember.get(`${row.team_id}:${row.user_id}`) ?? [];
+                  return { id: row.user_id, joined: row.joined_on, subteamId: ids[0] ?? "", subteamIds: ids };
+                }),
+              )
+            : null,
+        )
+      : Promise.resolve(null),
+    userRow.data?.is_admin === true
+      ? listUserOrigins(memberRows.map((row) => row.user_id))
+      : Promise.resolve(null),
+  ]);
   const balanceByMember = new Map<string, number>();
   if (totals.error) {
     const amounts = await admin.from("balance_entries").select("team_id, user_id, amount").eq("team_id", detailId);
@@ -335,16 +361,17 @@ export async function listOwnedTeams(userId: string, activeTeamId?: string | nul
     }
   }
   const byTeam = new Map<string, Member[]>();
-  for (const row of members.data as MemberRow[]) {
+  for (const row of memberRows) {
     const list = byTeam.get(row.team_id) ?? [];
     const key = `${row.team_id}:${row.user_id}`;
     const member = memberFromRow(row, idsByMember.get(key) ?? []);
     member.balance = balanceByMember.get(key) ?? 0;
+    const stats = attendanceStats?.get(member.id);
+    if (stats) member.attendance = stats;
     list.push(member);
     byTeam.set(row.team_id, list);
   }
-  if (userRow.data?.is_admin === true) {
-    const origins = await listUserOrigins((members.data as MemberRow[]).map((row) => row.user_id));
+  if (origins) {
     for (const list of byTeam.values()) {
       for (const member of list) {
         const origin = origins.get(member.id);

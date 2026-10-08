@@ -702,6 +702,8 @@ export const messages = {
   "roster.joined": { lv: "Pēdējo reizi", en: "Last time", ru: "Последний раз" },
   "roster.updated": { lv: "Mainīts {datetime}", en: "Updated {datetime}", ru: "Изменено {datetime}" },
   "roster.actions": { lv: "Darbības", en: "Actions", ru: "Действия" },
+  "roster.more": { lv: "Vairāk", en: "More", ru: "Ещё" },
+  "roster.sheet.close": { lv: "Aizvērt", en: "Close", ru: "Закрыть" },
   "actions.add": { lv: "Pievienot", en: "Add", ru: "Добавить" },
   "actions.edit": { lv: "Labot", en: "Edit", ru: "Изменить" },
   "actions.delete": { lv: "Dzēst", en: "Delete", ru: "Удалить" },
