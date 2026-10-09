@@ -11,6 +11,7 @@ import type { IssuedTeam } from "@/app/lib/invite-code";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
 import type { Sport } from "@/app/lib/sports";
 import { acceptStoredJoin } from "@/app/lib/team-actions";
+import type { EhlDirectoryTeam, EhlTeamMark } from "@/app/lib/ehl-directory";
 import type { GuestSignup } from "@/app/lib/training-guests";
 import { TeamCatalogProvider } from "@/app/lib/team-catalog";
 
@@ -18,6 +19,7 @@ export function DashboardApp({
   basePath,
   account = null,
   admin = null,
+  umamiNav = false,
   initialTeams = [],
   openTeamId = null,
   enabledModules = null,
@@ -27,10 +29,13 @@ export function DashboardApp({
   seedDemo = false,
   accountRestored = false,
   guestSignups = [],
+  ehlTeams = [],
+  ehlMarks = {},
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
   admin?: AdminConsole | null;
+  umamiNav?: boolean;
   initialTeams?: IssuedTeam[];
   openTeamId?: string | null;
   enabledModules?: string[] | null;
@@ -40,6 +45,8 @@ export function DashboardApp({
   seedDemo?: boolean;
   accountRestored?: boolean;
   guestSignups?: GuestSignup[];
+  ehlTeams?: EhlDirectoryTeam[];
+  ehlMarks?: Record<string, EhlTeamMark>;
 }) {
   const { t } = useLanguage();
   const router = useRouter();
@@ -61,7 +68,7 @@ export function DashboardApp({
 
   return (
     <TeamCatalogProvider seedDemo={seedDemo}>
-      <TeamDashboard basePath={basePath} account={account} admin={admin} initialTeams={initialTeams} openTeamId={openTeamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={presetEntuziasti} sports={sports} guestSignups={guestSignups} />
+      <TeamDashboard basePath={basePath} account={account} admin={admin} umamiNav={umamiNav} initialTeams={initialTeams} openTeamId={openTeamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={presetEntuziasti} sports={sports} guestSignups={guestSignups} ehlTeams={ehlTeams} ehlMarks={ehlMarks} />
     </TeamCatalogProvider>
   );
 }

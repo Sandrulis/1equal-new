@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.18
+
+- Administratora labajā joslā ir Entuziasti EHL komandas. Interese paliek sarakstā, Nē un Jā komandu paslēpj, un filtri tās parāda atpakaļ
+- `npm run ehl:teams` nolasa komandas nosaukumu un menedžeri
+- Entuziastu spēlētāja saite ir dalībnieka labošanā, ne konta uzstādījumos
+
 ## v0.2.17
 
 - Telefonā apakšējā josla paliek redzama, rāda tikai ikonas un sēž pie apakšas

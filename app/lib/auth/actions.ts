@@ -7,18 +7,14 @@ import { deletionBlockedReason, scheduleAccountDeletion, sendAccountDeletionConf
 import { getVerifiedAuth, needsMfaChallenge, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
-import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
 import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
 import { isEmailAddress } from "@/app/lib/email/email-address";
 import { asLang, translate, type MessageKey } from "@/app/lib/messages";
-import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import { siteMaintenanceOn } from "@/app/lib/maintenance";
-import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
-import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -26,7 +22,7 @@ import { isSupabaseConfigured } from "@/app/lib/supabase/env";
 import { createClient } from "@/app/lib/supabase/server";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
 
-export type AuthResult = { error: MessageKey } | { confirm: true } | { sent: true } | { ok: true; needsMfa?: boolean; restored?: boolean; ehlPlayer?: EhlPlayerProfile | null; teamCode?: string; display?: UserDisplayPreferences; emailSent?: boolean };
+export type AuthResult = { error: MessageKey } | { confirm: true } | { sent: true } | { ok: true; needsMfa?: boolean; restored?: boolean; display?: UserDisplayPreferences; emailSent?: boolean };
 
 const MIN_PASSWORD = 8;
 
@@ -323,27 +319,6 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     if (taken) return { error: "auth.error.exists" };
   }
 
-  const includePlayer = formData.has("playerUrl");
-  const teamCode = readField(formData, "teamCode").toUpperCase();
-  const teamOk = /^[A-Z0-9]{4,16}$/.test(teamCode);
-  let player: EhlPlayerProfile | null = null;
-  let savePlayer = false;
-  let playerTeamId: string | null = null;
-  if (includePlayer && teamOk) {
-    const team = await admin.from("teams").select("id, sport_id").eq("invite_code", teamCode).maybeSingle();
-    if (team.error) return { error: "auth.error.generic" };
-    playerTeamId = team.data?.id ?? null;
-    savePlayer = await moduleEnabledForSport(admin, team.data?.sport_id, FRONTEND_MODULE_KEYS.entuziasti, team.data?.id);
-    if (savePlayer) {
-      const raw = readField(formData, "playerUrl");
-      if (raw) {
-        const loaded = await loadEhlPlayer(raw);
-        if ("error" in loaded) return loaded;
-        player = loaded.profile;
-      }
-    }
-  }
-
   const hasDisplay = formData.has("weekStartDay");
   const display = hasDisplay ? readDisplayForm(formData) : null;
   if (hasDisplay && !display) return { error: "site_settings.error.display" };
@@ -353,7 +328,6 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     last_name: string;
     name: string;
     phone: string;
-    ehl_player?: Record<string, EhlPlayerProfile>;
     week_start_day?: UserDisplayPreferences["weekStartDay"];
     date_format?: UserDisplayPreferences["dateFormat"];
     date_separator?: UserDisplayPreferences["dateSeparator"];
@@ -365,11 +339,6 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     name: `${firstName} ${lastName}`.trim(),
     phone,
   };
-  if (savePlayer) {
-    const current = await admin.from("users").select("ehl_player").eq("id", user.id).maybeSingle();
-    if (current.error) return { error: "auth.error.generic" };
-    profile.ehl_player = mergeStoredEhlPlayer(current.data?.ehl_player, teamCode, player);
-  }
   if (display) {
     profile.week_start_day = display.weekStartDay;
     profile.date_format = display.dateFormat;
@@ -380,11 +349,6 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
   const saved = await admin.from("users").update(profile).eq("id", user.id);
   if (saved.error) return { error: "auth.error.generic" };
   await admin.from("team_members").update({ phone, updated_at: new Date().toISOString() }).eq("user_id", user.id);
-  if (savePlayer && playerTeamId) {
-    const linked = await admin.from("team_members").update({ ehl_player: player, updated_at: new Date().toISOString() }).eq("team_id", playerTeamId).eq("user_id", user.id);
-    if (linked.error) return { error: "auth.error.generic" };
-    refreshTeamData();
-  }
 
   await supabase.auth.updateUser({ data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}` } });
   let emailSent = false;
@@ -393,7 +357,7 @@ export async function updateProfile(formData: FormData): Promise<AuthResult> {
     if (!emailSent) return { error: "auth.email.unavailable" };
     await writeAudit("user.email_request", "users", user.id, {});
   }
-  return includePlayer ? { ok: true, ehlPlayer: player, teamCode, display: display ?? undefined, emailSent } : { ok: true, display: display ?? undefined, emailSent };
+  return { ok: true, display: display ?? undefined, emailSent };
 }
 
 function readDisplayForm(formData: FormData): UserDisplayPreferences | null {
@@ -414,27 +378,6 @@ function readDisplayForm(formData: FormData): UserDisplayPreferences | null {
     timeFormat: timeFormat === "12" || timeFormat === "24" ? timeFormat : null,
     timezone: timezone || null,
   };
-}
-
-async function loadEhlPlayer(raw: string): Promise<{ profile: EhlPlayerProfile } | { error: MessageKey }> {
-  const url = parseEhlPlayerUrl(raw);
-  if (!url) return { error: "user.player.invalid" };
-  try {
-    const response = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(8000),
-      headers: { accept: "text/html" },
-    });
-    const finalUrl = parseEhlPlayerUrl(response.url);
-    if (!finalUrl) return { error: "user.player.invalid" };
-    if (!response.ok) return { error: "user.player.failed" };
-    const html = (await response.text()).slice(0, 200_000);
-    const profile = parseEhlPlayerPage(html, finalUrl.toString());
-    if (!profile) return { error: "user.player.not_found" };
-    return { profile };
-  } catch {
-    return { error: "user.player.failed" };
-  }
 }
 
 export async function saveUserAvatar(formData: FormData): Promise<{ ok: true; url: string | null } | { ok: false; error: MessageKey }> {

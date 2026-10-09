@@ -13,6 +13,7 @@ import { EMAIL_KINDS, INTEGRATION_KEYS, type AdminConsole, type AdminFeedbackIte
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { listUserOrigins } from "@/app/lib/admin-origin";
 import { displaySportIcon, type Sport } from "@/app/lib/sports";
+import { parseUmamiShareUrl } from "@/app/lib/umami-share";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import type { AdminSection } from "@/app/lib/dashboard-path";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
@@ -296,6 +297,18 @@ export async function listIntegrations(): Promise<IntegrationStatus[]> {
     });
   }
   return INTEGRATION_KEYS.map((key) => byKey.get(key)!);
+}
+
+export async function umamiNavReady(): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const { data } = await admin
+    .from("site_integrations")
+    .select("configured_account_email, is_configured, is_enabled")
+    .eq("integration_key", "umami")
+    .maybeSingle();
+  if (!data?.is_configured || !data.is_enabled) return false;
+  return parseUmamiShareUrl(data.configured_account_email ?? "") !== null;
 }
 
 function isUmamiScript(value: string): boolean {

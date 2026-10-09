@@ -9,7 +9,9 @@ import { sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
 import { parseDashboardPath } from "@/app/lib/dashboard-path";
 import { captureRequestAddress, recordMissingTeamOrigins, recordUserOrigin, requestCountryCode } from "@/app/lib/admin-origin";
-import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen } from "@/app/lib/site-admin/repository";
+import { listEhlDirectory } from "@/app/lib/ehl-directory";
+import { listEhlTeamMarks } from "@/app/lib/ehl-marks";
+import { listEnabledFrontendModuleKeys, listIndividualFrontendModuleKeys, listSports, loadAdminConsole, touchUserLastSeen, umamiNavReady } from "@/app/lib/site-admin/repository";
 import { listOwnedTeams, settleFinishedEvents } from "@/app/lib/team-membership";
 import { listMyGuestSignups } from "@/app/lib/training-guests";
 
@@ -57,14 +59,17 @@ export default async function DashboardPage({
       settleIds.length ? settleFinishedEvents(settleIds, false) : Promise.resolve(),
     ]);
   });
-  const [admin, enabledModules, individualModuleKeys, sports, countryCode] = await Promise.all([
-    account.isAdmin && route.view === "admin" ? loadAdminConsole(account.id, route.section) : Promise.resolve(null),
+  const ehlTeams = account.isAdmin ? listEhlDirectory() : [];
+  const ehlMarks = account.isAdmin ? await listEhlTeamMarks() : {};
+  const [admin, enabledModules, individualModuleKeys, sports, countryCode, umamiNav] = await Promise.all([
+    account.isAdmin && route.view === "admin" && route.section !== "ehl" ? loadAdminConsole(account.id, route.section) : Promise.resolve(null),
     modulesPromise,
     individualPromise,
     sportsPromise,
     requestCountryCode(),
+    account.isAdmin ? umamiNavReady() : Promise.resolve(false),
   ]);
   const teamId = route.view === "admin" && route.section === "teams" ? route.teamId ?? query.team ?? null : null;
   const guestSignups = initialTeams.length === 0 ? await listMyGuestSignups() : [];
-  return <DashboardApp basePath="/dashboard" account={account} admin={admin} initialTeams={initialTeams} openTeamId={teamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={countryCode === "LV"} sports={sports} accountRestored={accountRestored} guestSignups={guestSignups} />;
+  return <DashboardApp basePath="/dashboard" account={account} admin={admin} umamiNav={umamiNav} initialTeams={initialTeams} openTeamId={teamId} enabledModules={enabledModules} individualModuleKeys={individualModuleKeys} presetEntuziasti={countryCode === "LV"} sports={sports} accountRestored={accountRestored} guestSignups={guestSignups} ehlTeams={ehlTeams} ehlMarks={ehlMarks} />;
 }

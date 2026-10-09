@@ -1,6 +1,6 @@
 {
   "name": "1equal-new",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -12,7 +12,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "audit:check": "node scripts/audit-check.mjs",
-    "db:migrate": "node scripts/apply-migrations.mjs"
+    "db:migrate": "node scripts/apply-migrations.mjs",
+    "ehl:teams": "node scripts/ehl-teams.mjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.3.1",

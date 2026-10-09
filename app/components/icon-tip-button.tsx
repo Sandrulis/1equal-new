@@ -2,18 +2,29 @@
 
 import { useState, type ReactNode } from "react";
 
-type Tone = "train" | "game" | "muted";
+type Tone = "train" | "game" | "muted" | "amber" | "ok";
 
 const toneClass: Record<Tone, string> = {
   train: "text-train hover:bg-train-soft",
   game: "text-game hover:bg-game-soft",
   muted: "text-muted hover:bg-ice",
+  amber: "text-[#c05621] hover:bg-[#fff1e6]",
+  ok: "text-[#178a45] hover:bg-[#e7f6ee]",
+};
+
+const pressedClass: Record<Tone, string> = {
+  train: "bg-train-soft",
+  game: "bg-game-soft",
+  muted: "bg-ice",
+  amber: "bg-[#fff1e6]",
+  ok: "bg-[#e7f6ee]",
 };
 
 export function IconTipButton({
   label,
   tone = "train",
   compact = false,
+  pressed = false,
   onClick,
   disabled = false,
   children,
@@ -21,6 +32,7 @@ export function IconTipButton({
   label: string;
   tone?: Tone;
   compact?: boolean;
+  pressed?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   children: ReactNode;
@@ -39,13 +51,14 @@ export function IconTipButton({
       <button
         type="button"
         aria-label={label}
+        aria-pressed={pressed}
         disabled={disabled}
         onClick={onClick}
         onMouseEnter={(event) => place(event.currentTarget)}
         onMouseLeave={() => setTip(null)}
         onFocus={(event) => place(event.currentTarget)}
         onBlur={() => setTip(null)}
-        className={`grid place-items-center rounded-lg ${compact ? "size-5" : "size-8"} ${toneClass[tone]}`}
+        className={`grid place-items-center rounded-lg disabled:opacity-40 ${compact ? "size-5" : "size-8"} ${toneClass[tone]} ${pressed ? pressedClass[tone] : ""}`}
       >
         {children}
       </button>

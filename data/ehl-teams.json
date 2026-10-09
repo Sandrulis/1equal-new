@@ -1,0 +1,1206 @@
+{
+  "source": "https://ehl.entuziasti.com/komandas",
+  "updatedAt": "2026-10-09T10:47:07.010Z",
+  "teams": [
+    {
+      "id": "328",
+      "slug": "garkalnes-patrioti",
+      "name": "GARKALNES PATRIOTI (GRK)",
+      "manager": "Sandris Kļaviņš",
+      "url": "https://ehl.entuziasti.com/komandas/garkalnes-patrioti/328",
+      "ok": true
+    },
+    {
+      "id": "232",
+      "slug": "ice-wolves",
+      "name": "ICE WOLVES (WF2)",
+      "manager": "Kristians Drelings",
+      "url": "https://ehl.entuziasti.com/komandas/ice-wolves/232",
+      "ok": true
+    },
+    {
+      "id": "482",
+      "slug": "vidzemes-vilki",
+      "name": "VIDZEMES VILKI (VLV)",
+      "manager": "Reinis Zavadskis",
+      "url": "https://ehl.entuziasti.com/komandas/vidzemes-vilki/482",
+      "ok": true
+    },
+    {
+      "id": "527",
+      "slug": "ledus-veci-iii",
+      "name": "LEDUS VEČI III (LV3)",
+      "manager": "Egils Štāls",
+      "url": "https://ehl.entuziasti.com/komandas/ledus-veci-iii/527",
+      "ok": true
+    },
+    {
+      "id": "373",
+      "slug": "ogres-ledus-brali-ii",
+      "name": "OGRES LEDUS BRĀĻI II (OL2)",
+      "manager": "Kristaps Legzdiņš",
+      "url": "https://ehl.entuziasti.com/komandas/ogres-ledus-brali-ii/373",
+      "ok": true
+    },
+    {
+      "id": "542",
+      "slug": "itrade-ii",
+      "name": "iTRADE II (IT2)",
+      "manager": "Jānis Ušča",
+      "url": "https://ehl.entuziasti.com/komandas/itrade-ii/542",
+      "ok": true
+    },
+    {
+      "id": "487",
+      "slug": "valmiera",
+      "name": "VALMIERA (VLM)",
+      "manager": "Markuss Žukovskis",
+      "url": "https://ehl.entuziasti.com/komandas/valmiera/487",
+      "ok": true
+    },
+    {
+      "id": "195",
+      "slug": "ice-wolves-ii",
+      "name": "ICE WOLVES II (WF2)",
+      "manager": "Kristians Drelings",
+      "url": "https://ehl.entuziasti.com/komandas/ice-wolves-ii/195",
+      "ok": true
+    },
+    {
+      "id": "447",
+      "slug": "marels-buve-ii",
+      "name": "MARELS BŪVE II (MB2)",
+      "manager": "Māris Apelis",
+      "url": "https://ehl.entuziasti.com/komandas/marels-buve-ii/447",
+      "ok": true
+    },
+    {
+      "id": "405",
+      "slug": "white-wings",
+      "name": "WHITE WINGS (WTW)",
+      "manager": "Valērijs Ivasenko",
+      "url": "https://ehl.entuziasti.com/komandas/white-wings/405",
+      "ok": true
+    },
+    {
+      "id": "491",
+      "slug": "igate",
+      "name": "IGATE (IGT)",
+      "manager": "Kārlis Vītols",
+      "url": "https://ehl.entuziasti.com/komandas/igate/491",
+      "ok": true
+    },
+    {
+      "id": "382",
+      "slug": "vella-kalpi",
+      "name": "VELLA KALPI (VKA)",
+      "manager": "Kaspars Burkits",
+      "url": "https://ehl.entuziasti.com/komandas/vella-kalpi/382",
+      "ok": true
+    },
+    {
+      "id": "437",
+      "slug": "black-magic-iii",
+      "name": "BLACK MAGIC III (BM3)",
+      "manager": "Raivis Ņekrasovs",
+      "url": "https://ehl.entuziasti.com/komandas/black-magic-iii/437",
+      "ok": true
+    },
+    {
+      "id": "291",
+      "slug": "mammoths-ii",
+      "name": "MAMMOTHS II (MT2)",
+      "manager": "Jānis Valters",
+      "url": "https://ehl.entuziasti.com/komandas/mammoths-ii/291",
+      "ok": true
+    },
+    {
+      "id": "546",
+      "slug": "usins-jr",
+      "name": "ŪSIŅŠ JR (USJ)",
+      "manager": "Toms Muižnieks",
+      "url": "https://ehl.entuziasti.com/komandas/usins-jr/546",
+      "ok": true
+    },
+    {
+      "id": "471",
+      "slug": "kekava-grinders",
+      "name": "ĶEKAVA GRINDERS (KEG)",
+      "manager": "Matīss Ribkinskis",
+      "url": "https://ehl.entuziasti.com/komandas/kekava-grinders/471",
+      "ok": true
+    },
+    {
+      "id": "513",
+      "slug": "pinkey-blinders-ii",
+      "name": "PINKEY BLINDERS II (PB2)",
+      "manager": "Rinalds Zeps",
+      "url": "https://ehl.entuziasti.com/komandas/pinkey-blinders-ii/513",
+      "ok": true
+    },
+    {
+      "id": "473",
+      "slug": "vikotrans",
+      "name": "VIKOTRANS (VKT)",
+      "manager": "Artūrs Klimkāns",
+      "url": "https://ehl.entuziasti.com/komandas/vikotrans/473",
+      "ok": true
+    },
+    {
+      "id": "240",
+      "slug": "wildcats-marupe",
+      "name": "WILDCATS MĀRUPE (MRP)",
+      "manager": "Artūrs Šteinbergs",
+      "url": "https://ehl.entuziasti.com/komandas/wildcats-marupe/240",
+      "ok": true
+    },
+    {
+      "id": "481",
+      "slug": "ll-x",
+      "name": "L&L X (LLX)",
+      "manager": "Laima Elizabete Lukašēviča",
+      "url": "https://ehl.entuziasti.com/komandas/ll-x/481",
+      "ok": true
+    },
+    {
+      "id": "526",
+      "slug": "vikingi-x",
+      "name": "VIKINGI X (VGX)",
+      "manager": "Jānis Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/vikingi-x/526",
+      "ok": true
+    },
+    {
+      "id": "459",
+      "slug": "sparta",
+      "name": "SPARTA (SPR)",
+      "manager": "Vasīlijs Belogubovs",
+      "url": "https://ehl.entuziasti.com/komandas/sparta/459",
+      "ok": true
+    },
+    {
+      "id": "484",
+      "slug": "las-estrellas",
+      "name": "LAS ESTRELLAS (LAS)",
+      "manager": "Armands Prāvs",
+      "url": "https://ehl.entuziasti.com/komandas/las-estrellas/484",
+      "ok": true
+    },
+    {
+      "id": "516",
+      "slug": "ogre-capitals",
+      "name": "OGRE CAPITALS (OCP)",
+      "manager": "Igors Zadvornovs",
+      "url": "https://ehl.entuziasti.com/komandas/ogre-capitals/516",
+      "ok": true
+    },
+    {
+      "id": "350",
+      "slug": "oileris",
+      "name": "OILERIS (OLR)",
+      "manager": "Mārtiņš Valdmanis",
+      "url": "https://ehl.entuziasti.com/komandas/oileris/350",
+      "ok": true
+    },
+    {
+      "id": "492",
+      "slug": "vervo",
+      "name": "VERVO (VRV)",
+      "manager": "Jānis Zariņš",
+      "url": "https://ehl.entuziasti.com/komandas/vervo/492",
+      "ok": true
+    },
+    {
+      "id": "250",
+      "slug": "briedis",
+      "name": "BRIEDIS (BRD)",
+      "manager": "Edijs Briedis",
+      "url": "https://ehl.entuziasti.com/komandas/briedis/250",
+      "ok": true
+    },
+    {
+      "id": "444",
+      "slug": "mego-ii",
+      "name": "MEGO II (MG2)",
+      "manager": "Kaspars Abuls",
+      "url": "https://ehl.entuziasti.com/komandas/mego-ii/444",
+      "ok": true
+    },
+    {
+      "id": "514",
+      "slug": "ozo-ogre",
+      "name": "OZO OGRE (OZG)",
+      "manager": "Artis Kalniņš",
+      "url": "https://ehl.entuziasti.com/komandas/ozo-ogre/514",
+      "ok": true
+    },
+    {
+      "id": "351",
+      "slug": "cirks-uz-ledus",
+      "name": "CIRKS UZ LEDUS (CRK)",
+      "manager": "Edgars Feldmanis",
+      "url": "https://ehl.entuziasti.com/komandas/cirks-uz-ledus/351",
+      "ok": true
+    },
+    {
+      "id": "376",
+      "slug": "vairogs",
+      "name": "VAIROGS (VRG)",
+      "manager": "Olegs Požilenko",
+      "url": "https://ehl.entuziasti.com/komandas/vairogs/376",
+      "ok": true
+    },
+    {
+      "id": "490",
+      "slug": "vikingi-iii",
+      "name": "VIKINGI III (VN3)",
+      "manager": "Jānis Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/vikingi-iii/490",
+      "ok": true
+    },
+    {
+      "id": "500",
+      "slug": "mezoni-ii",
+      "name": "MEŽOŅI II (MZ2)",
+      "manager": "Rolands Zariņš",
+      "url": "https://ehl.entuziasti.com/komandas/mezoni-ii/500",
+      "ok": true
+    },
+    {
+      "id": "445",
+      "slug": "rotasmeliorceltnieks-ii",
+      "name": "ROTAS/MELIORCELTNIEKS II (RT2)",
+      "manager": "Laura Spalviņa",
+      "url": "https://ehl.entuziasti.com/komandas/rotasmeliorceltnieks-ii/445",
+      "ok": true
+    },
+    {
+      "id": "295",
+      "slug": "haoss",
+      "name": "HAOSS (HAS)",
+      "manager": "Jānis Zablockis",
+      "url": "https://ehl.entuziasti.com/komandas/haoss/295",
+      "ok": true
+    },
+    {
+      "id": "325",
+      "slug": "rotas-meliorceltnieks",
+      "name": "ROTAS / MELIORCELTNIEKS (RTS)",
+      "manager": "Laura Spalviņa",
+      "url": "https://ehl.entuziasti.com/komandas/rotas-meliorceltnieks/325",
+      "ok": true
+    },
+    {
+      "id": "451",
+      "slug": "moltto",
+      "name": "MOLTTO (MTO)",
+      "manager": "Kristaps Zālītis",
+      "url": "https://ehl.entuziasti.com/komandas/moltto/451",
+      "ok": true
+    },
+    {
+      "id": "497",
+      "slug": "kalniesi",
+      "name": "KALNIEŠI (KLN)",
+      "manager": "Krišjānis Ziediņš",
+      "url": "https://ehl.entuziasti.com/komandas/kalniesi/497",
+      "ok": true
+    },
+    {
+      "id": "436",
+      "slug": "mego",
+      "name": "MEGO (MGO)",
+      "manager": "Kaspars Abuls",
+      "url": "https://ehl.entuziasti.com/komandas/mego/436",
+      "ok": true
+    },
+    {
+      "id": "483",
+      "slug": "dasp",
+      "name": "DASP (DAS)",
+      "manager": "Aivars Vilnis",
+      "url": "https://ehl.entuziasti.com/komandas/dasp/483",
+      "ok": true
+    },
+    {
+      "id": "334",
+      "slug": "ledus-veci-ii",
+      "name": "LEDUS VEČI II (LV2)",
+      "manager": "Egils Štāls",
+      "url": "https://ehl.entuziasti.com/komandas/ledus-veci-ii/334",
+      "ok": true
+    },
+    {
+      "id": "480",
+      "slug": "tukuma-brali-ii",
+      "name": "TUKUMA BRĀĻI II (TB2)",
+      "manager": "Māris Karstais",
+      "url": "https://ehl.entuziasti.com/komandas/tukuma-brali-ii/480",
+      "ok": true
+    },
+    {
+      "id": "537",
+      "slug": "zemessardze",
+      "name": "ZEMESSARDZE (ZS)",
+      "manager": "Edmunds Bērziņš",
+      "url": "https://ehl.entuziasti.com/komandas/zemessardze/537",
+      "ok": true
+    },
+    {
+      "id": "426",
+      "slug": "produs-black-magic",
+      "name": "PRODUS / BLACK MAGIC (BMK)",
+      "manager": "Raivis Ņekrasovs",
+      "url": "https://ehl.entuziasti.com/komandas/produs-black-magic/426",
+      "ok": true
+    },
+    {
+      "id": "400",
+      "slug": "tervete",
+      "name": "TĒRVETE (TRV)",
+      "manager": "Kristers Stankevičs",
+      "url": "https://ehl.entuziasti.com/komandas/tervete/400",
+      "ok": true
+    },
+    {
+      "id": "163",
+      "slug": "iecavamammoths",
+      "name": "IECAVA/MAMMOTHS (MTH)",
+      "manager": "Andris Štībelis",
+      "url": "https://ehl.entuziasti.com/komandas/iecavamammoths/163",
+      "ok": true
+    },
+    {
+      "id": "361",
+      "slug": "mezoni",
+      "name": "MEŽOŅI (MZO)",
+      "manager": "Rolands Zariņš",
+      "url": "https://ehl.entuziasti.com/komandas/mezoni/361",
+      "ok": true
+    },
+    {
+      "id": "293",
+      "slug": "ledus-veci",
+      "name": "LEDUS VEČI (LDV)",
+      "manager": "Toms Tumānovs",
+      "url": "https://ehl.entuziasti.com/komandas/ledus-veci/293",
+      "ok": true
+    },
+    {
+      "id": "337",
+      "slug": "patrioti",
+      "name": "PATRIOTI (PTR)",
+      "manager": "Ēriks Liflands",
+      "url": "https://ehl.entuziasti.com/komandas/patrioti/337",
+      "ok": true
+    },
+    {
+      "id": "494",
+      "slug": "rotas-meliorceltnieks-iii",
+      "name": "ROTAS / MELIORCELTNIEKS III (RT3)",
+      "manager": "Laura Spalviņa",
+      "url": "https://ehl.entuziasti.com/komandas/rotas-meliorceltnieks-iii/494",
+      "ok": true
+    },
+    {
+      "id": "502",
+      "slug": "pingvini-y",
+      "name": "PINGVĪNI Y (PNY)",
+      "manager": "Arnolds Seržants",
+      "url": "https://ehl.entuziasti.com/komandas/pingvini-y/502",
+      "ok": true
+    },
+    {
+      "id": "476",
+      "slug": "pinkey-blinders",
+      "name": "PINKEY BLINDERS (PNB)",
+      "manager": "Rinalds Zeps",
+      "url": "https://ehl.entuziasti.com/komandas/pinkey-blinders/476",
+      "ok": true
+    },
+    {
+      "id": "517",
+      "slug": "sadolin",
+      "name": "SADOLIN (SDN)",
+      "manager": "Ints Zeltiņš",
+      "url": "https://ehl.entuziasti.com/komandas/sadolin/517",
+      "ok": true
+    },
+    {
+      "id": "389",
+      "slug": "rsu",
+      "name": "RSU (RSU)",
+      "manager": "Reinis Rugājs",
+      "url": "https://ehl.entuziasti.com/komandas/rsu/389",
+      "ok": true
+    },
+    {
+      "id": "218",
+      "slug": "rupuci",
+      "name": "RUPUČI (RPC)",
+      "manager": "Kaspars Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/rupuci/218",
+      "ok": true
+    },
+    {
+      "id": "524",
+      "slug": "3s",
+      "name": "3S (3S)",
+      "manager": "Pēteris Alksnis",
+      "url": "https://ehl.entuziasti.com/komandas/3s/524",
+      "ok": true
+    },
+    {
+      "id": "538",
+      "slug": "3s-ii",
+      "name": "3S II (3S2)",
+      "manager": "Pēteris Alksnis",
+      "url": "https://ehl.entuziasti.com/komandas/3s-ii/538",
+      "ok": true
+    },
+    {
+      "id": "521",
+      "slug": "advocate-athlete",
+      "name": "ADVOCATE ATHLETE (ADV)",
+      "manager": "Kristaps Bazevičs",
+      "url": "https://ehl.entuziasti.com/komandas/advocate-athlete/521",
+      "ok": true
+    },
+    {
+      "id": "287",
+      "slug": "agp",
+      "name": "AGP (AGP)",
+      "manager": "Andrejs Grikovs",
+      "url": "https://ehl.entuziasti.com/komandas/agp/287",
+      "ok": true
+    },
+    {
+      "id": "469",
+      "slug": "aparati",
+      "name": "APARĀTI (APR)",
+      "manager": "Regnārs Kits",
+      "url": "https://ehl.entuziasti.com/komandas/aparati/469",
+      "ok": true
+    },
+    {
+      "id": "493",
+      "slug": "black-magic-ii",
+      "name": "BLACK MAGIC II (BM2)",
+      "manager": "Raivis Ņekrasovs",
+      "url": "https://ehl.entuziasti.com/komandas/black-magic-ii/493",
+      "ok": true
+    },
+    {
+      "id": "547",
+      "slug": "black-magic-iv",
+      "name": "BLACK MAGIC IV (BM4)",
+      "manager": "Raivis Ņekrasovs",
+      "url": "https://ehl.entuziasti.com/komandas/black-magic-iv/547",
+      "ok": true
+    },
+    {
+      "id": "204",
+      "slug": "blackout",
+      "name": "BLACKOUT (BLC)",
+      "manager": "Ilmārs Zausajevs",
+      "url": "https://ehl.entuziasti.com/komandas/blackout/204",
+      "ok": true
+    },
+    {
+      "id": "345",
+      "slug": "btauriekstes-pingvini",
+      "name": "BTA/URIEKSTES PINGVĪNI (UPG)",
+      "manager": "Guntis Banders",
+      "url": "https://ehl.entuziasti.com/komandas/btauriekstes-pingvini/345",
+      "ok": true
+    },
+    {
+      "id": "535",
+      "slug": "cirks-uz-ledus-iii",
+      "name": "CIRKS UZ LEDUS III (CR3)",
+      "manager": "Edgars Feldmanis",
+      "url": "https://ehl.entuziasti.com/komandas/cirks-uz-ledus-iii/535",
+      "ok": true
+    },
+    {
+      "id": "498",
+      "slug": "cooked",
+      "name": "COOKED (CKD)",
+      "manager": "Rūdolfs Kažoks",
+      "url": "https://ehl.entuziasti.com/komandas/cooked/498",
+      "ok": true
+    },
+    {
+      "id": "548",
+      "slug": "cp",
+      "name": "CP (CP)",
+      "manager": "Jānis Parādnieks",
+      "url": "https://ehl.entuziasti.com/komandas/cp/548",
+      "ok": true
+    },
+    {
+      "id": "532",
+      "slug": "daugavas-sharks",
+      "name": "DAUGAVAS SHARKS (DGS)",
+      "manager": "Mārtiņš Roze",
+      "url": "https://ehl.entuziasti.com/komandas/daugavas-sharks/532",
+      "ok": true
+    },
+    {
+      "id": "530",
+      "slug": "dizozoli",
+      "name": "DIŽOZOLI (DOZ)",
+      "manager": "Nikolajs Lebedevs",
+      "url": "https://ehl.entuziasti.com/komandas/dizozoli/530",
+      "ok": true
+    },
+    {
+      "id": "342",
+      "slug": "frozen",
+      "name": "FROZEN (FRZ)",
+      "manager": "Ilze Apeltone-Skarnele",
+      "url": "https://ehl.entuziasti.com/komandas/frozen/342",
+      "ok": true
+    },
+    {
+      "id": "454",
+      "slug": "garkalnes-patrioti-ii",
+      "name": "GARKALNES PATRIOTI II (GP2)",
+      "manager": "Sandris Kļaviņš",
+      "url": "https://ehl.entuziasti.com/komandas/garkalnes-patrioti-ii/454",
+      "ok": true
+    },
+    {
+      "id": "379",
+      "slug": "guffoni",
+      "name": "GUFFONI (GFN)",
+      "manager": "Ralfs Frišfelds Āgaris",
+      "url": "https://ehl.entuziasti.com/komandas/guffoni/379",
+      "ok": true
+    },
+    {
+      "id": "511",
+      "slug": "haoss-ii",
+      "name": "HAOSS II (HA2)",
+      "manager": "Jānis Zablockis",
+      "url": "https://ehl.entuziasti.com/komandas/haoss-ii/511",
+      "ok": true
+    },
+    {
+      "id": "422",
+      "slug": "hokeja-pasaule",
+      "name": "HOKEJA PASAULE (HKP)",
+      "manager": "Juris Saliņš",
+      "url": "https://ehl.entuziasti.com/komandas/hokeja-pasaule/422",
+      "ok": true
+    },
+    {
+      "id": "185",
+      "slug": "huligan",
+      "name": "HULIGAN (HLG)",
+      "manager": "Rihards Krauklis",
+      "url": "https://ehl.entuziasti.com/komandas/huligan/185",
+      "ok": true
+    },
+    {
+      "id": "415",
+      "slug": "ice-wolves-clubzone-lv",
+      "name": "ICE WOLVES / CLUBZONE.LV (WF3)",
+      "manager": "Kristians Drelings",
+      "url": "https://ehl.entuziasti.com/komandas/ice-wolves-clubzone-lv/415",
+      "ok": true
+    },
+    {
+      "id": "479",
+      "slug": "itrade",
+      "name": "iTRADE (ITR)",
+      "manager": "Jānis Ušča",
+      "url": "https://ehl.entuziasti.com/komandas/itrade/479",
+      "ok": true
+    },
+    {
+      "id": "121",
+      "slug": "jurmala",
+      "name": "JŪRMALA (JUR)",
+      "manager": "Jānis Millers",
+      "url": "https://ehl.entuziasti.com/komandas/jurmala/121",
+      "ok": true
+    },
+    {
+      "id": "458",
+      "slug": "krauzerstalsi",
+      "name": "KRAUZERS/TALSI (KRZ)",
+      "manager": "Mārtiņš Zaļupe",
+      "url": "https://ehl.entuziasti.com/komandas/krauzerstalsi/458",
+      "ok": true
+    },
+    {
+      "id": "529",
+      "slug": "kekava-buzzers",
+      "name": "ĶEKAVA BUZZERS (KEX)",
+      "manager": "Matīss Ribkinskis",
+      "url": "https://ehl.entuziasti.com/komandas/kekava-buzzers/529",
+      "ok": true
+    },
+    {
+      "id": "508",
+      "slug": "kekava-ringers",
+      "name": "ĶEKAVA RINGERS (KEB)",
+      "manager": "Matīss Ribkinskis",
+      "url": "https://ehl.entuziasti.com/komandas/kekava-ringers/508",
+      "ok": true
+    },
+    {
+      "id": "449",
+      "slug": "kekava-valnes",
+      "name": "ĶEKAVA VALNES (KEK)",
+      "manager": "Matīss Ribkinskis",
+      "url": "https://ehl.entuziasti.com/komandas/kekava-valnes/449",
+      "ok": true
+    },
+    {
+      "id": "203",
+      "slug": "lavina",
+      "name": "LAVĪNA (LAV)",
+      "manager": "Aleksandrs Ručkovksis",
+      "url": "https://ehl.entuziasti.com/komandas/lavina/203",
+      "ok": true
+    },
+    {
+      "id": "512",
+      "slug": "lavina-ii",
+      "name": "LAVĪNA II (LA2)",
+      "manager": "Aleksandrs Ručkovksis",
+      "url": "https://ehl.entuziasti.com/komandas/lavina-ii/512",
+      "ok": true
+    },
+    {
+      "id": "384",
+      "slug": "legendas",
+      "name": "LEĢENDAS (PLG)",
+      "manager": "Toms Paipals",
+      "url": "https://ehl.entuziasti.com/komandas/legendas/384",
+      "ok": true
+    },
+    {
+      "id": "453",
+      "slug": "legendas-v",
+      "name": "LEĢENDAS V (PL2)",
+      "manager": "Toms Paipals",
+      "url": "https://ehl.entuziasti.com/komandas/legendas-v/453",
+      "ok": true
+    },
+    {
+      "id": "395",
+      "slug": "legendas-x",
+      "name": "LEĢENDAS X (PLX)",
+      "manager": "Toms Paipals",
+      "url": "https://ehl.entuziasti.com/komandas/legendas-x/395",
+      "ok": true
+    },
+    {
+      "id": "446",
+      "slug": "lielupe",
+      "name": "LIELUPE (LLP)",
+      "manager": "Edgars Civjans/ Jānis Āboltiņš",
+      "url": "https://ehl.entuziasti.com/komandas/lielupe/446",
+      "ok": true
+    },
+    {
+      "id": "478",
+      "slug": "lielupe-rookies",
+      "name": "LIELUPE ROOKIES (LLR)",
+      "manager": "Edgars Civjans/ Jānis Āboltiņš",
+      "url": "https://ehl.entuziasti.com/komandas/lielupe-rookies/478",
+      "ok": true
+    },
+    {
+      "id": "407",
+      "slug": "ll-lk",
+      "name": "L&L LK (LLL)",
+      "manager": "Laima Elizabete Lukašēviča",
+      "url": "https://ehl.entuziasti.com/komandas/ll-lk/407",
+      "ok": true
+    },
+    {
+      "id": "440",
+      "slug": "ll-start",
+      "name": "L&L START (LLS)",
+      "manager": "Laima Elizabete Lukašēviča",
+      "url": "https://ehl.entuziasti.com/komandas/ll-start/440",
+      "ok": true
+    },
+    {
+      "id": "509",
+      "slug": "ll-straume",
+      "name": "L&L STRAUME (LST)",
+      "manager": "Laima Elizabete Lukašēviča",
+      "url": "https://ehl.entuziasti.com/komandas/ll-straume/509",
+      "ok": true
+    },
+    {
+      "id": "390",
+      "slug": "mad-dogs",
+      "name": "MAD DOGS (MDG)",
+      "manager": "Maksims Zeļenskis",
+      "url": "https://ehl.entuziasti.com/komandas/mad-dogs/390",
+      "ok": true
+    },
+    {
+      "id": "116",
+      "slug": "marels-buve",
+      "name": "MARELS BŪVE (MBV)",
+      "manager": "Māris Apelis",
+      "url": "https://ehl.entuziasti.com/komandas/marels-buve/116",
+      "ok": true
+    },
+    {
+      "id": "541",
+      "slug": "marels-buve-iii",
+      "name": "MARELS BŪVE III (MB3)",
+      "manager": "Māris Apelis",
+      "url": "https://ehl.entuziasti.com/komandas/marels-buve-iii/541",
+      "ok": true
+    },
+    {
+      "id": "452",
+      "slug": "mezabrali",
+      "name": "MEŽABRĀĻI (MZB)",
+      "manager": "Rūdolfs Grahoļskis",
+      "url": "https://ehl.entuziasti.com/komandas/mezabrali/452",
+      "ok": true
+    },
+    {
+      "id": "448",
+      "slug": "minotaurus",
+      "name": "MINOTAURUS (MNT)",
+      "manager": "Mārtiņš Palejs",
+      "url": "https://ehl.entuziasti.com/komandas/minotaurus/448",
+      "ok": true
+    },
+    {
+      "id": "177",
+      "slug": "mitava",
+      "name": "MĪTAVA (MTA)",
+      "manager": "Kārlis Trankalis",
+      "url": "https://ehl.entuziasti.com/komandas/mitava/177",
+      "ok": true
+    },
+    {
+      "id": "539",
+      "slug": "moltto-plus",
+      "name": "MOLTTO PLUS (MT2)",
+      "manager": "Kaspars Bogdanovics",
+      "url": "https://ehl.entuziasti.com/komandas/moltto-plus/539",
+      "ok": true
+    },
+    {
+      "id": "499",
+      "slug": "namejs",
+      "name": "NAMEJS (NMJ)",
+      "manager": "Antoņina Bļodone",
+      "url": "https://ehl.entuziasti.com/komandas/namejs/499",
+      "ok": true
+    },
+    {
+      "id": "504",
+      "slug": "ogre-smashers",
+      "name": "OGRE SMASHERS (SMH)",
+      "manager": "Roberts Mukāns",
+      "url": "https://ehl.entuziasti.com/komandas/ogre-smashers/504",
+      "ok": true
+    },
+    {
+      "id": "383",
+      "slug": "pagani",
+      "name": "PAGĀNI (PGN)",
+      "manager": "Kārlis Briedis",
+      "url": "https://ehl.entuziasti.com/komandas/pagani/383",
+      "ok": true
+    },
+    {
+      "id": "540",
+      "slug": "panello",
+      "name": "PANELLO (PNL)",
+      "manager": "Markuss Apsītis",
+      "url": "https://ehl.entuziasti.com/komandas/panello/540",
+      "ok": true
+    },
+    {
+      "id": "394",
+      "slug": "patrioti-ii",
+      "name": "PATRIOTI II (PT2)",
+      "manager": "Ēriks Liflands",
+      "url": "https://ehl.entuziasti.com/komandas/patrioti-ii/394",
+      "ok": true
+    },
+    {
+      "id": "475",
+      "slug": "pelekie-kardinali",
+      "name": "PELĒKIE KARDINĀLI (PLK)",
+      "manager": "Dāvis Zukurs",
+      "url": "https://ehl.entuziasti.com/komandas/pelekie-kardinali/475",
+      "ok": true
+    },
+    {
+      "id": "495",
+      "slug": "pelekie-kardinali-ii",
+      "name": "PELĒKIE KARDINĀLI II (PK2)",
+      "manager": "Dāvis Zukurs",
+      "url": "https://ehl.entuziasti.com/komandas/pelekie-kardinali-ii/495",
+      "ok": true
+    },
+    {
+      "id": "531",
+      "slug": "pelekie-kardinali-mini",
+      "name": "PELĒKIE KARDINĀLI MINI (PKM)",
+      "manager": "Dāvis Zukurs",
+      "url": "https://ehl.entuziasti.com/komandas/pelekie-kardinali-mini/531",
+      "ok": true
+    },
+    {
+      "id": "296",
+      "slug": "piecuki",
+      "name": "PIEČUKI (PCK)",
+      "manager": "Guntars Lazdiņš",
+      "url": "https://ehl.entuziasti.com/komandas/piecuki/296",
+      "ok": true
+    },
+    {
+      "id": "340",
+      "slug": "piecuki-ii",
+      "name": "PIEČUKI II (PC2)",
+      "manager": "Guntars Lazdiņš",
+      "url": "https://ehl.entuziasti.com/komandas/piecuki-ii/340",
+      "ok": true
+    },
+    {
+      "id": "378",
+      "slug": "piecuki-iii",
+      "name": "PIEČUKI III (PC3)",
+      "manager": "Guntars Lazdiņš",
+      "url": "https://ehl.entuziasti.com/komandas/piecuki-iii/378",
+      "ok": true
+    },
+    {
+      "id": "424",
+      "slug": "pingvini",
+      "name": "PINGVĪNI (PNG)",
+      "manager": "Arnolds Seržants",
+      "url": "https://ehl.entuziasti.com/komandas/pingvini/424",
+      "ok": true
+    },
+    {
+      "id": "474",
+      "slug": "pingvini-x",
+      "name": "PINGVĪNI X (PNX)",
+      "manager": "Arnolds Seržants",
+      "url": "https://ehl.entuziasti.com/komandas/pingvini-x/474",
+      "ok": true
+    },
+    {
+      "id": "370",
+      "slug": "priedaine",
+      "name": "PRIEDAINE (PRE)",
+      "manager": "Genādijs Ivanovs",
+      "url": "https://ehl.entuziasti.com/komandas/priedaine/370",
+      "ok": true
+    },
+    {
+      "id": "403",
+      "slug": "priedaine-ii",
+      "name": "PRIEDAINE II (PR2)",
+      "manager": "Genādijs Ivanovs",
+      "url": "https://ehl.entuziasti.com/komandas/priedaine-ii/403",
+      "ok": true
+    },
+    {
+      "id": "142",
+      "slug": "pta",
+      "name": "PTA (PTA)",
+      "manager": "Ingus Turks",
+      "url": "https://ehl.entuziasti.com/komandas/pta/142",
+      "ok": true
+    },
+    {
+      "id": "268",
+      "slug": "radexkengarags",
+      "name": "RADEX/ĶENGARAGS (KNG)",
+      "manager": "Mārtiņš Eisaks",
+      "url": "https://ehl.entuziasti.com/komandas/radexkengarags/268",
+      "ok": true
+    },
+    {
+      "id": "330",
+      "slug": "regrand",
+      "name": "REGRAND (RGR)",
+      "manager": "Kaspars Vitkovskis",
+      "url": "https://ehl.entuziasti.com/komandas/regrand/330",
+      "ok": true
+    },
+    {
+      "id": "544",
+      "slug": "rigas-dinamiti",
+      "name": "RĪGAS DINAMĪTI (RDM)",
+      "manager": "Anatolijs Krūklis",
+      "url": "https://ehl.entuziasti.com/komandas/rigas-dinamiti/544",
+      "ok": true
+    },
+    {
+      "id": "485",
+      "slug": "rodrigo-aboli",
+      "name": "RODRIGO ĀBOLI (RDA)",
+      "manager": "Gatis Klemencis",
+      "url": "https://ehl.entuziasti.com/komandas/rodrigo-aboli/485",
+      "ok": true
+    },
+    {
+      "id": "528",
+      "slug": "rotas-meliorceltnieks-iv",
+      "name": "ROTAS / MELIORCELTNIEKS IV (RT4)",
+      "manager": "Laura Spalviņa",
+      "url": "https://ehl.entuziasti.com/komandas/rotas-meliorceltnieks-iv/528",
+      "ok": true
+    },
+    {
+      "id": "515",
+      "slug": "rsu-ii",
+      "name": "RSU II (RS2)",
+      "manager": "Reinis Rugājs",
+      "url": "https://ehl.entuziasti.com/komandas/rsu-ii/515",
+      "ok": true
+    },
+    {
+      "id": "457",
+      "slug": "rupuci-ii",
+      "name": "RUPUČI II (RP2)",
+      "manager": "Kārlis Mucenieks",
+      "url": "https://ehl.entuziasti.com/komandas/rupuci-ii/457",
+      "ok": true
+    },
+    {
+      "id": "489",
+      "slug": "rure",
+      "name": "RŪRE (RUR)",
+      "manager": "Jēkabs Leiškalns",
+      "url": "https://ehl.entuziasti.com/komandas/rure/489",
+      "ok": true
+    },
+    {
+      "id": "510",
+      "slug": "sparta-ii",
+      "name": "SPARTA II (SP2)",
+      "manager": "Vasīlijs Belogubovs",
+      "url": "https://ehl.entuziasti.com/komandas/sparta-ii/510",
+      "ok": true
+    },
+    {
+      "id": "520",
+      "slug": "sports-lukss",
+      "name": "SPORTS LUKSS (SPL)",
+      "manager": "Juris Saliņš",
+      "url": "https://ehl.entuziasti.com/komandas/sports-lukss/520",
+      "ok": true
+    },
+    {
+      "id": "97",
+      "slug": "steevice",
+      "name": "STEEVICE (STV)",
+      "manager": "Oskars Mozgirs",
+      "url": "https://ehl.entuziasti.com/komandas/steevice/97",
+      "ok": true
+    },
+    {
+      "id": "105",
+      "slug": "taurus",
+      "name": "TAURUS (TRS)",
+      "manager": "Mārtiņš Palejs",
+      "url": "https://ehl.entuziasti.com/komandas/taurus/105",
+      "ok": true
+    },
+    {
+      "id": "460",
+      "slug": "tervete-backshots",
+      "name": "TĒRVETE BACKSHOTS (TRV)",
+      "manager": "Kristers Stankevičs",
+      "url": "https://ehl.entuziasti.com/komandas/tervete-backshots/460",
+      "ok": true
+    },
+    {
+      "id": "371",
+      "slug": "tukuma-brali",
+      "name": "TUKUMA BRĀĻI (TMB)",
+      "manager": "Māris Karstais",
+      "url": "https://ehl.entuziasti.com/komandas/tukuma-brali/371",
+      "ok": true
+    },
+    {
+      "id": "410",
+      "slug": "tukuma-brali-iii",
+      "name": "TUKUMA BRĀĻI III (TB3)",
+      "manager": "Māris Karstais",
+      "url": "https://ehl.entuziasti.com/komandas/tukuma-brali-iii/410",
+      "ok": true
+    },
+    {
+      "id": "519",
+      "slug": "tukuma-brali-iv",
+      "name": "TUKUMA BRĀĻI IV (TB4)",
+      "manager": "Jānis Krūklis",
+      "url": "https://ehl.entuziasti.com/komandas/tukuma-brali-iv/519",
+      "ok": true
+    },
+    {
+      "id": "180",
+      "slug": "unimars",
+      "name": "UNIMARS (UNI)",
+      "manager": "Uldis Eldmanis",
+      "url": "https://ehl.entuziasti.com/komandas/unimars/180",
+      "ok": true
+    },
+    {
+      "id": "277",
+      "slug": "usins",
+      "name": "ŪSIŅŠ (USN)",
+      "manager": "Gatis Drinķis",
+      "url": "https://ehl.entuziasti.com/komandas/usins/277",
+      "ok": true
+    },
+    {
+      "id": "393",
+      "slug": "vairogs-ii",
+      "name": "VAIROGS II (VG2)",
+      "manager": "Olegs Požilenko",
+      "url": "https://ehl.entuziasti.com/komandas/vairogs-ii/393",
+      "ok": true
+    },
+    {
+      "id": "404",
+      "slug": "varan",
+      "name": "VARAN (VRN)",
+      "manager": "Andrejs Kļemenkovs",
+      "url": "https://ehl.entuziasti.com/komandas/varan/404",
+      "ok": true
+    },
+    {
+      "id": "423",
+      "slug": "vector-hokejam-lv",
+      "name": "VECTOR / HOKEJAM.LV (VCT)",
+      "manager": "Kaspars Zanders",
+      "url": "https://ehl.entuziasti.com/komandas/vector-hokejam-lv/423",
+      "ok": true
+    },
+    {
+      "id": "461",
+      "slug": "vella-kalpi-ii",
+      "name": "VELLA KALPI II (VLK)",
+      "manager": "Kaspars Burkits",
+      "url": "https://ehl.entuziasti.com/komandas/vella-kalpi-ii/461",
+      "ok": true
+    },
+    {
+      "id": "518",
+      "slug": "vella-kalpi-iii",
+      "name": "VELLA KALPI III (VL3)",
+      "manager": "Kaspars Burkits",
+      "url": "https://ehl.entuziasti.com/komandas/vella-kalpi-iii/518",
+      "ok": true
+    },
+    {
+      "id": "536",
+      "slug": "vervo-ii",
+      "name": "VERVO II (VR2)",
+      "manager": "Jānis Zariņš",
+      "url": "https://ehl.entuziasti.com/komandas/vervo-ii/536",
+      "ok": true
+    },
+    {
+      "id": "505",
+      "slug": "vhr-thunder",
+      "name": "VHR THUNDER (VHR)",
+      "manager": "Aivis Barkovskis",
+      "url": "https://ehl.entuziasti.com/komandas/vhr-thunder/505",
+      "ok": true
+    },
+    {
+      "id": "381",
+      "slug": "vikingi",
+      "name": "VIKINGI (VKG)",
+      "manager": "Jānis Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/vikingi/381",
+      "ok": true
+    },
+    {
+      "id": "428",
+      "slug": "vikingi-ii",
+      "name": "VIKINGI II (VN2)",
+      "manager": "Elvijs Valduss",
+      "url": "https://ehl.entuziasti.com/komandas/vikingi-ii/428",
+      "ok": true
+    },
+    {
+      "id": "506",
+      "slug": "vikingi-jr",
+      "name": "VIKINGI JR (VN4)",
+      "manager": "Jānis Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/vikingi-jr/506",
+      "ok": true
+    },
+    {
+      "id": "427",
+      "slug": "vikotrans-elite",
+      "name": "VIKOTRANS ELITE (VKE)",
+      "manager": "Artūrs Klimkāns",
+      "url": "https://ehl.entuziasti.com/komandas/vikotrans-elite/427",
+      "ok": true
+    },
+    {
+      "id": "364",
+      "slug": "warriors",
+      "name": "WARRIORS (WRS)",
+      "manager": "Raimonds Kokins",
+      "url": "https://ehl.entuziasti.com/komandas/warriors/364",
+      "ok": true
+    },
+    {
+      "id": "372",
+      "slug": "wolf",
+      "name": "WOLF (WOL)",
+      "manager": "Jānis Freimanis",
+      "url": "https://ehl.entuziasti.com/komandas/wolf/372",
+      "ok": true
+    },
+    {
+      "id": "503",
+      "slug": "zemgales-alni",
+      "name": "ZEMGALES AĻŅI (ZGA)",
+      "manager": "Mārtiņš Jānis Lācgalvis",
+      "url": "https://ehl.entuziasti.com/komandas/zemgales-alni/503",
+      "ok": true
+    },
+    {
+      "id": "543",
+      "slug": "zemgales-legions",
+      "name": "ZEMGALES LEĢIONS (ZLG)",
+      "manager": "Jānis Pūpols",
+      "url": "https://ehl.entuziasti.com/komandas/zemgales-legions/543",
+      "ok": true
+    },
+    {
+      "id": "525",
+      "slug": "zeus-snusboys",
+      "name": "ZEUS SNUSBOYS (ZSB)",
+      "manager": "Jānis Plūme",
+      "url": "https://ehl.entuziasti.com/komandas/zeus-snusboys/525",
+      "ok": true
+    },
+    {
+      "id": "545",
+      "slug": "zeus-snusboys-ii",
+      "name": "ZEUS SNUSBOYS II (ZS2)",
+      "manager": "Jānis Plūme",
+      "url": "https://ehl.entuziasti.com/komandas/zeus-snusboys-ii/545",
+      "ok": true
+    }
+  ]
+}

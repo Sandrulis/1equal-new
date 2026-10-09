@@ -101,6 +101,8 @@ export function TeamRoster({
   attendanceOn = false,
   externalSettingsOpen = false,
   onExternalSettingsClose,
+  editSelfFor = null,
+  onEditSelfOpened,
 }: {
   teamName: string;
   inviteCode: string;
@@ -134,6 +136,8 @@ export function TeamRoster({
   attendanceOn?: boolean;
   externalSettingsOpen?: boolean;
   onExternalSettingsClose?: () => void;
+  editSelfFor?: string | null;
+  onEditSelfOpened?: () => void;
 }) {
   const { t, lang, languages } = useLanguage();
   const fallbackLang = languages.find((language) => language.isDefault)?.code ?? lang;
@@ -176,6 +180,20 @@ export function TeamRoster({
     }
   }
   const [editing, setEditing] = useState<Member | null>(null);
+  const [openedSelf, setOpenedSelf] = useState<string | null>(null);
+  const openSelf = editSelfFor && editSelfFor === inviteCode && accountId ? `${editSelfFor}:${accountId}` : null;
+  if (!editSelfFor && openedSelf) setOpenedSelf(null);
+  if (openSelf && openSelf !== openedSelf) {
+    const self = members.find((member) => member.id === accountId);
+    if (self) {
+      setOpenedSelf(openSelf);
+      setEditing(self);
+    }
+  }
+  useEffect(() => {
+    if (!openSelf || openSelf !== openedSelf) return;
+    onEditSelfOpened?.();
+  }, [openSelf, openedSelf, onEditSelfOpened]);
   const [removing, setRemoving] = useState<Member | null>(null);
   const [removePending, setRemovePending] = useState(false);
   const [inviting, setInviting] = useState(false);

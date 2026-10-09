@@ -164,15 +164,11 @@ export function TopBar({
         <UserMenu
           name={name}
           account={profile}
-          teamCode={team?.code ?? null}
-          teamName={team?.name ?? null}
           photoUrl={photoUrl}
           settingsOpen={settingsOpen}
           onSettingsOpenChange={onSettingsOpenChange}
           onSaved={saveAccount}
           calendarIntegration={calendarIntegration}
-          entuziasti={entuziasti}
-          player={player}
         />
         <IconTipButton label={t("user.logout")} tone="game" onClick={() => void signOut()}>
           <IconLogout />
@@ -192,27 +188,19 @@ export function TopBar({
 function UserMenu({
   name,
   account,
-  teamCode,
-  teamName,
   photoUrl,
   settingsOpen = false,
   onSettingsOpenChange,
   onSaved,
   calendarIntegration = false,
-  entuziasti = true,
-  player = null,
 }: {
   name: string;
   account: AccountProfile | null;
-  teamCode: string | null;
-  teamName: string | null;
   photoUrl: string | null;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
   onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; hasPassword?: boolean }) => void;
   calendarIntegration?: boolean;
-  entuziasti?: boolean;
-  player?: EhlPlayerProfile | null;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -328,7 +316,7 @@ function UserMenu({
         </>
       ) : null}
       {settingsOpen && account ? (
-        <AccountSettingsDialog key={teamCode ?? "account"} account={account} teamCode={teamCode} teamName={teamName} entuziasti={entuziasti} player={entuziasti ? player : null} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
+        <AccountSettingsDialog account={account} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
       ) : null}
       {passwordOpen && account ? (
         <ChangePasswordDialog

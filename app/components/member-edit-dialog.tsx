@@ -230,6 +230,7 @@ export function MemberEditDialog({
                 disabled={pending}
                 className={`${fieldClass} disabled:opacity-60`}
               />
+              <span className="mt-1 block font-normal text-muted">{t("user.settings.player_hint")}</span>
             </label>
             {remote ? <EhlPlayerLinkPreview value={playerUrl} seed={member.ehl ?? null} onResolved={applyLinkedPlayer} onLoading={setLinkBusy} /> : null}
           </>

@@ -57,6 +57,7 @@ import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { TopBar } from "@/app/components/top-bar";
 import type { AccountProfile } from "@/app/lib/auth/profile";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
+import type { EhlDirectoryTeam, EhlTeamMark } from "@/app/lib/ehl-directory";
 import type { AdminConsole } from "@/app/lib/site-admin/types";
 import { eventHref, routeFromPathname, teamHref, type AdminSection, type DashboardBase } from "@/app/lib/dashboard-path";
 import { parseUmamiShareUrl } from "@/app/lib/umami-share";
@@ -69,6 +70,7 @@ import { removeTrainingGuest, setTrainingGuestsAllowed, type GuestSignup } from 
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 const AdminCronPage = dynamic(() => import("@/app/components/admin-cron-page").then((mod) => mod.AdminCronPage));
+const AdminEhlTeams = dynamic(() => import("@/app/components/admin-ehl-teams").then((mod) => mod.AdminEhlTeams));
 const AdminSportsPage = dynamic(() => import("@/app/components/admin-sports-page").then((mod) => mod.AdminSportsPage));
 const AdminIntegrationsPage = dynamic(() => import("@/app/components/admin-integrations-page").then((mod) => mod.AdminIntegrationsPage));
 const AdminUmamiPage = dynamic(() => import("@/app/components/admin-umami-page").then((mod) => mod.AdminUmamiPage));
@@ -209,6 +211,7 @@ export function TeamDashboard({
   basePath,
   account = null,
   admin: initialAdmin = null,
+  umamiNav = false,
   initialTeams = [],
   openTeamId = null,
   enabledModules = null,
@@ -216,10 +219,13 @@ export function TeamDashboard({
   presetEntuziasti = false,
   sports = [],
   guestSignups: initialGuestSignups = [],
+  ehlTeams = [],
+  ehlMarks: initialEhlMarks = {},
 }: {
   basePath: DashboardBase;
   account?: AccountProfile | null;
   admin?: AdminConsole | null;
+  umamiNav?: boolean;
   initialTeams?: IssuedTeam[];
   openTeamId?: string | null;
   enabledModules?: string[] | null;
@@ -227,8 +233,11 @@ export function TeamDashboard({
   presetEntuziasti?: boolean;
   sports?: Sport[];
   guestSignups?: GuestSignup[];
+  ehlTeams?: EhlDirectoryTeam[];
+  ehlMarks?: Record<string, EhlTeamMark>;
 }) {
   const [admin, setAdmin] = useState(initialAdmin);
+  const [ehlMarks, setEhlMarks] = useState(initialEhlMarks);
   const [seenAdmin, setSeenAdmin] = useState(initialAdmin);
   if (initialAdmin !== seenAdmin) {
     setSeenAdmin(initialAdmin);
@@ -245,6 +254,7 @@ export function TeamDashboard({
   const [guestSignups, setGuestSignups] = useState(initialGuestSignups);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamSettingsOpen, setTeamSettingsOpen] = useState(false);
+  const [editSelfFor, setEditSelfFor] = useState<string | null>(null);
   const needsTeam = Boolean(account) && !ownedTeam;
   const [demoBundle, setDemoBundle] = useState<DemoBundle | null>(null);
   useEffect(() => {
@@ -288,7 +298,7 @@ export function TeamDashboard({
   }, [basePath]);
   const adminSection = route.view === "admin" ? route.section : null;
   useEffect(() => {
-    if (basePath === "/demo" || !adminSection) return;
+    if (basePath === "/demo" || !adminSection || adminSection === "ehl") return;
     if (!admin) {
       let active = true;
       void fetch(`/api/admin/console?section=${adminSection}&full=1`)
@@ -1144,6 +1154,21 @@ export function TeamDashboard({
     });
   }
 
+  function openOwnPlayer() {
+    const code = ownedTeam?.code;
+    if (!code) return;
+    if (view === "team") {
+      setEditSelfFor(code);
+      return;
+    }
+    collapseIfNarrow();
+    navigate("team", () => {
+      softGo(`${basePath}/team`);
+      window.scrollTo({ top: 0 });
+      setEditSelfFor(code);
+    });
+  }
+
   function moduleOn(key: string) {
     if (!enabledModules) return true;
     if (!enabledModules.includes(key)) return false;
@@ -1181,22 +1206,27 @@ export function TeamDashboard({
     if (view !== "home" || lineup) showHome("kalendars");
     setAddingEvent(true);
   }
-  const adminCounts: Partial<Record<AdminSection, number>> = admin
-    ? {
-        users: admin.usersLoaded ? admin.users.length : admin.userCount,
-        teams: admin.teams.length,
-        subteams: admin.subteams.length,
-        modules: admin.modules.length,
-        integrations: admin.integrations.length,
-        languages: admin.languages.length,
-        translations: admin.translationsLoaded ? admin.translations.length : admin.translationCount,
-        email: admin.emailTemplates.length,
-        feedback: admin.feedback.length,
-        todo: admin.todos.filter((item) => !item.isDone).length,
-      }
-    : {};
+  const adminCounts: Partial<Record<AdminSection, number>> = {
+    ...(admin
+      ? {
+          users: admin.usersLoaded ? admin.users.length : admin.userCount,
+          teams: admin.teams.length,
+          subteams: admin.subteams.length,
+          modules: admin.modules.length,
+          integrations: admin.integrations.length,
+          languages: admin.languages.length,
+          translations: admin.translationsLoaded ? admin.translations.length : admin.translationCount,
+          email: admin.emailTemplates.length,
+          feedback: admin.feedback.length,
+          todo: admin.todos.filter((item) => !item.isDone).length,
+        }
+      : {}),
+    ehl: ehlTeams.filter((team) => ehlMarks[team.id] !== "no" && ehlMarks[team.id] !== "yes").length,
+  };
   const umamiIntegration = admin?.integrations.find((item) => item.key === "umami");
-  const showUmami = Boolean(umamiIntegration?.enabled && umamiIntegration.configured && parseUmamiShareUrl(umamiIntegration.replyTo));
+  const showUmami = admin
+    ? Boolean(umamiIntegration?.enabled && umamiIntegration.configured && parseUmamiShareUrl(umamiIntegration.replyTo))
+    : umamiNav;
   const adminNav = ADMIN_NAV.filter((item) => item.section !== "umami" || showUmami);
 
   function showAdmin(section: AdminSection) {
@@ -1572,8 +1602,8 @@ export function TeamDashboard({
             {t("admin.teams.loading")}
           </div>
         ) : null}
-        {account && ownedTeam && !ownedTeam.watching && entuziastiOn && !teamPlayer(profile, ownedTeam.code) && route.view !== "admin" && !showStart && !teamPending ? (
-          <PlayerLinkHint teamCode={ownedTeam.code} onOpen={() => setSettingsOpen(true)} />
+        {account && ownedTeam && !ownedTeam.watching && entuziastiOn && !(selfMember ? selfMember.ehl : teamPlayer(profile, ownedTeam.code)) && route.view !== "admin" && !showStart && !teamPending ? (
+          <PlayerLinkHint teamCode={ownedTeam.code} onOpen={openOwnPlayer} />
         ) : null}
         {!showStart && !teamPending && pendingVoteEvents.length && !(view === "home" && showPoll && !lineupEvent) ? (
           <div role="status" className="mb-4 rounded-2xl bg-game-soft px-4 py-3 ring-1 ring-line">
@@ -1671,6 +1701,8 @@ export function TeamDashboard({
             onTeamSaved={rememberTeam}
             externalSettingsOpen={teamSettingsOpen}
             onExternalSettingsClose={() => setTeamSettingsOpen(false)}
+            editSelfFor={editSelfFor}
+            onEditSelfOpened={() => setEditSelfFor(null)}
             initialMembers={(activeTeam.demo || !profile ? demoMembers : activeTeam.watching ? (activeTeam.members ?? []).filter((member) => member.id !== profile.id) : activeTeam.members?.length ? activeTeam.members : [creatorMember(profile, activeTeam.code)]).map((member) => {
               const delta = activeTeam.demo ? demoPlayerDelta[member.id] : 0;
               if (!delta) return member;
@@ -1748,7 +1780,10 @@ export function TeamDashboard({
           />
           </div>
         ) : null}
-        {route.view === "admin" ? (
+        {route.view === "admin" && route.section === "ehl" ? (
+          <AdminEhlTeams teams={ehlTeams} marks={ehlMarks} onMarksChange={setEhlMarks} />
+        ) : null}
+        {route.view === "admin" && route.section !== "ehl" ? (
           <div className="space-y-6">
             {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules" || route.section === "sports") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
@@ -2264,11 +2299,13 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   feedback: "nav.admin.feedback",
   todo: "nav.admin.todo",
   cron: "nav.admin.cron",
+  ehl: "nav.admin.ehl",
 };
 
 const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[] = [
   { section: "users", label: ADMIN_LABEL.users, icon: <IconUsers /> },
   { section: "teams", label: ADMIN_LABEL.teams, icon: <IconTeams /> },
+  { section: "ehl", label: ADMIN_LABEL.ehl, icon: <IconEhl /> },
   { section: "subteams", label: ADMIN_LABEL.subteams, icon: <IconLayers /> },
   { section: "settings", label: ADMIN_LABEL.settings, icon: <IconGear /> },
   { section: "modules", label: ADMIN_LABEL.modules, icon: <IconModules /> },
@@ -2738,6 +2775,15 @@ function IconPin() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z" />
       <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function IconEhl() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 6h12M8 12h12M8 18h12" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
     </svg>
   );
 }
