@@ -70,6 +70,7 @@ import { removeTrainingGuest, setTrainingGuestsAllowed, type GuestSignup } from 
 import { useTeamCatalog } from "@/app/lib/team-catalog";
 
 const AdminCronPage = dynamic(() => import("@/app/components/admin-cron-page").then((mod) => mod.AdminCronPage));
+const AdminAuditPage = dynamic(() => import("@/app/components/admin-audit-page").then((mod) => mod.AdminAuditPage));
 const AdminEhlTeams = dynamic(() => import("@/app/components/admin-ehl-teams").then((mod) => mod.AdminEhlTeams));
 const AdminSportsPage = dynamic(() => import("@/app/components/admin-sports-page").then((mod) => mod.AdminSportsPage));
 const AdminIntegrationsPage = dynamic(() => import("@/app/components/admin-integrations-page").then((mod) => mod.AdminIntegrationsPage));
@@ -298,7 +299,7 @@ export function TeamDashboard({
   }, [basePath]);
   const adminSection = route.view === "admin" ? route.section : null;
   useEffect(() => {
-    if (basePath === "/demo" || !adminSection || adminSection === "ehl") return;
+    if (basePath === "/demo" || !adminSection || adminSection === "ehl" || adminSection === "audit") return;
     if (!admin) {
       let active = true;
       void fetch(`/api/admin/console?section=${adminSection}&full=1`)
@@ -1783,7 +1784,8 @@ export function TeamDashboard({
         {route.view === "admin" && route.section === "ehl" ? (
           <AdminEhlTeams teams={ehlTeams} marks={ehlMarks} onMarksChange={setEhlMarks} />
         ) : null}
-        {route.view === "admin" && route.section !== "ehl" ? (
+        {route.view === "admin" && route.section === "audit" ? <AdminAuditPage /> : null}
+        {route.view === "admin" && route.section !== "ehl" && route.section !== "audit" ? (
           <div className="space-y-6">
             {admin && (route.section === "users" || route.section === "teams" || route.section === "subteams" || route.section === "modules" || route.section === "sports") ? null : (
               <h1 className="text-2xl font-semibold tracking-tight">{t(ADMIN_LABEL[route.section])}</h1>
@@ -2300,6 +2302,7 @@ const ADMIN_LABEL: Record<AdminSection, MessageKey> = {
   todo: "nav.admin.todo",
   cron: "nav.admin.cron",
   ehl: "nav.admin.ehl",
+  audit: "nav.admin.audit",
 };
 
 const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[] = [
@@ -2318,6 +2321,7 @@ const ADMIN_NAV: { section: AdminSection; label: MessageKey; icon: ReactNode }[]
   { section: "feedback", label: ADMIN_LABEL.feedback, icon: <IconComment /> },
   { section: "todo", label: ADMIN_LABEL.todo, icon: <IconTodo /> },
   { section: "cron", label: ADMIN_LABEL.cron, icon: <IconCron /> },
+  { section: "audit", label: ADMIN_LABEL.audit, icon: <IconAudit /> },
 ];
 
 function MobileDock({
@@ -2858,6 +2862,15 @@ function IconMail() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3 7l9 7 9-7" />
+    </svg>
+  );
+}
+
+function IconAudit() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 6h12M8 12h12M8 18h12" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
     </svg>
   );
 }

@@ -140,6 +140,7 @@ export function NoTeamStart({
               void submitCreate();
             }}
           >
+            <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
             {showLink ? (
               <div className="text-left">
                 <EhlTeamLinkField
@@ -171,7 +172,6 @@ export function NoTeamStart({
               <AvatarCropField ref={avatarRef} disabled={pending} />
             </div>
           )}
-            <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} />
             <div className="text-left">
               <MoneyVotingFields
                 idPrefix="start-team"

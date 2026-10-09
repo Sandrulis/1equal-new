@@ -364,6 +364,7 @@ function CreateTeamDialog({
             void submit();
           }}
         >
+          {open ? <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} /> : null}
           {showLink ? (
             <EhlTeamLinkField
               value={link}
@@ -389,7 +390,6 @@ function CreateTeamDialog({
             />
           </label>
           {showLink && link.trim() !== "" ? null : <AvatarCropField ref={avatarRef} disabled={pending} />}
-          {open ? <SportField sports={sports} value={chosenSportId(sports, sportId) ?? ""} onChange={setSportId} disabled={pending} /> : null}
           <MoneyVotingFields
             idPrefix="create-team"
             currency={currency}

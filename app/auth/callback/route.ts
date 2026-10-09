@@ -27,6 +27,31 @@ export async function GET(request: Request) {
     return completeGoogleSignIn(request, origin, searchParams.get("code") ?? "", googleState);
   }
 
+  const tokenHash = searchParams.get("token_hash")?.trim() ?? "";
+  const otpType = searchParams.get("type");
+  if (tokenHash && (otpType === "recovery" || otpType === "magiclink") && tokenHash.length <= 2000 && !/[^A-Za-z0-9._~=-]/.test(tokenHash)) {
+    const supabase = await createClient();
+    const verified = await supabase.auth.verifyOtp({ type: otpType, token_hash: tokenHash });
+    if (!verified.error && verified.data.user) {
+      const email = verified.data.user.email?.trim().toLowerCase();
+      if (email) {
+        const admin = createAdminClient();
+        if (admin) await admin.from("users").update({ email }).eq("id", verified.data.user.id);
+      }
+      const settlement = await settleAccountDeletionOnSignIn(verified.data.user.id);
+      if (settlement === "deleted") {
+        await supabase.auth.signOut();
+        return NextResponse.redirect(`${origin}/login?error=deleted`);
+      }
+      const next = searchParams.get("next");
+      const destination = otpType === "recovery" || next === "/reset-password" ? "/reset-password" : "/dashboard";
+      const response = NextResponse.redirect(`${origin}${destination}`);
+      if (settlement === "restored") withAccountRestoredCookie(response);
+      return response;
+    }
+    return NextResponse.redirect(`${origin}/login`);
+  }
+
   const code = searchParams.get("code");
   if (code) {
     const supabase = await createClient();

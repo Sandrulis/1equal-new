@@ -63,7 +63,10 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
 
   const email = readField(formData, "email").toLowerCase();
   const password = typeof formData.get("password") === "string" ? String(formData.get("password")) : "";
-  if (!email || password.length < MIN_PASSWORD) return { error: "auth.error.invalid" };
+  if (!email || password.length < MIN_PASSWORD) {
+    await writeAudit("auth.sign_in", "users", null, { email, error: "auth.error.invalid" }, { status: "error" });
+    return { error: "auth.error.invalid" };
+  }
   const turnstile = await requireTurnstileToken(readField(formData, "turnstileToken"));
   if (!turnstile.ok) return { error: turnstile.error };
 
@@ -72,21 +75,28 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
   cookieStore.set(REMEMBER_SESSION_COOKIE, remember ? "1" : "", rememberPreferenceOptions(remember));
   const supabase = await createClient(remember);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: mapAuthError(error.code, error.message) };
+  if (error) {
+    const key = mapAuthError(error.code, error.message);
+    await writeAudit("auth.sign_in", "users", null, { email, error: key }, { status: "error" });
+    return { error: key };
+  }
   const admin = createAdminClient();
   if (admin && data.user && (await siteMaintenanceOn(admin))) {
     const person = await admin.from("users").select("is_admin").eq("id", data.user.id).maybeSingle();
     if (person.data?.is_admin !== true) {
       await supabase.auth.signOut();
+      await writeAudit("auth.sign_in", "users", data.user.id, { email, error: "auth.error.maintenance" }, { status: "error", actorId: data.user.id });
       return { error: "auth.error.maintenance" };
     }
   }
   const settlement = data.user ? await settleAccountDeletionOnSignIn(data.user.id) : "none";
   if (settlement === "deleted") {
     await supabase.auth.signOut();
+    await writeAudit("auth.sign_in", "users", data.user?.id ?? null, { email, error: "user.delete.gone" }, { status: "error", actorId: data.user?.id ?? null });
     return { error: "user.delete.gone" };
   }
   const needsMfa = data.user ? needsMfaChallenge(data.user, data.session?.access_token) : false;
+  if (data.user) await writeAudit("auth.sign_in", "users", data.user.id, {}, { actorId: data.user.id });
 
   return { ok: true, needsMfa, restored: settlement === "restored" };
 }
@@ -129,8 +139,10 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
   const mailed = await mailAccountLink(admin, email, "signup");
   if (!mailed) {
     await admin.auth.admin.deleteUser(data.user.id);
+    await writeAudit("auth.sign_up", "users", data.user.id, { email, error: "auth.email.unavailable" }, { status: "error", actorId: data.user.id });
     return { error: "auth.email.unavailable" };
   }
+  await writeAudit("auth.sign_up", "users", data.user.id, { email }, { actorId: data.user.id });
   return { confirm: true };
 }
 
@@ -195,7 +207,11 @@ export async function changePassword(formData: FormData): Promise<AuthResult> {
     const checked = await supabase.auth.signInWithPassword({ email, password: current });
     if (checked.error) return { error: "user.password.wrong" };
     const updated = await supabase.auth.updateUser({ password: next });
-    if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+    if (updated.error) {
+      await writeAudit("auth.password_set", "users", user.id, { error: "failed" }, { status: "error", actorId: user.id });
+      return { error: mapAuthError(updated.error.code, updated.error.message) };
+    }
+    await writeAudit("auth.password_set", "users", user.id, {}, { actorId: user.id });
     return { ok: true };
   }
 
@@ -205,7 +221,11 @@ export async function changePassword(formData: FormData): Promise<AuthResult> {
     password: next,
     app_metadata: { ...user.app_metadata, password_set: true },
   });
-  if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+  if (updated.error) {
+    await writeAudit("auth.password_set", "users", user.id, { error: "failed" }, { status: "error", actorId: user.id });
+    return { error: mapAuthError(updated.error.code, updated.error.message) };
+  }
+  await writeAudit("auth.password_set", "users", user.id, {}, { actorId: user.id });
   return { ok: true };
 }
 
@@ -221,8 +241,12 @@ export async function resetPassword(formData: FormData): Promise<AuthResult> {
   if (!admin) return { error: "auth.error.config" };
   if (await siteMaintenanceOn(admin)) return { error: "auth.error.maintenance" };
   if (await accountHasNoPassword(admin, email)) return { error: "auth.forgot.no_password" };
-  if (await rateLimit(`reset:${email}`, 5, 15 * 60 * 1000)) return { sent: true };
-  await mailAccountLink(admin, email, "recovery");
+  if (await rateLimit(`reset:${email}`, 5, 15 * 60 * 1000)) {
+    await writeAudit("auth.password_reset", "users", null, { email, error: "rate" }, { status: "error" });
+    return { sent: true };
+  }
+  const mailed = await mailAccountLink(admin, email, "recovery");
+  await writeAudit("auth.password_reset", "users", null, { email }, { status: mailed ? "ok" : "error" });
   return { sent: true };
 }
 
@@ -232,8 +256,12 @@ export async function setNewPassword(formData: FormData): Promise<AuthResult> {
   const { supabase, user } = await getVerifiedAuth();
   if (!supabase || !user) return { error: "auth.error.generic" };
   const updated = await supabase.auth.updateUser({ password });
-  if (updated.error) return { error: mapAuthError(updated.error.code, updated.error.message) };
+  if (updated.error) {
+    await writeAudit("auth.password_set", "users", user.id, { error: "failed" }, { status: "error", actorId: user.id });
+    return { error: mapAuthError(updated.error.code, updated.error.message) };
+  }
   await markPasswordSet(user.id, user.app_metadata);
+  await writeAudit("auth.password_set", "users", user.id, {}, { actorId: user.id });
   return { ok: true };
 }
 
@@ -252,16 +280,24 @@ async function accountHasNoPassword(admin: NonNullable<ReturnType<typeof createA
   return authUser.data.user?.app_metadata?.password_set === false;
 }
 
+function accountCallbackLink(hashedToken: string, kind: "signup" | "recovery"): string | null {
+  const token = hashedToken.trim();
+  if (token.length < 20 || token.length > 2000 || /[^A-Za-z0-9._~=-]/.test(token)) return null;
+  const url = new URL("/auth/callback", getSiteUrl());
+  url.searchParams.set("token_hash", token);
+  url.searchParams.set("type", kind === "recovery" ? "recovery" : "magiclink");
+  url.searchParams.set("next", kind === "recovery" ? "/reset-password" : "/dashboard");
+  return url.toString();
+}
+
 async function mailAccountLink(admin: NonNullable<ReturnType<typeof createAdminClient>>, email: string, kind: "signup" | "recovery"): Promise<boolean> {
   if (kind === "recovery" && (await accountHasNoPassword(admin, email))) return false;
-  const redirectTo = `${getSiteUrl()}/auth/callback${kind === "recovery" ? "?next=/reset-password" : ""}`;
   const link = await admin.auth.admin.generateLink({
     type: kind === "recovery" ? "recovery" : "magiclink",
     email,
-    options: { redirectTo },
   });
-  const actionLink = link.data.properties?.action_link;
-  if (link.error || !actionLink) return kind === "recovery";
+  const actionLink = accountCallbackLink(link.data.properties?.hashed_token ?? "", kind);
+  if (link.error || !actionLink) return false;
 
   const integration = await admin.from("site_integrations").select("client_id, client_secret, configured_account_email, is_configured, is_enabled").eq("integration_key", "resend").maybeSingle();
   const fromEmail = integration.data?.client_id?.trim() ?? "";
@@ -454,6 +490,7 @@ export async function saveUserLanguage(code: string): Promise<boolean> {
 
 export async function signOut() {
   if (isSupabaseConfigured()) {
+    await writeAudit("auth.sign_out", "users", null, {});
     const supabase = await createClient();
     await supabase.auth.signOut();
     const cookieStore = await cookies();

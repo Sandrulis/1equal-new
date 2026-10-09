@@ -1,6 +1,6 @@
 export type DashboardBase = "/dashboard" | "/demo";
 
-export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "umami", "languages", "translations", "email", "feedback", "todo", "cron", "sports", "ehl"] as const;
+export const ADMIN_SECTIONS = ["users", "teams", "subteams", "settings", "modules", "integrations", "umami", "languages", "translations", "email", "feedback", "todo", "cron", "sports", "ehl", "audit"] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 

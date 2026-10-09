@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.19
+
+- Sporta veids ir pirmais lauks, kad veido, pievieno vai labo komandu
+- Paroles un reģistrācijas saite atver 1equal.com, nevis localhost caur Supabase
+- Administratora labajā joslā ir Žurnāls ar datuma, lietotāja, komandas un kļūdu filtriem
+
 ## v0.2.18
 
 - Administratora labajā joslā ir Entuziasti EHL komandas. Interese paliek sarakstā, Nē un Jā komandu paslēpj, un filtri tās parāda atpakaļ

@@ -1084,6 +1084,7 @@ function TeamSettingsDialog({
     <>
       <AdminDialog open={open && mismatch === null} title={t("team.settings.title")} onClose={onClose}>
         <form onSubmit={(event) => void submit(event)} className="space-y-4">
+          <SportField sports={sports} value={pickedSport ?? ""} onChange={setDraftSport} disabled={busy !== null} />
           {showLink ? (
             <EhlTeamLinkField
               value={draftLink}
@@ -1113,7 +1114,6 @@ function TeamSettingsDialog({
               onDirty={setAvatarDirty}
             />
           ) : null}
-          <SportField sports={sports} value={pickedSport ?? ""} onChange={setDraftSport} disabled={busy !== null} />
           <MoneyVotingFields
             idPrefix="team-settings"
             currency={draftCurrency}

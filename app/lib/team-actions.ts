@@ -246,6 +246,7 @@ export async function createOwnedTeam(input: CreateTeamInput): Promise<CreateRes
 
   await rememberActiveTeam(gate.client, gate.account.id, teamId);
   refreshTeamData();
+  await writeAudit("team.create", "teams", teamId, { teamId, name }, { teamId });
   return {
     ok: true,
     team: { id: teamId, name, code, demo: false, sourceUrl: source, logoUrl: logo, homeKitUrl: presentKit(kits?.home_kit_url), awayKitUrl: presentKit(kits?.away_kit_url), leaderId: gate.account.id, currency, trainingVotingHours: training, gameVotingHours: game, sportId: sport.sportId, moduleKeys, balance: 0, rsvps: [], members: [member], subteams: [], venues: [], events: [] },
@@ -301,6 +302,7 @@ export async function updateOwnedTeam(input: {
     .update({ name, currency, training_voting_hours: training, game_voting_hours: game, source_url: keptSource, logo_url: keptLogo, ...(kits ? { home_kit_url: kits.home_kit_url, away_kit_url: kits.away_kit_url } : {}), ...(sportId ? { sport_id: sportId } : {}), updated_at: new Date().toISOString() })
     .eq("id", input.teamId);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("team.update", "teams", input.teamId, { teamId: input.teamId }, { teamId: input.teamId });
   if (entuziasti && !ownLogo) await removeAvatar(`teams/${input.teamId}.jpg`);
   refreshTeamData();
   return { ok: true, name, currency, trainingVotingHours: training, gameVotingHours: game, sourceUrl: keptSource, logoUrl: keptLogo, homeKitUrl: presentKit(homeKitUrl), awayKitUrl: presentKit(awayKitUrl), sportId };
@@ -360,6 +362,7 @@ export async function joinOwnedTeam(rawCode: string): Promise<CreateResult> {
 
   refreshTeamData();
   await rememberActiveTeam(gate.client, gate.account.id, found.data.id);
+  await writeAudit("team.join", "teams", found.data.id, { teamId: found.data.id }, { teamId: found.data.id });
   return {
     ok: true,
     team: {
@@ -701,6 +704,7 @@ export async function createOwnedEvent(input: {
   }
   await notifyNewEvent(event, input.teamId, gate.account.id);
   refreshTeamData();
+  await writeAudit("event.create", "team_events", event.id, { teamId: input.teamId }, { teamId: input.teamId });
   return { ok: true, event, teamBalance };
 }
 
@@ -837,6 +841,7 @@ export async function updateOwnedEvent(input: {
   if (teamBalance == null) return { ok: false, error: "auth.error.generic" };
   const fresh = await gate.client.from("team_events").select("settled_at").eq("id", event.id).maybeSingle();
   if (fresh.error) return { ok: false, error: "auth.error.generic" };
+  await writeAudit("event.update", "team_events", input.eventId, { teamId: input.teamId }, { teamId: input.teamId });
   refreshTeamData();
   return { ok: true, event: { ...event, settled: Boolean(fresh.data?.settled_at) }, teamBalance };
 }
@@ -944,7 +949,10 @@ export async function setEventAttendance(input: {
     actorId: gate.account.id,
     enforceDeadline: !manage,
   });
-  if (result.ok) refreshTeamData();
+  if (result.ok) {
+    await writeAudit("event.attendance", "team_events", input.eventId, { teamId: input.teamId, userId: input.userId, status: input.status }, { teamId: input.teamId });
+    refreshTeamData();
+  }
   return result;
 }
 

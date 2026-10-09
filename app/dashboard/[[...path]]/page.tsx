@@ -62,7 +62,7 @@ export default async function DashboardPage({
   const ehlTeams = account.isAdmin ? listEhlDirectory() : [];
   const ehlMarks = account.isAdmin ? await listEhlTeamMarks() : {};
   const [admin, enabledModules, individualModuleKeys, sports, countryCode, umamiNav] = await Promise.all([
-    account.isAdmin && route.view === "admin" && route.section !== "ehl" ? loadAdminConsole(account.id, route.section) : Promise.resolve(null),
+    account.isAdmin && route.view === "admin" && route.section !== "ehl" && route.section !== "audit" ? loadAdminConsole(account.id, route.section) : Promise.resolve(null),
     modulesPromise,
     individualPromise,
     sportsPromise,
