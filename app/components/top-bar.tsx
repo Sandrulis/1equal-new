@@ -1,27 +1,25 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ContentImage } from "@/app/components/content-image";
+import { useSiteBrand } from "@/app/components/site-brand-provider";
 import { AccountSettingsDialog } from "@/app/components/account-settings-dialog";
 import { CalendarExportDialog } from "@/app/components/calendar-export-dialog";
 import { MfaSettingsDialog } from "@/app/components/mfa-settings-dialog";
 import { NotificationsDialog } from "@/app/components/notifications-dialog";
 import { ChangePasswordDialog } from "@/app/components/change-password-dialog";
-import { IconLogout, IconTipButton } from "@/app/components/icon-tip-button";
+import { IconLogout } from "@/app/components/icon-tip-button";
 import { LanguageMenu } from "@/app/components/language-menu";
 import { PlayerBalanceDialog } from "@/app/components/player-profile";
 import type { BalanceHold } from "@/app/components/team-roster";
-import { TeamSwitcher } from "@/app/components/team-switcher";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import { signOut } from "@/app/lib/auth/actions";
-import { accountName, teamPlayer, type AccountProfile } from "@/app/lib/auth/profile";
-import type { EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { accountName, type AccountProfile } from "@/app/lib/auth/profile";
 import type { Member } from "@/app/lib/demo-data";
 import { CURRENT_USER_ID } from "@/app/lib/demo-constants";
 import { useFormatMoney } from "@/app/components/currency-provider";
-import type { CreateTeamInput } from "@/app/lib/team-defaults";
-import type { Sport } from "@/app/lib/sports";
 import { useLanguage } from "@/app/lib/language";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import { useHeaderBottom, useNarrow, usePresence } from "@/app/lib/use-presence";
@@ -37,61 +35,142 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-export function TopBar({
-  onHome,
-  account = null,
+export function MemberBalance({
+  member,
   team = null,
-  teams = [],
-  onSelectTeam,
-  onUnwatchTeam,
-  onCreateTeam,
-  settingsOpen = false,
-  onSettingsOpenChange,
-  onAccountChange,
+  reservedHolds = [],
+  compact = false,
+}: {
+  member: Member;
+  team?: Pick<IssuedTeam, "id" | "demo"> | null;
+  reservedHolds?: BalanceHold[];
+  compact?: boolean;
+}) {
+  const { t } = useLanguage();
+  const formatMoney = useFormatMoney();
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const [holdsOpen, setHoldsOpen] = useState(false);
+  const reservedBalance = Math.round(reservedHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
+  const amount = formatMoney(member.balance);
+  const tone = member.balance < 0 ? "text-game" : member.balance > 0 ? "text-[#1b7a46]" : "text-muted";
+  const label = `${t("roster.balance.player")} ${amount}`;
+
+  return (
+    <>
+      <div className="mb-2.5">
+        <button
+          type="button"
+          aria-label={label}
+          onClick={() => setBalanceOpen(true)}
+          className={`flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}`}
+        >
+          <span className={`inline-grid h-9 w-9 shrink-0 place-items-center text-ink [&_svg]:h-5 [&_svg]:w-5 ${compact ? tone : ""}`}>
+            <IconWallet />
+          </span>
+          <span className={`min-w-0 truncate text-sm font-semibold tabular-nums ${tone} ${compact ? "sr-only" : ""}`}>{amount}</span>
+        </button>
+        {reservedBalance > 0 ? (
+          <button
+            type="button"
+            onClick={() => setHoldsOpen(true)}
+            aria-label={t("finance.reserved", { amount: formatMoney(reservedBalance) })}
+            className={`block w-full font-medium text-muted tabular-nums hover:underline ${compact ? "text-center text-[10px]" : "pl-11 text-left text-xs"}`}
+          >
+            ({formatMoney(reservedBalance)})
+          </button>
+        ) : null}
+      </div>
+      {balanceOpen ? <PlayerBalanceDialog member={member} teamId={team && !team.demo ? (team.id ?? null) : null} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
+      {holdsOpen ? <HoldDialog holds={reservedHolds} onClose={() => setHoldsOpen(false)} /> : null}
+    </>
+  );
+}
+
+export function TopBar({
   onOpenMenu,
   menuOpen = false,
   onOpenAdmin,
   adminOpen = false,
-  balanceMember = null,
-  reservedHolds = [],
-  calendarIntegration = false,
-  entuziasti = true,
-  player = null,
-  enabledModules = null,
-  individualModuleKeys = [],
-  presetEntuziasti = false,
-  sports = [],
+  leading = null,
+  trailing = null,
 }: {
-  onHome: () => void;
-  account?: AccountProfile | null;
-  team?: Pick<IssuedTeam, "id" | "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
-  teams?: IssuedTeam[];
-  onSelectTeam?: (code: string) => void;
-  onUnwatchTeam?: (teamId: string) => void | Promise<void>;
-  onCreateTeam?: (input: CreateTeamInput) => boolean | Promise<boolean>;
-  settingsOpen?: boolean;
-  onSettingsOpenChange?: (open: boolean) => void;
-  onAccountChange?: (account: AccountProfile) => void;
   onOpenMenu?: () => void;
   menuOpen?: boolean;
   onOpenAdmin?: () => void;
   adminOpen?: boolean;
-  balanceMember?: Member | null;
-  reservedHolds?: BalanceHold[];
-  calendarIntegration?: boolean;
-  entuziasti?: boolean;
-  player?: EhlPlayerProfile | null;
-  enabledModules?: string[] | null;
-  individualModuleKeys?: string[];
-  presetEntuziasti?: boolean;
-  sports?: Sport[];
+  leading?: ReactNode;
+  trailing?: ReactNode;
 }) {
   const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
-  const [profile, setProfile] = useState(account);
+  const brand = useSiteBrand();
+
+  return (
+    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 max-[599px]:z-[60] sm:px-6 min-[600px]:hidden lg:order-none lg:px-8">
+      <div className="flex min-w-0 items-center gap-2">
+        {onOpenMenu ? (
+          <button type="button" aria-label={t("nav.sections")} aria-expanded={menuOpen} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
+            {menuOpen ? <IconClose /> : <IconMenu />}
+          </button>
+        ) : null}
+        {menuOpen ? (
+          <span className="flex min-w-0 items-center gap-2 min-[600px]:hidden">
+            {brand.logoUrl ? <ContentImage src={brand.logoUrl} className="h-7 w-auto shrink-0" /> : null}
+            <span className="truncate text-base font-semibold tracking-wide">{brand.name}</span>
+          </span>
+        ) : null}
+        {leading}
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {trailing}
+        {onOpenAdmin ? (
+          <button type="button" aria-label={t("nav.admin")} aria-expanded={adminOpen} onClick={onOpenAdmin} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
+            {adminOpen ? <IconClose /> : <IconMenu />}
+          </button>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+export function UserMenu({
+  name,
+  account,
+  photoUrl,
+  settingsOpen = false,
+  onSettingsOpenChange,
+  onSaved,
+  calendarIntegration = false,
+  sidebar = false,
+  compact = false,
+}: {
+  name: string;
+  account: AccountProfile | null;
+  photoUrl: string | null;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string; hasPassword?: boolean }) => void;
+  calendarIntegration?: boolean;
+  sidebar?: boolean;
+  compact?: boolean;
+}) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [mfaOpen, setMfaOpen] = useState(false);
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [demoName, setDemoName] = useState("");
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [languageSlot, setLanguageSlot] = useState<HTMLDivElement | null>(null);
+  const narrow = useNarrow();
+  const sheet = usePresence(open && narrow && !sidebar);
+  const sheetTop = useHeaderBottom(sheet.mounted, rootRef);
+  useExclusiveMobileMenu("user", open && !sidebar, () => setOpen(false));
   useEffect(() => {
-    if (account) return;
+    if (account || name) return;
     let active = true;
     void import("@/app/lib/demo-data").then((mod) => {
       if (!active) return;
@@ -101,123 +180,16 @@ export function TopBar({
     return () => {
       active = false;
     };
-  }, [account]);
-  const name = profile ? accountName(profile) : demoName;
-
-  const linkedPhoto = entuziasti ? (player?.photoUrl ?? teamPlayer(profile, team?.code)?.photoUrl ?? null) : null;
-  const photoUrl = linkedPhoto ?? profile?.avatarUrl ?? null;
-  const [balanceOpen, setBalanceOpen] = useState(false);
-  const [holdsOpen, setHoldsOpen] = useState(false);
-  const reservedBalance = Math.round(reservedHolds.reduce((sum, hold) => sum + hold.amount, 0) * 100) / 100;
-
-  function saveAccount(next: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string; hasPassword?: boolean }) {
-    setProfile((current) => (current ? { ...current, ...next } : current));
-    if (profile) onAccountChange?.({ ...profile, ...next });
-  }
-
-  return (
-    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 max-[599px]:z-[60] sm:px-6 lg:order-none lg:px-8">
-      <div className="flex min-w-0 items-center gap-2">
-        {onOpenMenu ? (
-          <button type="button" aria-label={t("nav.sections")} aria-expanded={menuOpen} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
-            {menuOpen ? <IconClose /> : <IconMenu />}
-          </button>
-        ) : null}
-        <TeamSwitcher
-          team={team}
-          teams={teams}
-          canSwitch={Boolean(account)}
-          onHome={onHome}
-          onSelect={onSelectTeam ?? (() => onHome())}
-          onUnwatch={onUnwatchTeam}
-          onCreate={onCreateTeam ?? (async () => false)}
-          sports={sports}
-          enabledModules={enabledModules}
-          individualModuleKeys={individualModuleKeys}
-          presetEntuziasti={presetEntuziasti}
-        />
-      </div>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        <LanguageMenu />
-        {balanceMember ? (
-          <div className="text-right">
-            <button
-              type="button"
-              aria-label={t("roster.balance")}
-              onClick={() => setBalanceOpen(true)}
-              className={`rounded-lg px-2 py-1 text-sm font-semibold tabular-nums hover:bg-ice ${balanceMember.balance < 0 ? "text-game" : balanceMember.balance > 0 ? "text-[#1b7a46]" : "text-muted"}`}
-            >
-              {formatMoney(balanceMember.balance)}
-            </button>
-            {reservedBalance > 0 ? (
-              <button
-                type="button"
-                onClick={() => setHoldsOpen(true)}
-                aria-label={t("finance.reserved", { amount: formatMoney(reservedBalance) })}
-                className="block w-full px-2 text-xs font-medium text-muted tabular-nums hover:underline"
-              >
-                ({formatMoney(reservedBalance)})
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <UserMenu
-          name={name}
-          account={profile}
-          photoUrl={photoUrl}
-          settingsOpen={settingsOpen}
-          onSettingsOpenChange={onSettingsOpenChange}
-          onSaved={saveAccount}
-          calendarIntegration={calendarIntegration}
-        />
-        <IconTipButton label={t("user.logout")} tone="game" onClick={() => void signOut()}>
-          <IconLogout />
-        </IconTipButton>
-        {onOpenAdmin ? (
-          <button type="button" aria-label={t("nav.admin")} aria-expanded={adminOpen} onClick={onOpenAdmin} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
-            {adminOpen ? <IconClose /> : <IconMenu />}
-          </button>
-        ) : null}
-      </div>
-      {balanceOpen && balanceMember ? <PlayerBalanceDialog member={balanceMember} teamId={team && !team.demo ? (team.id ?? null) : null} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
-      {holdsOpen ? <HoldDialog holds={reservedHolds} onClose={() => setHoldsOpen(false)} /> : null}
-    </header>
-  );
-}
-
-function UserMenu({
-  name,
-  account,
-  photoUrl,
-  settingsOpen = false,
-  onSettingsOpenChange,
-  onSaved,
-  calendarIntegration = false,
-}: {
-  name: string;
-  account: AccountProfile | null;
-  photoUrl: string | null;
-  settingsOpen?: boolean;
-  onSettingsOpenChange?: (open: boolean) => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; hasPassword?: boolean }) => void;
-  calendarIntegration?: boolean;
-}) {
-  const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
-  const [mfaOpen, setMfaOpen] = useState(false);
-  const [noticesOpen, setNoticesOpen] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow();
-  const sheet = usePresence(open && narrow);
-  const sheetTop = useHeaderBottom(sheet.mounted, rootRef);
-  useExclusiveMobileMenu("user", open, () => setOpen(false));
+  }, [account, name]);
+  const label = name || (account ? accountName(account) : demoName);
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-language-popover]")) return;
+      if (rootRef.current?.contains(target as Node) || menuRef.current?.contains(target as Node)) return;
+      setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -229,6 +201,33 @@ function UserMenu({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !sidebar) {
+      setMenuPos(null);
+      return;
+    }
+    function place() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const menu = menuRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.max(rect.width, 256);
+      let left = rect.left;
+      if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+      const height = menu?.height ?? 0;
+      let top = rect.top - 4 - height;
+      if (!height || top < 8) top = Math.max(8, rect.bottom + 4);
+      if (height && top + height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - height - 8);
+      setMenuPos({ top, left, width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, sidebar, compact]);
 
   const menuItems = (
     <div className="p-1.5">
@@ -274,31 +273,66 @@ function UserMenu({
           }}
         />
       ) : null}
+      <div className="my-1 border-t border-line" />
+      <div ref={setLanguageSlot} />
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          setOpen(false);
+          void signOut();
+        }}
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-game hover:bg-ice"
+      >
+        <IconLogout />
+        {t("user.logout")}
+      </button>
     </div>
   );
 
+  const menuPanel = open && sidebar ? (
+    <div
+      ref={menuRef}
+      role="menu"
+      style={{ top: menuPos?.top ?? -9999, left: menuPos?.left ?? 0, width: menuPos?.width ?? 256, visibility: menuPos ? "visible" : "hidden" }}
+      className="fixed z-[70] max-h-[min(24rem,calc(100dvh-1rem))] overflow-y-auto rounded-xl bg-paper shadow-lg ring-1 ring-line"
+    >
+      {menuItems}
+    </div>
+  ) : null;
+
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={sidebar ? "min-w-0" : "relative"}>
       <button
+        ref={buttonRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        title={sidebar && compact ? label : undefined}
         onClick={() => {
           const next = !open;
-          if (next) claimMobileMenu("user");
-          else releaseMobileMenu("user");
+          if (!sidebar) {
+            if (next) claimMobileMenu("user");
+            else releaseMobileMenu("user");
+          }
           setOpen(next);
         }}
-        className="inline-flex items-center gap-2 rounded-lg hover:bg-ice min-[600px]:py-1 min-[600px]:pr-2 min-[600px]:pl-1"
+        className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "inline-flex items-center gap-2 rounded-lg hover:bg-ice min-[600px]:py-1 min-[600px]:pr-2 min-[600px]:pl-1"}
       >
         {photoUrl ? (
-          <ContentImage src={photoUrl} className="h-9 w-9 rounded-lg bg-ice object-contain object-center" />
+          <ContentImage src={photoUrl} className="h-9 w-9 shrink-0 rounded-lg bg-ice object-contain object-center" />
         ) : (
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(name)}</span>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-xs font-semibold text-white">{initials(label)}</span>
         )}
-        <span className="hidden max-w-36 truncate text-sm font-medium min-[700px]:inline">{name}</span>
+        <span className={sidebar ? `min-w-0 flex-1 truncate text-sm font-medium ${compact ? "sr-only" : ""}` : "hidden max-w-36 truncate text-sm font-medium min-[700px]:inline"}>{label}</span>
+        {!(sidebar && compact) ? (
+          <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "hidden size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line min-[700px]:grid"}>
+            <IconChevronsUpDown />
+          </span>
+        ) : null}
       </button>
-      {open && !narrow ? (
+      {menuPanel && typeof document !== "undefined" ? createPortal(menuPanel, document.body) : null}
+      {open && !narrow && !sidebar ? (
         <div role="menu" className="absolute right-0 z-40 mt-1 w-64 rounded-xl bg-paper ring-1 ring-line">
           {menuItems}
         </div>
@@ -308,13 +342,14 @@ function UserMenu({
           <button type="button" aria-label={t("event.close")} onClick={() => setOpen(false)} style={{ top: sheetTop }} className={`fixed inset-x-0 bottom-0 z-30 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${sheet.shown ? "opacity-100" : "pointer-events-none opacity-0"}`} />
           <div style={{ top: sheetTop }} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 overflow-hidden">
             <div role="menu" className={`pointer-events-auto bg-paper shadow-lg transition-transform duration-200 ${sheet.shown ? "translate-y-0" : "-translate-y-full"}`}>
-              <p className="truncate px-4 py-2.5 text-sm font-medium">{name}</p>
+              <p className="truncate px-4 py-2.5 text-sm font-medium">{label}</p>
               <div className="border-b border-line" />
               {menuItems}
             </div>
           </div>
         </>
       ) : null}
+      <LanguageMenu embedded slot={languageSlot} docked={sidebar} />
       {settingsOpen && account ? (
         <AccountSettingsDialog account={account} onClose={() => onSettingsOpenChange?.(false)} onSaved={onSaved} />
       ) : null}
@@ -404,6 +439,25 @@ function IconClose() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function IconWallet() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <circle cx="16.5" cy="14.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconChevronsUpDown() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6.5 8 3.5 12 6.5" />
+      <path d="M4 9.5 8 12.5 12 9.5" />
     </svg>
   );
 }

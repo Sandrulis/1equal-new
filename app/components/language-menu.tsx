@@ -6,19 +6,24 @@ import { useLanguage } from "@/app/lib/language";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import { useNarrow, useHeaderBottom, usePresence } from "@/app/lib/use-presence";
 
-export function LanguageMenu() {
+export function LanguageMenu({ embedded = false, slot = null, docked = false }: { embedded?: boolean; slot?: HTMLElement | null; docked?: boolean }) {
   const { t, lang, languages, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
+  const [flyout, setFlyout] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
-  const sheet = usePresence(open && narrow);
+  const sheet = usePresence(open && narrow && !docked);
   const sheetTop = useHeaderBottom(sheet.mounted, rootRef);
-  useExclusiveMobileMenu("language", open, () => setOpen(false));
+  useExclusiveMobileMenu("language", open && !docked, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || buttonRef.current?.contains(target) || popRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -30,6 +35,28 @@ export function LanguageMenu() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) setFlyout(null);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !embedded || (narrow && !docked)) return;
+    const button = buttonRef.current;
+    const pop = popRef.current;
+    if (!button || !pop) return;
+    const anchor = button.getBoundingClientRect();
+    const menu = button.closest("[role='menu']")?.getBoundingClientRect();
+    const popBox = pop.getBoundingClientRect();
+    let left = (menu?.left ?? anchor.left) - popBox.width - 8;
+    let top = anchor.top;
+    if (left < 8) {
+      left = Math.max(8, Math.min((menu?.right ?? anchor.right) - popBox.width, window.innerWidth - popBox.width - 8));
+      top = (menu?.bottom ?? anchor.bottom) + 8;
+    }
+    if (top + popBox.height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - popBox.height - 8);
+    setFlyout({ top, left });
+  }, [open, embedded, narrow, docked, lang]);
 
   const current = languages.find((item) => item.code === lang) ?? languages[0];
 
@@ -52,26 +79,65 @@ export function LanguageMenu() {
     ));
   }
 
+  const embeddedButton = (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-label={current.name}
+      aria-expanded={open}
+      aria-haspopup="listbox"
+      onClick={() => {
+        const next = !open;
+        if (!docked) {
+          if (next) claimMobileMenu("language");
+          else releaseMobileMenu("language");
+        }
+        setOpen(next);
+      }}
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-ice"
+    >
+      <Flag code={current.code} />
+      <span className="min-w-0 flex-1 truncate">{current.name}</span>
+    </button>
+  );
+
   return (
     <div ref={rootRef} className="relative">
-      <FlagTip name={current.name}>
-        <button
-          type="button"
-          aria-label={current.name}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          onClick={() => {
-            const next = !open;
-            if (next) claimMobileMenu("language");
-            else releaseMobileMenu("language");
-            setOpen(next);
-          }}
-          className="inline-flex h-9 items-center rounded-lg bg-paper px-2 ring-1 ring-line hover:bg-ice"
-        >
-          <Flag code={current.code} />
-        </button>
-      </FlagTip>
-      {open && !narrow ? (
+      {embedded ? (slot ? createPortal(embeddedButton, slot) : null) : (
+        <FlagTip name={current.name}>
+          <button
+            type="button"
+            aria-label={current.name}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            onClick={() => {
+              const next = !open;
+              if (next) claimMobileMenu("language");
+              else releaseMobileMenu("language");
+              setOpen(next);
+            }}
+            className="inline-flex h-9 items-center rounded-lg bg-paper px-2 ring-1 ring-line hover:bg-ice"
+          >
+            <Flag code={current.code} />
+          </button>
+        </FlagTip>
+      )}
+      {open && embedded && (!narrow || docked)
+        ? createPortal(
+            <div
+              ref={popRef}
+              data-language-popover
+              role="listbox"
+              aria-label={current.name}
+              style={{ top: flyout?.top ?? -9999, left: flyout?.left ?? 0, visibility: flyout ? "visible" : "hidden" }}
+              className="fixed z-[80] flex min-w-40 flex-col gap-0.5 rounded-xl bg-paper p-1 shadow-lg ring-1 ring-line"
+            >
+              {languageOptions()}
+            </div>,
+            document.body,
+          )
+        : null}
+      {open && !embedded && !narrow ? (
         <div role="listbox" aria-label={current.name} className="absolute right-0 z-20 mt-1 flex min-w-36 flex-col gap-0.5 rounded-xl bg-paper p-1 ring-1 ring-line">
           {languageOptions()}
         </div>

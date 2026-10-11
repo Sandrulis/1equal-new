@@ -9,9 +9,9 @@ import { ContentImage } from "@/app/components/content-image";
 import { CURRENT_USER_ID, TEAM_NAME } from "@/app/lib/demo-constants";
 import type { AttendanceStats } from "@/app/lib/attendance-stats";
 import type { EventType, Member, TeamEvent } from "@/app/lib/demo-data";
-import { teamPlayer } from "@/app/lib/auth/profile";
+import { accountName, teamPlayer } from "@/app/lib/auth/profile";
 import { creatorMember } from "@/app/lib/team-creator";
-import { PlayerLinkHint } from "@/app/components/team-switcher";
+import { PlayerLinkHint, TeamSwitcher } from "@/app/components/team-switcher";
 import { DEMO_INVITE_CODE, findIssuedTeam, forgetTeam, getCurrentTeam, listMyTeams, normalizeInviteCode, replaceMyTeams, selectMyTeam, setCurrentTeam, type IssuedTeam } from "@/app/lib/invite-code";
 import { getDemoSession, settleDemoCharges, subscribeDemoSession, updateDemoSession } from "@/app/lib/demo-session";
 import { AdminDialog } from "@/app/components/admin-dialog";
@@ -27,7 +27,6 @@ import { isCurrency, normalizeCurrency, type CreateTeamInput } from "@/app/lib/t
 import {
   formatClock,
   formatDisplayDate,
-  formatDuration,
   formatMoney,
   formatMonthTitle,
   formatWeekday,
@@ -38,23 +37,23 @@ import {
   weekdayHeaders,
 } from "@/app/lib/format";
 import { useLanguage } from "@/app/lib/language";
-import { usePresence } from "@/app/lib/use-presence";
+import { useNarrow, usePresence } from "@/app/lib/use-presence";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import type { MessageKey } from "@/app/lib/messages";
 import type { Sport } from "@/app/lib/sports";
 import { catalogForSport } from "@/app/lib/positions";
 import { EventDetails, LineupOpenButton, VoteCountdown, eventVotingOpen, memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { EventFormDialog, type NewEventInput } from "@/app/components/event-form-dialog";
-import { IconChevronLeft, IconChevronRight, IconPlus } from "@/app/components/icon-tip-button";
+import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconTipButton, IconTrash } from "@/app/components/icon-tip-button";
 import type { SideMap, SlotMap } from "@/app/components/event-lineup";
 import type { BalanceHold } from "@/app/components/team-roster";
 import { SiteFooter } from "@/app/components/site-footer";
 import { EntuziastiProvider } from "@/app/components/entuziasti-context";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
-import { CurrencyProvider, useFormatMoney } from "@/app/components/currency-provider";
-import { DisplayPreferencesProvider, useDisplayFormat } from "@/app/components/display-preferences";
+import { CurrencyProvider } from "@/app/components/currency-provider";
+import { DisplayPreferencesProvider } from "@/app/components/display-preferences";
 import { useSiteBrand } from "@/app/components/site-brand-provider";
-import { TopBar } from "@/app/components/top-bar";
+import { MemberBalance, TopBar, UserMenu } from "@/app/components/top-bar";
 import type { AccountProfile } from "@/app/lib/auth/profile";
 import { FRONTEND_MODULE_KEYS } from "@/app/lib/frontend-modules";
 import type { EhlDirectoryTeam, EhlTeamMark } from "@/app/lib/ehl-directory";
@@ -110,11 +109,16 @@ function eventCost(event: TeamEvent, pricePerHour: number): number | null {
   return hoursBetween(event.start, event.end) * pricePerHour;
 }
 
-function subteamChipStyle(color: string): CSSProperties | null {
+function subteamHex(color: string): string | null {
   const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
   if (!match) return null;
   const raw = match[1];
-  const full = raw.length === 3 ? raw.split("").map((part) => part + part).join("") : raw;
+  return raw.length === 3 ? raw.split("").map((part) => part + part).join("") : raw;
+}
+
+function subteamChipStyle(color: string): CSSProperties | null {
+  const full = subteamHex(color);
+  if (!full) return null;
   const value = Number.parseInt(full, 16);
   const red = (value >> 16) & 255;
   const green = (value >> 8) & 255;
@@ -125,6 +129,12 @@ function subteamChipStyle(color: string): CSSProperties | null {
     borderColor: `#${full}`,
     color: luminance > 0.62 ? "#12202b" : "#ffffff",
   };
+}
+
+function subteamWash(color: string): string | null {
+  const full = subteamHex(color);
+  if (!full) return null;
+  return `color-mix(in srgb, #${full} 22%, #ffffff)`;
 }
 
 function EventTypeMark({ type }: { type: EventType }) {
@@ -156,27 +166,12 @@ function withLineup(previous: TeamEvent, next: TeamEvent): TeamEvent {
 }
 
 
-function EventCardBody({ event, game, cost, subteamName }: { event: TeamEvent; game: boolean; cost: number | null; subteamName?: string }) {
-  const { t } = useLanguage();
-  const formatMoney = useFormatMoney();
-  const { formatTime } = useDisplayFormat();
-  const subteam = subteamName;
-  const hours = event.end ? hoursBetween(event.start, event.end) : null;
-  return (
-    <>
-      <p className={`text-xs font-semibold ${game ? "text-game" : "text-train"}`}>
-        {game ? t("legend.game") : t("legend.training")}
-      </p>
-      {game && event.home != null ? <p className="mt-0.5 text-sm">{t(event.home ? "event.game.home" : "event.game.away")}</p> : null}
-      {event.titleId ? <p className="mt-0.5 font-medium">{t(eventTitleKey(event.titleId))}</p> : null}
-      {!event.titleId && !game ? <p className="mt-0.5 text-sm">{event.withCoach ? t("event.add.coach") : t("event.add.coach.off")}</p> : null}
-      <p className="mt-2 text-sm text-muted">
-        {hours != null ? `${formatTime(event.start)}-${formatTime(event.end)}, ${formatDuration(hours)}` : formatTime(event.start)}
-      </p>
-      {cost != null ? <p className="mt-1 text-sm font-semibold tabular-nums">{formatMoney(cost)}</p> : null}
-      {subteam ? <p className="mt-1 text-sm">{subteam}</p> : null}
-    </>
-  );
+function eventKindDetail(event: TeamEvent, game: boolean, t: (key: MessageKey) => string): string | null {
+  if (game) {
+    if (event.home != null) return t(event.home ? "event.game.home" : "event.game.away");
+    return event.titleId ? t(eventTitleKey(event.titleId)) : null;
+  }
+  return t(event.withCoach ? "event.add.coach" : "event.add.coach.off");
 }
 
 function membersForEvent(event: TeamEvent, roster: Member[]): Member[] {
@@ -522,15 +517,18 @@ export function TeamDashboard({
     softGo(teamHref(basePath));
     router.refresh();
   }
-  const openEventId = route.view === "home" ? route.eventId : null;
+  const routeEventId = route.view === "home" ? route.eventId : null;
   const lineup = route.view === "home" && route.lineup;
+  const [modalEventId, setModalEventId] = useState<string | null>(null);
+  const openEventId = lineup ? routeEventId : modalEventId;
   const [homePick, setHomePick] = useState<HomeView | null>(null);
   const [homeVisit, setHomeVisit] = useState<string | null>(null);
-  const homeVisitKey = view === "home" && !openEventId && !lineup ? pathname : "";
+  const homeVisitKey = view === "home" && !routeEventId && !lineup ? pathname : "";
   if (homeVisitKey !== homeVisit) {
     setHomeVisit(homeVisitKey);
     setHomePick(null);
   }
+  if (view !== "home" && modalEventId) setModalEventId(null);
   const { subteams, venues, subteamById, venueById } = useTeamCatalog();
   const filterSubteams = activeTeam && !activeTeam.demo && activeTeam.id ? (activeTeam.subteams ?? []) : subteams;
   const todayIso = isoDate(new Date());
@@ -573,6 +571,7 @@ export function TeamDashboard({
   const demoPlayerDelta = demo.player;
   const demoTeamDelta = demo.team;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const phone = useNarrow();
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -754,9 +753,10 @@ export function TeamDashboard({
     });
   }, [activeSubteamId, activeVenueId, calendarEvents, typeFilter]);
 
-  const selectedEvents = filtered
-    .filter((event) => event.date === selectedIso)
-    .sort((a, b) => a.start.localeCompare(b.start));
+  const weekEndIso = isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 6));
+  const weekEvents = filtered
+    .filter((event) => event.date >= todayIso && event.date <= weekEndIso)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, TeamEvent[]>();
@@ -786,19 +786,23 @@ export function TeamDashboard({
     setSelectedIso(todayIso);
   }
 
+  function closeEventModal() {
+    setModalEventId(null);
+    if (!routeEventId || lineup) return;
+    setClientPath(basePath);
+    softReplace(basePath);
+  }
+
   function selectDay(date: Date, keepEvent = false) {
     setYear(date.getFullYear());
     setMonth(date.getMonth());
     setSelectedIso(isoDate(date));
-    if (!keepEvent && openEventId) softGo(basePath);
+    if (!keepEvent) setModalEventId(null);
   }
 
   function showEvent(event: TeamEvent, date: Date) {
     selectDay(date, true);
-    softGo(eventHref(basePath, event.id));
-    window.setTimeout(() => {
-      document.getElementById("event-details")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 0);
+    setModalEventId(event.id);
   }
 
   async function setMemberRsvp(memberId: string, status: Rsvp, targetEventId?: string) {
@@ -1043,7 +1047,7 @@ export function TeamDashboard({
       });
       setDeleteTarget(null);
       showFeedback({ message: t("event.delete.saved"), variant: "success" });
-      softGo(basePath);
+      closeEventModal();
       return;
     }
     setSavingEvent(true);
@@ -1075,7 +1079,7 @@ export function TeamDashboard({
     });
     setDeleteTarget(null);
     showFeedback({ message: t("event.delete.saved"), variant: "success" });
-    softGo(basePath);
+    closeEventModal();
   }
 
   function openLineup(event: TeamEvent) {
@@ -1096,7 +1100,8 @@ export function TeamDashboard({
 
   function showHome(anchor?: string) {
     collapseIfNarrow();
-    const onCalendar = view === "home" && !openEventId && !lineup;
+    setModalEventId(null);
+    const onCalendar = view === "home" && !lineup;
     if (onCalendar) {
       if (!anchor) window.scrollTo({ top: 0, behavior: "smooth" });
       else document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1124,14 +1129,6 @@ export function TeamDashboard({
     }
     document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [pathname, view, lineup]);
-
-  useEffect(() => {
-    if (!openEventId || lineup) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById("event-details")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [calendarEvents, openEventId, lineup]);
 
   function showView(next: Exclude<DashboardView, "home">) {
     collapseIfNarrow();
@@ -1240,6 +1237,12 @@ export function TeamDashboard({
   }
 
   const now = useNow();
+  useEffect(() => {
+    if (lineup || !routeEventId) return;
+    setModalEventId(routeEventId);
+    setClientPath(basePath);
+    softReplace(basePath);
+  }, [basePath, lineup, routeEventId]);
   const openEventDate = openEventId && !lineup ? (calendarEvents.find((item) => item.id === openEventId)?.date ?? null) : null;
   const [trackedEventDate, setTrackedEventDate] = useState<string | null>(null);
   if (openEventDate && openEventDate !== trackedEventDate) {
@@ -1439,12 +1442,77 @@ export function TeamDashboard({
     if (!canManageTeam || (path === `${basePath}/guests` && !teamPending && (!pondOn || guestCount === 0))) softReplace(basePath);
   }, [basePath, canManageTeam, guestCount, pondOn, teamPending, view]);
 
+  const sidebarTeam = activeTeam
+    ? {
+        name: activeTeam.name,
+        code: activeTeam.code,
+        demo: Boolean(activeTeam.demo),
+        logoUrl: "logoUrl" in activeTeam ? activeTeam.logoUrl : null,
+        sportId: "sportId" in activeTeam ? activeTeam.sportId : null,
+        moduleKeys: "moduleKeys" in activeTeam ? activeTeam.moduleKeys : undefined,
+      }
+    : null;
+  const sidebarPhoto = (entuziastiOn ? (selfMember?.ehl?.photoUrl ?? teamPlayer(profile, activeTeam?.code)?.photoUrl) : null) ?? profile?.avatarUrl ?? null;
+  const headerIdentity = phone && !account;
+
+  function renderTeamSwitcher(compact: boolean, docked = true) {
+    if (!sidebarTeam) return null;
+    return (
+      <TeamSwitcher
+        sidebar={docked}
+        compact={compact}
+        team={sidebarTeam}
+        teams={account ? teams : []}
+        canSwitch={Boolean(account)}
+        onHome={() => showHome()}
+        onSelect={selectTeam}
+        onUnwatch={account?.isAdmin ? unwatchTeam : undefined}
+        onCreate={createTeam}
+        sports={sports}
+        enabledModules={enabledModules}
+        individualModuleKeys={individualModuleKeys}
+        presetEntuziasti={presetEntuziasti}
+      />
+    );
+  }
+
+  function renderMemberBalance(compact: boolean) {
+    if (!financeAllowed || !selfMember) return null;
+    return (
+      <MemberBalance
+        member={selfMember}
+        team={activeTeam ? { id: "id" in activeTeam ? activeTeam.id : undefined, demo: Boolean(activeTeam.demo) } : null}
+        reservedHolds={memberHolds[selfMember.id] ?? []}
+        compact={compact}
+      />
+    );
+  }
+
+  function renderUserMenu(compact: boolean, docked = true) {
+    return (
+      <UserMenu
+        sidebar={docked}
+        compact={compact}
+        name={profile ? accountName(profile) : ""}
+        account={profile}
+        photoUrl={sidebarPhoto}
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
+        onSaved={(next) => {
+          if (!profile) return;
+          applyAccount({ ...profile, ...next });
+        }}
+        calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
+      />
+    );
+  }
+
   return (
     <EntuziastiProvider enabled={entuziastiOn}>
     <CurrencyProvider currency={currencyCode}>
     <DisplayPreferencesProvider value={display}>
     <div
-      className={`flex min-h-dvh flex-col min-[600px]:grid min-[600px]:min-h-screen min-[600px]:transition-[grid-template-columns] min-[600px]:duration-200 ${account?.isAdmin ? "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)_3.5rem]" : "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)]"}`}
+      className={`flex min-h-dvh flex-col bg-paper min-[600px]:grid min-[600px]:min-h-screen min-[600px]:transition-[grid-template-columns] min-[600px]:duration-200 ${account?.isAdmin ? "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)_3.5rem]" : "min-[600px]:grid-cols-[var(--side)_minmax(0,1fr)]"}`}
       style={{ "--side": overlay || sidebarCollapsed ? "3.5rem" : "15rem" } as CSSProperties}
     >
       {overlay ? (
@@ -1455,8 +1523,13 @@ export function TeamDashboard({
           className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm"
         />
       ) : null}
+      {canManageTeam && !showStart ? (
+        <button type="button" aria-label={t("event.add")} inert={overlay || undefined} onClick={beginAddEvent} className={`pointer-events-auto fixed right-6 bottom-6 hidden size-14 place-items-center rounded-full bg-side text-ink shadow-lg ring-1 ring-line min-[600px]:grid ${overlay ? "z-20" : "z-50"}`}>
+          <span className="[&_svg]:size-6"><IconPlus /></span>
+        </button>
+      ) : null}
       <div className={overlay ? "relative z-40" : "contents"}>
-      <aside className={overlay ? "fixed top-0 left-0 z-40 hidden h-screen w-60 flex-col overflow-hidden bg-navy text-white shadow-xl min-[600px]:flex" : `order-2 hidden overflow-hidden bg-navy text-white min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
+      <aside className={overlay ? "fixed top-0 left-0 z-40 hidden h-screen w-60 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl min-[600px]:flex" : `order-2 hidden overflow-hidden border-r border-line bg-side text-ink min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
         <div className="hidden items-center gap-2 overflow-hidden px-2.5 py-4 min-[600px]:flex">
           <button
             type="button"
@@ -1464,7 +1537,7 @@ export function TeamDashboard({
             title={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
             aria-expanded={!sidebarCollapsed}
             onClick={() => setSidebarCollapsed((value) => !value)}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/80 hover:bg-white/10"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-paper"
           >
             {sidebarCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
           </button>
@@ -1473,6 +1546,11 @@ export function TeamDashboard({
             <p className="truncate text-base font-semibold tracking-wide">{brand.name}</p>
           </span>
         </div>
+        {!phone && sidebarTeam ? (
+          <div className={`shrink-0 pb-4 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}>
+            {renderTeamSwitcher(sidebarCollapsed)}
+          </div>
+        ) : null}
         <nav
           className={`flex flex-wrap gap-1 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:items-stretch min-[600px]:overflow-x-hidden min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:px-2.5" : "min-[600px]:overflow-y-auto min-[600px]:pr-4 min-[600px]:pl-2.5"}`}
           aria-label={t("nav.sections")}
@@ -1485,14 +1563,15 @@ export function TeamDashboard({
           {showTeamSettings ? <SideItem label={t("nav.team_settings")} icon={<IconGear />} compact={sidebarCollapsed} onClick={openTeamSettings} /> : null}
         </nav>
         {needsTeam && guestSignups.length > 0 && !sidebarCollapsed ? (
-          <div className="hidden max-h-72 shrink-0 overflow-y-auto border-t border-white/15 py-3 pr-4 pl-2.5 min-[600px]:block">
-            <GuestSignups tone="navy" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
+          <div className="hidden max-h-72 shrink-0 overflow-y-auto border-t border-line py-3 pr-4 pl-2.5 min-[600px]:block">
+            <GuestSignups tone="paper" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
           </div>
         ) : null}
+        <div className="mt-auto hidden shrink-0 flex-col min-[600px]:flex">
         {account ? (
           <nav
             aria-label={t("nav.help")}
-            className={`mt-auto hidden shrink-0 flex-col gap-1 overflow-hidden border-t border-white/15 pt-3 pb-3 min-[600px]:flex ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}
+            className={`flex shrink-0 flex-col gap-1 overflow-hidden border-t border-line pt-3 pb-3 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}
           >
             <SideItem label={t("nav.report_bug")} icon={<IconBug />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("bug")} />
             <SideItem label={t("nav.suggestions")} icon={<IconBulb />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("suggestion")} />
@@ -1500,6 +1579,13 @@ export function TeamDashboard({
             <SideItem label={t("landing.nav.contact")} icon={<IconMail />} compact={sidebarCollapsed} onClick={() => setContactOpen(true)} />
           </nav>
         ) : null}
+        {!phone ? (
+          <div className={`border-t border-line py-2 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}>
+            {renderMemberBalance(sidebarCollapsed)}
+            {renderUserMenu(sidebarCollapsed)}
+          </div>
+        ) : null}
+        </div>
       </aside>
       <MobileDock
         sectionsLabel={t("nav.sections")}
@@ -1535,8 +1621,10 @@ export function TeamDashboard({
       {account && menuPresence.mounted ? (
         <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] overflow-hidden overscroll-none min-[600px]:hidden">
           <button type="button" aria-label={t("event.close")} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${menuPresence.shown ? "opacity-100" : "opacity-0"}`} onClick={() => setMenuOpen(false)} />
-          <aside className={`absolute top-0 right-auto bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 z-10 flex w-64 flex-col overflow-hidden bg-navy text-white shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
-            <div className="flex h-full flex-col gap-1 overflow-hidden px-2 py-3 pr-4">
+          <aside className={`absolute inset-y-0 left-0 z-10 flex w-64 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
+            <div className="flex h-full min-h-0 flex-col">
+            {phone && sidebarTeam ? <div className="shrink-0 pt-3 pr-4 pb-4 pl-[18px]">{renderTeamSwitcher(false)}</div> : null}
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pr-4">
               <nav aria-label={t("nav.sections")} className="flex flex-col gap-1">
                 <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} row onClick={() => { setMenuOpen(false); showHome("kalendars"); }} />
                 <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} row onClick={() => { setMenuOpen(false); showView("team"); }} />
@@ -1545,12 +1633,19 @@ export function TeamDashboard({
                 {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} row onClick={() => { setMenuOpen(false); showView("venues"); }} /> : null}
                 {showTeamSettings ? <SideItem label={t("nav.team_settings")} icon={<IconGear />} row onClick={() => { setMenuOpen(false); openTeamSettings(); }} /> : null}
               </nav>
-              <nav aria-label={t("nav.help")} className="mt-2 flex flex-col gap-1 border-t border-white/15 pt-3">
+              <nav aria-label={t("nav.help")} className="mt-2 flex flex-col gap-1 border-t border-line pt-3">
                 <SideItem label={t("nav.report_bug")} icon={<IconBug />} row onClick={() => { setMenuOpen(false); setFeedbackKind("bug"); }} />
                 <SideItem label={t("nav.suggestions")} icon={<IconBulb />} row onClick={() => { setMenuOpen(false); setFeedbackKind("suggestion"); }} />
                 <SideItem label={t("nav.feedback")} icon={<IconComment />} row onClick={() => { setMenuOpen(false); setFeedbackKind("feedback"); }} />
                 <SideItem label={t("landing.nav.contact")} icon={<IconMail />} row onClick={() => { setMenuOpen(false); setContactOpen(true); }} />
               </nav>
+            </div>
+            {phone ? (
+              <div className="shrink-0 border-t border-line py-2 pr-4 pl-[18px] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {renderMemberBalance(false)}
+                {renderUserMenu(false)}
+              </div>
+            ) : null}
             </div>
           </aside>
         </div>
@@ -1561,18 +1656,6 @@ export function TeamDashboard({
 
       <div className="flex min-h-screen min-w-0 flex-col max-[599px]:contents">
       <TopBar
-        key={ownedTeam ? teamPlayer(profile, ownedTeam.code)?.sourceUrl ?? ownedTeam.code : "account"}
-        account={profile}
-        team={activeTeam ? { id: activeTeam.id, name: activeTeam.name, code: activeTeam.code, logoUrl: activeTeam.logoUrl, sportId: activeTeam.sportId, moduleKeys: activeTeam.moduleKeys, demo: activeTeam.demo } : null}
-        teams={account ? teams : []}
-        onHome={() => showHome()}
-        onSelectTeam={selectTeam}
-        onUnwatchTeam={account?.isAdmin ? unwatchTeam : undefined}
-        onCreateTeam={createTeam}
-        settingsOpen={settingsOpen}
-        onSettingsOpenChange={setSettingsOpen}
-        onAccountChange={applyAccount}
-        player={entuziastiOn ? selfMember?.ehl ?? null : null}
         menuOpen={menuOpen}
         adminOpen={adminOpen}
         onOpenMenu={account ? () => {
@@ -1587,14 +1670,8 @@ export function TeamDashboard({
           else releaseMobileMenu("admin");
           setAdminOpen(next);
         } : undefined}
-        balanceMember={financeAllowed ? selfMember : null}
-        reservedHolds={selfMember ? (memberHolds[selfMember.id] ?? []) : []}
-        calendarIntegration={moduleOn(FRONTEND_MODULE_KEYS.calendar)}
-        entuziasti={entuziastiOn}
-        enabledModules={enabledModules}
-        individualModuleKeys={individualModuleKeys}
-        presetEntuziasti={presetEntuziasti}
-        sports={sports}
+        leading={headerIdentity ? renderTeamSwitcher(false, false) : null}
+        trailing={headerIdentity ? renderUserMenu(false, false) : null}
       />
       <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {teamPending ? (
@@ -1672,7 +1749,11 @@ export function TeamDashboard({
               }
               return true;
             }}
-            onBack={() => guardLeave(() => softGo(eventHref(basePath, lineupEvent.id)))}
+            onBack={() => guardLeave(() => {
+              setModalEventId(lineupEvent.id);
+              setClientPath(basePath);
+              softReplace(basePath);
+            })}
             onUnsaved={rememberLineupUnsaved}
             editable={canEditLineup}
             positions={catalogForSport(activeTeam?.demo ? null : activeTeam?.sportId, sports)}
@@ -2069,69 +2150,71 @@ export function TeamDashboard({
             </button>
           ) : null}
           <aside className="order-3 rounded-2xl bg-paper p-4 ring-1 ring-line sm:p-5 xl:order-none">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">{formatWeekday(selectedIso, formatLang)}</p>
-            <h2 className="mt-1 text-lg font-semibold">{formatDate(selectedIso)}</h2>
-            {selectedEvents.length === 0 ? (
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">{t("week.upcoming")}</p>
+            <h2 className="mt-1 text-lg font-semibold">{formatDate(todayIso)} - {formatDate(weekEndIso)}</h2>
+            {weekEvents.length === 0 ? (
               <p className="mt-4 text-sm text-muted">
-                {filtersActive ? t("day.emptyFiltered") : t("day.empty")}
+                {filtersActive ? t("week.emptyFiltered") : t("week.empty")}
               </p>
             ) : (
               <ul className="mt-4 space-y-3">
-                {selectedEvents.map((event) => {
+                {weekEvents.map((event) => {
                   const venue = venueSource.find((item) => item.id === event.venueId);
                   const cost = eventCost(event, venue?.pricePerHour ?? 0);
-                  const subteamName = filterSubteams.find((item) => item.id === event.subteamId)?.name;
+                  const subteam = filterSubteams.find((item) => item.id === event.subteamId);
+                  const subteamName = subteam?.name;
+                  const wash = subteamsOn && subteam ? subteamWash(subteam.color) : null;
                   const game = event.type === "game";
+                  const detail = eventKindDetail(event, game, t);
+                  const timeLabel = event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start);
+                  const showActions = basePath === "/demo" || managesTeam || lineupAllowed;
                   return (
-                    <li key={event.id} className={`rounded-xl bg-ice p-3 ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {lineupAllowed ? (
-                            <button type="button" disabled={lineupPendingId === event.id} onClick={() => openLineup(event)} className="w-full text-left disabled:cursor-not-allowed">
-                              <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
-                            </button>
-                          ) : (
-                            <EventCardBody event={event} game={game} cost={cost} subteamName={subteamName} />
-                          )}
+                    <li key={event.id} style={wash ? { backgroundColor: wash } : undefined} className={`rounded-xl p-3 ${wash ? "" : "bg-ice"} ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
+                      <div className="grid grid-cols-2 items-start gap-x-3">
+                        <div className="min-w-0">
+                          <p className={`text-lg font-semibold leading-tight ${game ? "text-game" : "text-train"}`}>
+                            {game ? t("legend.game") : t("legend.training")}
+                          </p>
+                          {detail ? <p className="mt-0.5 text-sm">{detail}</p> : null}
+                          <p className="mt-1 text-sm tabular-nums">{formatDate(event.date)} {timeLabel}</p>
+                          <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} align="start" compact className="mt-2 [&_p]:flex-wrap" />
+                        </div>
+                        <div className="flex min-w-0 flex-col items-end text-right">
+                          {showActions ? (
+                            <div className="flex items-center justify-end gap-0.5">
+                              {basePath === "/demo" || managesTeam ? (
+                                <IconTipButton label={t("actions.edit")} tone="muted" onClick={() => setEditingEvent(event)}>
+                                  <IconPencil />
+                                </IconTipButton>
+                              ) : null}
+                              {basePath === "/demo" || managesTeam ? (
+                                <IconTipButton label={t("actions.delete")} tone="game" onClick={() => setDeleteTarget(event)}>
+                                  <IconTrash />
+                                </IconTipButton>
+                              ) : null}
+                              {lineupAllowed ? (
+                                <LineupOpenButton pending={lineupPendingId === event.id} label={t("frontend_modules.game_layout")} onClick={() => openLineup(event)} />
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {cost != null ? <p className="mt-1 text-xl font-semibold tabular-nums leading-tight">{money(cost)}</p> : null}
+                          {subteamName ? <p className="mt-1 text-sm">{subteamName}</p> : null}
                           {venue ? (
                             <button
                               type="button"
                               onClick={() => toggleVenue(event.venueId)}
-                              className="mt-1 text-left text-sm text-train hover:underline"
+                              className="mt-0.5 max-w-full truncate text-sm text-train hover:underline"
                             >
                               {venue.name}
                             </button>
                           ) : null}
-                          {event.end ? (
-                            <p className="mt-1 text-xs text-muted">
-                              {formatDuration(hoursBetween(event.start, event.end))} × {money(venue?.pricePerHour ?? 0)}/h
-                            </p>
-                          ) : null}
-                          {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
-                            <p className="mt-2 text-xs font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
-                          ) : null}
-                          {teamHold(event) > 0 ? (
-                            <p className="mt-1 text-xs text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
-                          ) : null}
                         </div>
-                        <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} align="end" compact className="shrink-0" />
                       </div>
-                      {basePath === "/demo" || managesTeam || lineupAllowed ? (
-                        <div className="mt-3 flex flex-nowrap items-center gap-1.5">
-                          {basePath === "/demo" || managesTeam ? (
-                            <button type="button" onClick={() => setEditingEvent(event)} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-paper">
-                              {t("actions.edit")}
-                            </button>
-                          ) : null}
-                          {basePath === "/demo" || managesTeam ? (
-                            <button type="button" onClick={() => setDeleteTarget(event)} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium text-game hover:bg-game-soft">
-                              {t("actions.delete")}
-                            </button>
-                          ) : null}
-                          {lineupAllowed ? (
-                            <LineupOpenButton pending={lineupPendingId === event.id} label={t("frontend_modules.game_layout")} onClick={() => openLineup(event)} />
-                          ) : null}
-                        </div>
+                      {selfMember && playerHold(event.id, selfMember.id) > 0 ? (
+                        <p className="mt-2 text-xs font-medium text-train">{t("finance.reserved", { amount: money(playerHold(event.id, selfMember.id)) })}</p>
+                      ) : null}
+                      {teamHold(event) > 0 ? (
+                        <p className="mt-1 text-xs text-muted">{t("finance.reserved.team", { amount: money(teamHold(event)) })}</p>
                       ) : null}
                     </li>
                   );
@@ -2156,7 +2239,7 @@ export function TeamDashboard({
             onCreate={(input) => void addEvent(input)}
           />
         ) : null}
-        {openEvent ? (
+        {openEvent && !lineup ? (
           <EventDetails
             event={openEvent}
             members={membersForEvent(openEvent, roster)}
@@ -2175,7 +2258,7 @@ export function TeamDashboard({
             lineupPending={lineupPendingId === openEvent.id}
             onEdit={basePath === "/demo" || managesTeam ? () => setEditingEvent(openEvent) : undefined}
             onDelete={basePath === "/demo" || managesTeam ? () => setDeleteTarget(openEvent) : undefined}
-            onClose={() => softGo(basePath)}
+            onClose={closeEventModal}
             guestControls={pondEvent && managesTeam}
             guestHint={openEvent && managesTeam && openEvent.type === "training" && !openEvent.withCoach && !pondOn && basePath !== "/demo" ? (individualModuleKeys.includes(FRONTEND_MODULE_KEYS.pond) ? "team" : "sport") : null}
             allowGuests={Boolean(openEvent.allowGuests)}
@@ -2232,7 +2315,7 @@ export function TeamDashboard({
       {account?.isAdmin && adminPresence.mounted ? (
         <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] min-[600px]:hidden">
           <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${adminPresence.shown ? "opacity-100" : "opacity-0"}`} />
-          <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col bg-navy text-white shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
+          <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col border-l border-line bg-side text-ink shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
             <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {adminNav.map((item) => (
                 <SideItem
@@ -2257,7 +2340,7 @@ export function TeamDashboard({
         <div className="max-[599px]:contents min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-40 min-[600px]:h-screen min-[600px]:self-start min-[600px]:overflow-visible">
         <aside
           aria-label={t("nav.admin")}
-          className="group/admin z-40 hidden flex-col overflow-hidden bg-navy text-white transition-[width] duration-200 min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60"
+          className="group/admin z-40 hidden flex-col overflow-hidden border-l border-line bg-side text-ink transition-[width] duration-200 min-[600px]:absolute min-[600px]:top-0 min-[600px]:right-0 min-[600px]:flex min-[600px]:h-full min-[600px]:w-14 min-[600px]:hover:w-60 min-[600px]:hover:shadow-xl min-[600px]:focus-within:w-60"
         >
           <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 max-[599px]:pt-3 max-[599px]:pb-[calc(1rem+env(safe-area-inset-bottom))] min-[600px]:pr-2.5 min-[600px]:group-hover/admin:pr-4 min-[600px]:group-focus-within/admin:pr-4">
             {adminNav.map((item) => (
@@ -2447,33 +2530,33 @@ function MobileDock({
       {moreOpen ? (
         <div className="pointer-events-auto absolute right-4 bottom-full left-4 z-10 mb-3 rounded-2xl bg-paper p-1.5 text-ink shadow-lg ring-1 ring-line">
           {showGuests ? (
-            <button type="button" aria-busy={guestsBusy || undefined} onClick={() => pick(onGuests)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "guests" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
-              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{guestsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconGuest />}</span>
+            <button type="button" aria-busy={guestsBusy || undefined} onClick={() => pick(onGuests)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "guests" ? "bg-side font-medium shadow-sm" : "hover:bg-side"}`}>
+              <span className="grid size-8 place-items-center text-ink [&_svg]:size-5">{guestsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-ink/20 border-t-ink" /> : <IconGuest />}</span>
               {guestsLabel}
             </button>
           ) : null}
           {showSubteams ? (
-            <button type="button" aria-busy={subteamsBusy || undefined} onClick={() => pick(onSubteams)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "subteams" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
-              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{subteamsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconLayers />}</span>
+            <button type="button" aria-busy={subteamsBusy || undefined} onClick={() => pick(onSubteams)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "subteams" ? "bg-side font-medium shadow-sm" : "hover:bg-side"}`}>
+              <span className="grid size-8 place-items-center text-ink [&_svg]:size-5">{subteamsBusy ? <span className="size-4 animate-spin rounded-full border-2 border-ink/20 border-t-ink" /> : <IconLayers />}</span>
               {subteamsLabel}
             </button>
           ) : null}
           {showVenues ? (
-            <button type="button" aria-busy={venuesBusy || undefined} onClick={() => pick(onVenues)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "venues" ? "bg-ice font-medium" : "hover:bg-ice"}`}>
-              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5">{venuesBusy ? <span className="size-4 animate-spin rounded-full border-2 border-line border-t-navy" /> : <IconPin />}</span>
+            <button type="button" aria-busy={venuesBusy || undefined} onClick={() => pick(onVenues)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${view === "venues" ? "bg-side font-medium shadow-sm" : "hover:bg-side"}`}>
+              <span className="grid size-8 place-items-center text-ink [&_svg]:size-5">{venuesBusy ? <span className="size-4 animate-spin rounded-full border-2 border-ink/20 border-t-ink" /> : <IconPin />}</span>
               {venuesLabel}
             </button>
           ) : null}
           {showSettings ? (
-            <button type="button" onClick={() => pick(onSettings)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-ice">
-              <span className="grid size-8 place-items-center text-navy [&_svg]:size-5"><IconGear /></span>
+            <button type="button" onClick={() => pick(onSettings)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-side">
+              <span className="grid size-8 place-items-center text-ink [&_svg]:size-5"><IconGear /></span>
               {settingsLabel}
             </button>
           ) : null}
         </div>
       ) : null}
       <div className="flex items-end justify-center gap-2">
-      <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex h-11 items-stretch gap-1 rounded-2xl bg-navy p-1 text-white shadow-lg">
+      <nav aria-label={sectionsLabel} className="pointer-events-auto relative flex h-11 items-stretch gap-1 rounded-2xl bg-side p-1 text-ink shadow-lg ring-1 ring-line">
         <DockItem label={homeLabel} icon={<IconCalendar />} active={view === "home"} busy={homeBusy} onClick={() => pick(onHome)} />
         <DockItem label={teamLabel} icon={<IconUsers />} active={view === "team"} busy={teamBusy} onClick={() => pick(onTeam)} />
         {inlineExtras ? extraItems() : null}
@@ -2487,17 +2570,12 @@ function MobileDock({
         ) : null}
       </nav>
       {canAdd ? (
-        <button type="button" data-dock-add aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto grid size-11 shrink-0 place-items-center rounded-full bg-navy text-white shadow-lg">
+        <button type="button" data-dock-add aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto grid size-11 shrink-0 place-items-center rounded-full bg-side text-ink shadow-lg ring-1 ring-line">
           <span className="[&_svg]:size-6"><IconPlus /></span>
         </button>
       ) : null}
       </div>
     </div>
-    {canAdd ? (
-      <button type="button" aria-label={addLabel} onClick={() => pick(onAdd)} className="pointer-events-auto fixed right-6 bottom-6 z-50 hidden size-14 place-items-center rounded-full bg-navy text-white shadow-lg min-[600px]:grid">
-        <span className="[&_svg]:size-6"><IconPlus /></span>
-      </button>
-    ) : null}
     </>
   );
 }
@@ -2510,9 +2588,9 @@ function DockItem({ label, ariaLabel, icon, active, busy = false, onClick }: { l
       aria-busy={busy || undefined}
       aria-label={ariaLabel ?? label}
       onClick={onClick}
-      className={`grid h-full min-w-11 place-items-center rounded-lg px-2.5 ${active ? "bg-white/15" : "hover:bg-white/10"}`}
+      className={`grid h-full min-w-11 place-items-center rounded-lg px-2.5 text-ink ${active ? "bg-paper shadow-sm" : "hover:bg-paper"}`}
     >
-      <span className="grid h-6 place-items-center [&_svg]:size-5">{busy ? <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon ?? <span className="text-base font-semibold tracking-widest">{label}</span>}</span>
+      <span className="grid h-6 place-items-center [&_svg]:size-5">{busy ? <span className="size-4 animate-spin rounded-full border-2 border-ink/20 border-t-ink" /> : icon ?? <span className="text-base font-semibold tracking-widest">{label}</span>}</span>
     </button>
   );
 }
@@ -2562,17 +2640,17 @@ function SideItem({
       aria-current={active ? "page" : undefined}
       aria-busy={busy || undefined}
       aria-label={caption}
-      className={`relative text-white/90 hover:bg-white/10 ${
+      className={`relative text-ink hover:bg-paper ${
         flush
           ? "inline-flex w-full flex-none flex-row items-center gap-2 overflow-hidden rounded-xl py-0 text-left text-sm"
           : row
             ? "inline-flex w-full flex-none flex-row items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm"
             : "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[11px] leading-tight min-[600px]:inline-flex min-[600px]:w-full min-[600px]:flex-none min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-start min-[600px]:gap-2 min-[600px]:overflow-hidden min-[600px]:rounded-xl min-[600px]:px-0 min-[600px]:py-0 min-[600px]:text-left min-[600px]:text-sm"
-      } ${active ? "bg-white/15" : ""}`}
+      } ${active ? "bg-paper shadow-sm" : ""}`}
     >
-      <span className="inline-grid h-9 w-9 shrink-0 place-items-center [&_svg]:h-5 [&_svg]:w-5">{busy ? <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : icon}</span>
+      <span className="inline-grid h-9 w-9 shrink-0 place-items-center [&_svg]:h-5 [&_svg]:w-5">{busy ? <span className="size-5 animate-spin rounded-full border-2 border-ink/20 border-t-ink" /> : icon}</span>
       <span className={flush || row ? "min-w-0 flex-1 truncate" : `whitespace-nowrap min-[600px]:min-w-0 min-[600px]:flex-1 min-[600px]:truncate ${compact ? "min-[600px]:sr-only" : ""}`}>{label}</span>
-      {count != null ? <span className={`shrink-0 text-xs tabular-nums whitespace-nowrap text-white/55 ${flush || row ? "pr-4" : compact ? "sr-only" : "hidden pr-4 min-[600px]:inline"}`}>{count}</span> : null}
+      {count != null ? <span className={`shrink-0 text-xs tabular-nums whitespace-nowrap text-muted ${flush || row ? "pr-4" : compact ? "sr-only" : "hidden pr-4 min-[600px]:inline"}`}>{count}</span> : null}
     </button>
     {tip
       ? createPortal(

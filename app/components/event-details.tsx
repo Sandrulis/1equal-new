@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { InviteEmailFields, listedEmails } from "@/app/components/invite-email-fields";
@@ -16,6 +17,7 @@ import { memberFaceUrl } from "@/app/lib/entuziasti-view";
 import { isTrainerMember, type PositionCatalogItem } from "@/app/lib/positions";
 import { useEntuziasti } from "@/app/components/entuziasti-context";
 import { useLanguage } from "@/app/lib/language";
+import { useIsClient } from "@/app/lib/use-is-client";
 import { inviteTrainingGuests } from "@/app/lib/training-guests";
 
 export type Rsvp = "going" | "absent" | "pending";
@@ -60,7 +62,6 @@ export function VoteCountdown({ deadline, align = "start", compact = false, clas
     ...(left.days > 0 ? [{ value: String(left.days), unit: t("event.vote.unit.d") }] : []),
     { value: String(left.hours).padStart(2, "0"), unit: t("event.vote.unit.h") },
     { value: String(left.minutes).padStart(2, "0"), unit: t("event.vote.unit.min") },
-    { value: String(left.seconds).padStart(2, "0"), unit: t("event.vote.unit.s") },
   ];
   const end = align === "end";
   return (
@@ -191,6 +192,8 @@ export function EventDetails({
   const { formatLang, t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const [inviting, setInviting] = useState(false);
+  const titleId = useId();
+  const mounted = useIsClient();
   const formatMoney = useFormatMoney();
   const { formatDate, formatTime } = useDisplayFormat();
   const fee = feeProp ?? eventPlayerFee(event.type);
@@ -206,11 +209,31 @@ export function EventDetails({
   const derived = hours > 0 && fee > 0 ? Math.round(hours * fee * 100) / 100 : 0;
   const requested = event.expense != null && event.expense > 0 ? event.expense : derived;
   const percent = requested === 0 ? 0 : Math.min(100, Math.round((collected / requested) * 100));
+  const kindNote = event.type === "game"
+    ? event.home == null ? null : t(event.home ? "event.game.home" : "event.game.away")
+    : t(event.withCoach ? "event.add.coach" : "event.add.coach.off");
 
-  return (
-    <section id="event-details" className="mt-4 scroll-mt-4 rounded-2xl bg-paper ring-1 ring-line">
-      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-        <h2 className="text-lg font-semibold">{t(event.type === "game" ? "legend.game" : "legend.training")}</h2>
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !inviting) onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [inviting, onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
+      <section id="event-details" role="dialog" aria-modal="true" aria-labelledby={titleId} className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <h2 id={titleId} className="min-w-0 truncate text-lg font-semibold">{t(event.type === "game" ? "legend.game" : "legend.training")}{kindNote ? ` (${kindNote})` : ""}</h2>
         <span className="flex items-center gap-2">
           {onEdit ? (
             <button type="button" onClick={onEdit} className="rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-ice">
@@ -228,13 +251,11 @@ export function EventDetails({
           </IconTipButton>
         </span>
       </div>
+      <div className="overflow-y-auto">
 
       <div className="flex flex-col gap-4 px-4 py-4 min-[600px]:flex-row min-[600px]:items-start min-[600px]:justify-between min-[600px]:px-5">
         <dl className="order-2 grid min-w-0 flex-1 gap-2 text-sm min-[600px]:order-1 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
-          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)}`} />
-          <Detail label={t("event.time")} value={event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)} />
-          {event.type === "game" && event.home != null ? <Detail label={t("event.game.side")} value={t(event.home ? "event.game.home" : "event.game.away")} /> : null}
-          {event.type === "training" ? <Detail label={t("event.coach")} value={event.withCoach ? t("event.add.coach") : t("event.add.coach.off")} /> : null}
+          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)} ${event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)}`} />
           <Detail label={t("event.venue")} value={venueName} />
           <Detail label={t("event.price")} value={formatMoney(fee)} />
         </dl>
@@ -345,7 +366,10 @@ export function EventDetails({
           </AttendanceGroup>
         </div>
       </div>
+      </div>
     </section>
+    </div>,
+    document.body,
   );
 }
 

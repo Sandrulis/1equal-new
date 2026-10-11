@@ -686,6 +686,9 @@ export const messages = {
   "event.close": { lv: "Aizvērt", en: "Close", ru: "Закрыть" },
   "day.empty": { lv: "Šajā dienā nav spēļu vai treniņu.", en: "No games or practices on this day.", ru: "В этот день нет игр и тренировок." },
   "day.emptyFiltered": { lv: "Ar šo filtru šajā dienā nekā nav.", en: "Nothing on this day for this filter.", ru: "С этим фильтром в этот день ничего нет." },
+  "week.upcoming": { lv: "Nākamā nedēļa", en: "Upcoming week", ru: "Ближайшая неделя" },
+  "week.empty": { lv: "Nākamajā nedēļā nav spēļu vai treniņu.", en: "No games or practices in the upcoming week.", ru: "На ближайшей неделе нет игр и тренировок." },
+  "week.emptyFiltered": { lv: "Ar šo filtru nākamajā nedēļā nekā nav.", en: "Nothing in the upcoming week for this filter.", ru: "С этим фильтром на ближайшей неделе ничего нет." },
   "members.title": { lv: "Dalībnieki", en: "Members", ru: "Участники" },
   "members.hint": { lv: "Klikšķis uz cilvēka filtrē kalendāru pēc apakškomandas.", en: "Click a person to filter the calendar by sub-team.", ru: "Нажатие на человека фильтрует календарь по подкоманде." },
   "members.showing": { lv: "Rāda {name}", en: "Showing {name}", ru: "Показано: {name}" },
@@ -740,6 +743,7 @@ export const messages = {
   "roster.member": { lv: "Dalībnieks", en: "Member", ru: "Участник" },
   "roster.details": { lv: "Numurs un pozīcija", en: "Number and position", ru: "Номер и позиция" },
   "roster.balance": { lv: "Bilance", en: "Balance", ru: "Баланс" },
+  "roster.balance.player": { lv: "Spēlētāja bilance:", en: "Player balance:", ru: "Баланс игрока:" },
   "roster.attendance": { lv: "Apmeklētība", en: "Attendance", ru: "Посещаемость" },
   "roster.attendance.legend": {
     lv: "Apmeklētība tiek rēķināta no notikumu balsojumiem. Skaitā ir «Būšu» pret notikušajām spēlēm un treniņiem, kuros spēlētājam bija jābalso: viņa apakškomanda vai visa komanda, ja apakškomanda nav norādīta.",

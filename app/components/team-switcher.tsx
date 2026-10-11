@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { AdminDialog } from "@/app/components/admin-dialog";
 import { AvatarCropField, type AvatarCropHandle } from "@/app/components/avatar-crop-field";
 import { EhlTeamLinkField, sameEhlTeam, type ResolvedEhlTeam } from "@/app/components/ehl-team-link-field";
@@ -41,6 +42,8 @@ export function TeamSwitcher({
   enabledModules = null,
   individualModuleKeys = [],
   presetEntuziasti = false,
+  sidebar = false,
+  compact = false,
 }: {
   team: Pick<IssuedTeam, "name" | "code" | "logoUrl" | "sportId" | "moduleKeys" | "demo"> | null;
   teams: IssuedTeam[];
@@ -53,18 +56,25 @@ export function TeamSwitcher({
   enabledModules?: string[] | null;
   individualModuleKeys?: string[];
   presetEntuziasti?: boolean;
+  sidebar?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
-  useExclusiveMobileMenu("team", open, () => setOpen(false));
+  useExclusiveMobileMenu("team", open && !sidebar, () => setOpen(false));
   const [creating, setCreating] = useState(false);
   const [unwatchingId, setUnwatchingId] = useState<string | null>(null);
   const [wide, setWide] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   function logoOf(item: Pick<IssuedTeam, "logoUrl" | "sportId" | "moduleKeys" | "demo">): string | null {
     const sportKeys = item.sportId ? (sports.find((sport) => sport.id === item.sportId)?.moduleKeys ?? null) : null;
-    const granted = item.demo || !individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti) || (item.moduleKeys ?? []).includes(FRONTEND_MODULE_KEYS.entuziasti);
+    const individual = individualModuleKeys.includes(FRONTEND_MODULE_KEYS.entuziasti);
+    const keys = item.moduleKeys;
+    const granted = item.demo || !individual || keys == null || keys.includes(FRONTEND_MODULE_KEYS.entuziasti);
     const modules = granted ? enabledModules : (enabledModules ?? []).filter((key) => key !== FRONTEND_MODULE_KEYS.entuziasti);
     return teamLogoUrl(item.logoUrl, entuziastiForSport(modules, sportKeys));
   }
@@ -82,7 +92,9 @@ export function TeamSwitcher({
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -95,10 +107,40 @@ export function TeamSwitcher({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open || !sidebar) {
+      setMenuPos(null);
+      return;
+    }
+    function place() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const menu = menuRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.max(rect.width, 288);
+      let left = rect.left;
+      if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+      const height = menu?.height ?? 0;
+      let top = rect.bottom + 4;
+      if (height && top + height > window.innerHeight - 8) top = Math.max(8, rect.top - 4 - height);
+      setMenuPos({ top, left, width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, sidebar, compact, teams.length]);
+
   if (!team) return null;
 
   function activate() {
-    if (canSwitch && wide) {
+    if (!canSwitch) {
+      onHome();
+      return;
+    }
+    if (sidebar || wide) {
       setOpen((value) => !value);
       return;
     }
@@ -106,20 +148,27 @@ export function TeamSwitcher({
   }
 
   return (
-    <div ref={rootRef} className="relative min-w-0">
+    <div ref={rootRef} className={sidebar ? "min-w-0" : "relative min-w-0"}>
       <div className="flex min-w-0 items-center">
         <button
+          ref={buttonRef}
           type="button"
           aria-label={team.name}
-          aria-expanded={canSwitch && wide ? open : undefined}
-          aria-haspopup={canSwitch && wide ? "menu" : undefined}
+          title={sidebar && compact ? team.name : undefined}
+          aria-expanded={canSwitch && (sidebar || wide) ? open : undefined}
+          aria-haspopup={canSwitch && (sidebar || wide) ? "menu" : undefined}
           onClick={activate}
-          className="flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"
+          className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"}
         >
           <TeamMark name={team.name} logoUrl={logoOf(team)} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
-          <span className="hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block">{team.name}</span>
+          <span className={sidebar ? `min-w-0 flex-1 truncate text-sm font-semibold ${compact ? "sr-only" : ""}` : "hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block"}>{team.name}</span>
+          {canSwitch && !(sidebar && compact) ? (
+            <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "hidden size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line min-[600px]:grid"}>
+              <IconChevronsUpDown />
+            </span>
+          ) : null}
         </button>
-        {canSwitch && !wide ? (
+        {canSwitch && !wide && !sidebar ? (
           <button
             type="button"
             aria-label={t("team.switch.label")}
@@ -138,7 +187,7 @@ export function TeamSwitcher({
         ) : null}
       </div>
       {open && canSwitch ? (
-        <div role="menu" aria-label={t("team.switch.label")} className="absolute top-full left-0 z-40 mt-1 rounded-xl bg-paper p-1.5 ring-1 ring-line max-[599px]:fixed max-[599px]:inset-x-0 max-[599px]:top-14 max-[599px]:rounded-none min-[600px]:w-72">
+        <TeamMenuFrame sidebar={sidebar} pos={menuPos} menuRef={menuRef} label={t("team.switch.label")}>
           {teams.map((item) => (
             <div key={item.code} className={`flex items-center rounded-lg ${item.code === team.code ? "bg-ice" : ""}`}>
               <button
@@ -187,7 +236,7 @@ export function TeamSwitcher({
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-navy text-white">+</span>
             {t("team.switch.add")}
           </button>
-        </div>
+        </TeamMenuFrame>
       ) : null}
       <CreateTeamDialog
         open={creating}
@@ -439,10 +488,47 @@ function CreateTeamDialog({
   );
 }
 
+function TeamMenuFrame({
+  sidebar,
+  pos,
+  menuRef,
+  label,
+  children,
+}: {
+  sidebar: boolean;
+  pos: { top: number; left: number; width: number } | null;
+  menuRef: RefObject<HTMLDivElement | null>;
+  label: string;
+  children: ReactNode;
+}) {
+  const node = (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={label}
+      style={sidebar ? { top: pos?.top ?? -9999, left: pos?.left ?? 0, width: pos?.width ?? 288, visibility: pos ? "visible" : "hidden" } : undefined}
+      className={sidebar ? "fixed z-[70] max-h-[min(24rem,calc(100dvh-1rem))] overflow-y-auto rounded-xl bg-paper p-1.5 shadow-lg ring-1 ring-line" : "absolute top-full left-0 z-40 mt-1 rounded-xl bg-paper p-1.5 ring-1 ring-line max-[599px]:fixed max-[599px]:inset-x-0 max-[599px]:top-14 max-[599px]:rounded-none min-[600px]:w-72"}
+    >
+      {children}
+    </div>
+  );
+  if (sidebar && typeof document !== "undefined") return createPortal(node, document.body);
+  return node;
+}
+
 function IconChevronDown({ open }: { open: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={open ? "rotate-180" : ""}>
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function IconChevronsUpDown() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6.5 8 3.5 12 6.5" />
+      <path d="M4 9.5 8 12.5 12 9.5" />
     </svg>
   );
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.20
+
+- Notikums atveras modālī bez savas adreses. Virsrakstā ir mājas vai izbraukums un treneris, laiks ir aiz datuma
+- Labajā kolonnā ir nākamās nedēļas notikumi, un kartītes fons ir blāva apakškomandas krāsa
+- Spēlētāja bilance ir kreisajā sānjoslā virs lietotāja izvēlnes, ar maka ikonu un summu
+
 ## v0.2.19
 
 - Sporta veids ir pirmais lauks, kad veido, pievieno vai labo komandu
