@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4
+
+- Android lietotnē sīkdatņu logs pats neatveras. Iestatījumus joprojām var atvērt no kājenes
+
 ## v0.3.3
 
 - Android lietotne atveras uz ielogošanos, un ielogotu aizved uz paneli

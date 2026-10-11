@@ -84,7 +84,8 @@ function CookieConsentUi() {
   const { consent, isSettingsOpen } = useCookieConsent();
   const mounted = useIsClient();
 
-  if (!mounted || isNativeApp()) return null;
+  if (!mounted) return null;
+  if (isNativeApp() && !isSettingsOpen) return null;
   if (isSettingsOpen) return createPortal(<CookieSettings />, document.body);
   if (consent) return null;
   return createPortal(<CookieBanner />, document.body);
