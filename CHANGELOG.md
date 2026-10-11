@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.6
+
+- Android lietotnē Google ielogošanās vairs neatver pilno pārlūku. Logs aizveras un atgriežas aplikācijā
+
 ## v0.3.5
 
 - Android lietotnē ielogošanās ir bez augšējās joslas. Valodas karogs ir pa labi no virsraksta

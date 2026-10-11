@@ -7,6 +7,7 @@ import {
   isGoogleSignInEnabled,
   serializeGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
@@ -27,11 +28,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${back}?error=${error}`);
   }
 
+  const native = searchParams.get("client") === "app" && (await isNativeAppRequest());
   const state = createGoogleOAuthState(searchParams.get("remember") === "1", from, safeTrainingPath(searchParams.get("next")));
-  const url = await buildGoogleAuthorizeUrl(origin, state.nonce);
+  const url = await buildGoogleAuthorizeUrl(origin, state.nonce, native);
   if (!url) return NextResponse.redirect(`${origin}${back}?error=google`);
 
-  const response = NextResponse.redirect(url);
+  const response = native ? NextResponse.json({ url }) : NextResponse.redirect(url);
   response.cookies.set(GOOGLE_OAUTH_COOKIE, serializeGoogleOAuthState(state), googleOAuthCookieOptions(600));
   return response;
 }

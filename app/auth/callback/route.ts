@@ -8,6 +8,7 @@ import {
   parseGoogleOAuthState,
 } from "@/app/lib/auth/google-oauth";
 import { settleAccountDeletionOnSignIn, withAccountRestoredCookie } from "@/app/lib/auth/account-deletion";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
@@ -18,6 +19,12 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const googleState = parseGoogleOAuthState(cookieStore.get(GOOGLE_OAUTH_COOKIE)?.value);
   const stateParam = searchParams.get("state");
+
+  if (stateParam?.startsWith("app.") && !googleState && !(await isNativeAppRequest())) {
+    const target = new URL("oneequal://auth/callback");
+    searchParams.forEach((value, key) => target.searchParams.set(key, value));
+    return new NextResponse(null, { status: 302, headers: { Location: target.toString() } });
+  }
 
   if (googleOAuthStatesMatch(googleState, stateParam) && googleState) {
     if (searchParams.get("error") === "access_denied" || !searchParams.get("code")) {

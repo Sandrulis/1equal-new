@@ -88,16 +88,22 @@ function sameNonce(left: string, right: string) {
   return timingSafeEqual(a, b);
 }
 
+export function oauthStateNonce(stateParam: string | null) {
+  if (!stateParam) return null;
+  return stateParam.startsWith("app.") ? stateParam.slice(4) : stateParam;
+}
+
 export function googleOAuthStatesMatch(cookie: GoogleOAuthState | null, stateParam: string | null) {
-  if (!cookie || !stateParam) return false;
-  return sameNonce(cookie.nonce, stateParam);
+  const nonce = oauthStateNonce(stateParam);
+  if (!cookie || !nonce) return false;
+  return sameNonce(cookie.nonce, nonce);
 }
 
 export function googleRedirectUri(origin: string) {
   return `${origin.replace(/\/$/, "")}/auth/callback`;
 }
 
-export async function buildGoogleAuthorizeUrl(origin: string, nonce: string) {
+export async function buildGoogleAuthorizeUrl(origin: string, nonce: string, native = false) {
   const credentials = await readGoogleOAuthCredentials();
   if (!credentials) return null;
   const params = new URLSearchParams({
@@ -106,7 +112,7 @@ export async function buildGoogleAuthorizeUrl(origin: string, nonce: string) {
     response_type: "code",
     scope: "openid email profile",
     prompt: "select_account",
-    state: nonce,
+    state: native ? `app.${nonce}` : nonce,
   });
   return `${AUTHORIZE_URL}?${params.toString()}`;
 }
