@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.8
+
+- Produkcija ielādē Firebase atslēgu, lai Android paziņojums par jaunu notikumu aiziet
+
 ## v0.3.7
 
 - Android lietotnē Google ielogošanās notiek pašā aplikācijā, bez adreses joslas
