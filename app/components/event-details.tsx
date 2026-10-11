@@ -136,6 +136,7 @@ export function EventDetails({
   venueName,
   fee: feeProp,
   voteDeadline = null,
+  now = null,
   knownRsvp = false,
   actorId = null,
   leader = false,
@@ -165,6 +166,7 @@ export function EventDetails({
   venueName: string;
   fee?: number;
   voteDeadline?: number | null;
+  now?: number | null;
   knownRsvp?: boolean;
   actorId?: string | null;
   leader?: boolean;
@@ -212,6 +214,7 @@ export function EventDetails({
   const kindNote = event.type === "game"
     ? event.home == null ? null : t(event.home ? "event.game.home" : "event.game.away")
     : t(event.withCoach ? "event.add.coach" : "event.add.coach.off");
+  const countdownOpen = voteDeadline != null && now != null && now < voteDeadline;
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -253,13 +256,26 @@ export function EventDetails({
       </div>
       <div className="overflow-y-auto">
 
-      <div className="flex flex-col gap-4 px-4 py-4 min-[600px]:flex-row min-[600px]:items-start min-[600px]:justify-between min-[600px]:px-5">
-        <dl className="order-2 grid min-w-0 flex-1 gap-2 text-sm min-[600px]:order-1 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
-          <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)} ${event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)}`} />
-          <Detail label={t("event.venue")} value={venueName} />
-          <Detail label={t("event.price")} value={formatMoney(fee)} />
-        </dl>
-        <VoteCountdown deadline={voteDeadline} align="end" className="order-1 shrink-0 min-[600px]:order-2" />
+      <div className="flex flex-col gap-2 px-4 py-4 text-sm min-[600px]:flex-row min-[600px]:items-start min-[600px]:justify-between min-[600px]:gap-4 sm:px-5">
+        <div className="grid min-w-0 flex-1 gap-2">
+          <dl className="grid gap-2 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
+            <Detail label={t("event.date")} value={`${formatWeekday(event.date, formatLang)}, ${formatDate(event.date)} ${event.end ? `${formatTime(event.start)}-${formatTime(event.end)}` : formatTime(event.start)}`} />
+            <Detail label={t("event.venue")} value={venueName} className={countdownOpen ? "max-[599px]:hidden" : ""} />
+          </dl>
+          {countdownOpen ? (
+            <div className="grid grid-cols-2 items-start gap-4 min-[600px]:hidden">
+              <div className="grid min-w-0 gap-2">
+                <span className="text-muted">{t("event.venue")}</span>
+                <span className="font-medium">{venueName}</span>
+              </div>
+              <VoteCountdown deadline={voteDeadline} align="end" className="min-w-0 [&>p:first-child]:text-sm [&>p:last-child]:mt-2" />
+            </div>
+          ) : null}
+          <dl className="grid gap-2 min-[600px]:grid-cols-[8rem_minmax(0,1fr)]">
+            <Detail label={t("event.price")} value={formatMoney(fee)} />
+          </dl>
+        </div>
+        <VoteCountdown deadline={voteDeadline} align="end" className="hidden shrink-0 min-[600px]:block" />
       </div>
       {guestControls ? (
         <div className="mx-4 mb-4 flex flex-wrap items-center gap-2 sm:mx-5">
@@ -298,23 +314,23 @@ export function EventDetails({
       {teamReserved > 0 ? <p className="px-4 pb-1 text-sm text-muted sm:px-5">{t("finance.reserved.team", { amount: formatMoney(teamReserved) })}</p> : null}
 
       <div className="mx-4 mb-4 rounded-xl bg-ice px-4 py-3 sm:mx-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 items-end gap-x-4 gap-y-3">
           <Summary label={t("event.add.expense")} value={formatMoney(requested)} />
           <Summary label={t("event.collected")} value={formatMoney(collected)} />
           <Summary label={t("event.participants")} value={signupCount} />
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div
-            className="h-2 flex-1 overflow-hidden rounded-full bg-paper"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={percent}
-            aria-label={t("event.collected")}
-          >
-            <div className="h-full rounded-full bg-train" style={{ width: `${percent}%` }} />
+          <div className="flex min-w-0 items-center gap-2">
+            <div
+              className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-paper"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              aria-label={t("event.collected")}
+            >
+              <div className="h-full rounded-full bg-train" style={{ width: `${percent}%` }} />
+            </div>
+            <span className="text-sm font-medium tabular-nums">{percent}%</span>
           </div>
-          <span className="text-sm font-medium tabular-nums">{percent}%</span>
         </div>
       </div>
 
@@ -373,11 +389,11 @@ export function EventDetails({
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
     <>
-      <dt className="text-muted">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dt className={`text-muted ${className}`}>{label}</dt>
+      <dd className={`font-medium ${className}`}>{value}</dd>
     </>
   );
 }

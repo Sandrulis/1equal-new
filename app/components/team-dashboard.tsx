@@ -2249,6 +2249,7 @@ export function TeamDashboard({
             venueName={venueSource.find((item) => item.id === openEvent.venueId)?.name ?? ""}
             fee={venueSource.find((item) => item.id === openEvent.venueId)?.pricePerHour ?? 0}
             voteDeadline={eventVotingDeadline(openEvent, voteTraining, voteGame)}
+            now={now}
             knownRsvp={knownRsvp}
             actorId={profile && activeTeam && !activeTeam.demo ? profile.id : null}
             leader={canManageTeam}

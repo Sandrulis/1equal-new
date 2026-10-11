@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.23
+
+- Telefonā balsošanas atskaite ir labajā kolonnā pie laukuma, citur bloka labajā augšējā stūrī
+- Notikuma progress ir divās kolonnās: izdevumi un dalībnieki, savāktais un josla
+
 ## v0.2.22
 
 - Release pārbaude vairs nekrīt uz lint: izvēlnes, notikuma forma un kalendāra saraksts
