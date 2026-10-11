@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: "1Equal",
   webDir: "mobile/www",
   server: {
-    url: "https://1equal.com",
+    url: "https://www.1equal.com",
     androidScheme: "https",
+    allowNavigation: ["www.1equal.com", "1equal.com"],
   },
   plugins: {
     PushNotifications: {

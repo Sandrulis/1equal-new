@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.2
+
+- Android lietotne atver vietni, un kamēr tā ielādējas, centrā ir logo vai sistēmas nosaukums ar ielādes joslu
+
 ## v0.3.1
 
 - Telefonā komandas izvēle ir kreisajā pusē, bilance un lietotāja izvēlne labajā. Kreisās izvēlnes linki ritinās kopā
