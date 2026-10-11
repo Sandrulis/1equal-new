@@ -1619,9 +1619,9 @@ export function TeamDashboard({
         onAdd={beginAddEvent}
       />
       {account && menuPresence.mounted ? (
-        <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] overflow-hidden overscroll-none min-[600px]:hidden">
+        <div className="fixed inset-0 z-[55] overflow-hidden overscroll-none min-[600px]:hidden">
           <button type="button" aria-label={t("event.close")} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${menuPresence.shown ? "opacity-100" : "opacity-0"}`} onClick={() => setMenuOpen(false)} />
-          <aside className={`absolute inset-y-0 left-0 z-10 flex w-64 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
+          <aside className={`absolute inset-y-0 left-0 z-10 flex w-64 flex-col overflow-hidden border-r border-line bg-side pt-14 text-ink shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
             <div className="flex h-full min-h-0 flex-col">
             {phone && sidebarTeam ? <div className="shrink-0 pt-3 pr-4 pb-4 pl-[18px]">{renderTeamSwitcher(false)}</div> : null}
             <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pr-4">
@@ -1673,7 +1673,7 @@ export function TeamDashboard({
         leading={headerIdentity ? renderTeamSwitcher(false, false) : null}
         trailing={headerIdentity ? renderUserMenu(false, false) : null}
       />
-      <main className="order-3 flex-1 px-4 py-5 sm:px-6 lg:order-none lg:px-8 lg:py-7">
+      <main className="order-3 flex-1 px-4 py-5 max-[599px]:pt-[calc(3.5rem+1.25rem)] sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {teamPending ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted" role="status">
             <span className="size-5 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" />
@@ -2313,9 +2313,9 @@ export function TeamDashboard({
       </div>
       </div>
       {account?.isAdmin && adminPresence.mounted ? (
-        <div className="fixed top-14 right-0 bottom-0 left-0 z-[55] min-[600px]:hidden">
+        <div className="fixed inset-0 z-[55] min-[600px]:hidden">
           <button type="button" aria-label={t("sidebar.collapse")} onClick={() => setAdminOpen(false)} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${adminPresence.shown ? "opacity-100" : "opacity-0"}`} />
-          <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col border-l border-line bg-side text-ink shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
+          <aside aria-label={t("nav.admin")} className={`absolute top-0 right-0 bottom-0 z-10 flex w-72 flex-col border-l border-line bg-side pt-14 text-ink shadow-xl transition-transform duration-200 ${adminPresence.shown ? "translate-x-0" : "translate-x-full"}`}>
             <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3 pr-4 pl-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {adminNav.map((item) => (
                 <SideItem

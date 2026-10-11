@@ -60,7 +60,7 @@ export function EventFormDialog({
   const [venueId, setVenueId] = useState(event?.venueId ?? "");
   const [subteamId, setSubteamId] = useState(event?.subteamId ?? "");
   const [expense, setExpense] = useState(event?.expense != null ? String(event.expense) : "");
-  const [withCoach, setWithCoach] = useState(Boolean(event?.withCoach));
+  const [withCoach, setWithCoach] = useState(event?.withCoach === true);
   const [home, setHome] = useState<boolean | null>(event?.type === "game" ? (event.home ?? null) : null);
   const timeAnchorRef = useRef<HTMLButtonElement>(null);
   const start = hour && minute ? `${hour}:${minute}` : "";
@@ -140,8 +140,11 @@ export function EventFormDialog({
             </div>
             {type === "game" ? (
               <div className="min-w-0">
-                <span className="text-sm text-muted">{t("event.game.side")}</span>
-                <div className="mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ring-line" role="group" aria-label={t("event.game.side")}>
+                <span className="text-sm text-muted">
+                  {t("event.game.side")}
+                  <sup className="ml-0.5 text-[10px] leading-none font-semibold text-game" aria-hidden="true">*</sup>
+                </span>
+                <div className={`mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ${home == null ? "ring-game" : "ring-line"}`} role="group" aria-required="true" aria-label={t("event.game.side")}>
                   {([true, false] as const).map((option) => (
                     <button
                       key={option ? "home" : "away"}
@@ -157,20 +160,20 @@ export function EventFormDialog({
               </div>
             ) : null}
             {type === "training" ? (
-              <div className="text-sm">
-                <span className="text-muted">{t("event.add.coach")}</span>
-                <div className="mt-1 flex items-center justify-between rounded-lg bg-ice px-3 py-2 ring-1 ring-line">
-                  <span className="text-ink">{withCoach ? t("event.add.coach") : t("event.add.coach.off")}</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={withCoach}
-                    aria-label={t("event.add.coach")}
-                    onClick={() => setWithCoach((current) => !current)}
-                    className={`relative h-6 w-11 shrink-0 rounded-full ${withCoach ? "bg-train" : "bg-line"}`}
-                  >
-                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper ${withCoach ? "left-5" : "left-0.5"}`} />
-                  </button>
+              <div className="min-w-0">
+                <span className="text-sm text-muted">{t("event.coach")}</span>
+                <div className="mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ring-line" role="group" aria-label={t("event.coach")}>
+                  {([false, true] as const).map((option) => (
+                    <button
+                      key={option ? "with" : "without"}
+                      type="button"
+                      aria-pressed={withCoach === option}
+                      onClick={() => setWithCoach(option)}
+                      className={`flex-1 rounded-md px-3 py-1.5 text-sm ${withCoach === option ? "bg-paper font-medium shadow-sm" : "text-muted"}`}
+                    >
+                      {t(option ? "event.coach.switch.on" : "event.coach.switch.off")}
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : null}

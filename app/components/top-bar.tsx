@@ -105,7 +105,7 @@ export function TopBar({
   const brand = useSiteBrand();
 
   return (
-    <header className="sticky top-0 z-30 order-1 flex min-h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 py-1 max-[599px]:z-[60] sm:px-6 min-[600px]:hidden lg:order-none lg:px-8">
+    <header className="fixed inset-x-0 top-0 z-[60] flex h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 sm:px-6 min-[600px]:hidden">
       <div className="flex min-w-0 items-center gap-2">
         {onOpenMenu ? (
           <button type="button" aria-label={t("nav.sections")} aria-expanded={menuOpen} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">

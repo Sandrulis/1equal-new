@@ -618,6 +618,8 @@ export const messages = {
   "event.add.coach": { lv: "Ar treneri", en: "With a coach", ru: "С тренером" },
   "event.add.coach.off": { lv: "Bez trenera", en: "Without a coach", ru: "Без тренера" },
   "event.coach": { lv: "Treneris", en: "Coach", ru: "Тренер" },
+  "event.coach.switch.off": { lv: "Bez", en: "No", ru: "Нет" },
+  "event.coach.switch.on": { lv: "Ar", en: "Yes", ru: "Да" },
   "pond.need_sport": { lv: "Lai pieaicinātu no malas, sadaļā Sporta veidi šim sportam atzīmē moduli Viesi bez trenera.", en: "To invite people from outside, mark Guests without a coach on this sport under Sports.", ru: "Чтобы приглашать со стороны, в разделе Виды спорта отметь модуль Гости без тренера." },
   "pond.need_team": { lv: "Lai pieaicinātu no malas, sistēmas administratoram šai komandai jāieslēdz modulis Viesi bez trenera.", en: "To invite people from outside, a system administrator has to turn on Guests without a coach for this team.", ru: "Чтобы приглашать со стороны, системный администратор должен включить этой команде модуль Гости без тренера." },
   "event.add.saved": { lv: "Notikums ir pievienots.", en: "Event added.", ru: "Событие добавлено." },

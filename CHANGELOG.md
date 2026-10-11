@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.21
+
+- Treniņa formā Treneris ir kā Veids: Bez vai Ar, un jaunam treniņam ir Bez
+- Spēlei mājas vai izbraukums ir obligāts, un bez šīs izvēles notikumu nevar saglabāt
+- Telefonā augšējā josla paliek virs kreisās izvēlnes
+
 ## v0.2.20
 
 - Notikums atveras modālī bez savas adreses. Virsrakstā ir mājas vai izbraukums un treneris, laiks ir aiz datuma
