@@ -40,11 +40,13 @@ export function MemberBalance({
   team = null,
   reservedHolds = [],
   compact = false,
+  header = false,
 }: {
   member: Member;
   team?: Pick<IssuedTeam, "id" | "demo"> | null;
   reservedHolds?: BalanceHold[];
   compact?: boolean;
+  header?: boolean;
 }) {
   const { t } = useLanguage();
   const formatMoney = useFormatMoney();
@@ -57,7 +59,12 @@ export function MemberBalance({
 
   return (
     <>
-      <div className="mb-2.5">
+      {header ? (
+        <button type="button" aria-label={label} onClick={() => setBalanceOpen(true)} className={`max-w-28 truncate text-sm font-semibold tabular-nums ${tone}`}>
+          {amount}
+        </button>
+      ) : null}
+      {header ? null : <div className="mb-2.5">
         <button
           type="button"
           aria-label={label}
@@ -79,7 +86,7 @@ export function MemberBalance({
             ({formatMoney(reservedBalance)})
           </button>
         ) : null}
-      </div>
+      </div>}
       {balanceOpen ? <PlayerBalanceDialog member={member} teamId={team && !team.demo ? (team.id ?? null) : null} reserved={reservedBalance} onClose={() => setBalanceOpen(false)} /> : null}
       {holdsOpen ? <HoldDialog holds={reservedHolds} onClose={() => setHoldsOpen(false)} /> : null}
     </>
@@ -105,7 +112,7 @@ export function TopBar({
   const brand = useSiteBrand();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[60] flex h-14 items-center justify-between gap-3 border-b border-line bg-paper px-4 sm:px-6 min-[600px]:hidden">
+    <header className="fixed inset-x-0 top-0 z-[60] flex h-14 items-center justify-between gap-2.5 border-b border-line bg-paper px-2.5 min-[600px]:hidden">
       <div className="flex min-w-0 items-center gap-2">
         {onOpenMenu ? (
           <button type="button" aria-label={t("nav.sections")} aria-expanded={menuOpen} onClick={onOpenMenu} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice min-[600px]:hidden">
@@ -316,7 +323,7 @@ export function UserMenu({
           }
           setOpen(next);
         }}
-        className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "inline-flex items-center gap-2 rounded-lg hover:bg-ice min-[600px]:py-1 min-[600px]:pr-2 min-[600px]:pl-1"}
+        className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "inline-flex h-9 items-center gap-1.5 rounded-lg py-0 pr-2.5 pl-0 hover:bg-ice"}
       >
         {photoUrl ? (
           <ContentImage src={photoUrl} className="h-9 w-9 shrink-0 rounded-lg bg-ice object-contain object-center" />
@@ -325,7 +332,7 @@ export function UserMenu({
         )}
         <span className={sidebar ? `min-w-0 flex-1 truncate text-sm font-medium ${compact ? "sr-only" : ""}` : "hidden max-w-36 truncate text-sm font-medium min-[700px]:inline"}>{label}</span>
         {!(sidebar && compact) ? (
-          <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "hidden size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line min-[700px]:grid"}>
+          <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line"}>
             <IconChevronsUpDown />
           </span>
         ) : null}

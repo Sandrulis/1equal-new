@@ -1,6 +1,6 @@
 {
   "name": "1equal-new",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -13,9 +13,15 @@
     "typecheck": "tsc --noEmit",
     "audit:check": "node scripts/audit-check.mjs",
     "db:migrate": "node scripts/apply-migrations.mjs",
-    "ehl:teams": "node scripts/ehl-teams.mjs"
+    "ehl:teams": "node scripts/ehl-teams.mjs",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/push-notifications": "^8.1.3",
     "@fortawesome/fontawesome-svg-core": "^7.3.1",
     "@fortawesome/free-brands-svg-icons": "^7.3.1",
     "@fortawesome/free-regular-svg-icons": "^7.3.1",
@@ -24,6 +30,7 @@
     "@sentry/nextjs": "^11.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
+    "firebase-admin": "^14.5.0",
     "next": "16.3.8",
     "react": "19.2.4",
     "react-dom": "19.2.4"

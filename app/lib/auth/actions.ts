@@ -490,6 +490,11 @@ export async function saveUserLanguage(code: string): Promise<boolean> {
 
 export async function signOut() {
   if (isSupabaseConfigured()) {
+    const { user } = await getVerifiedAuth();
+    if (user) {
+      const admin = createAdminClient();
+      if (admin) await admin.from("push_devices").delete().eq("user_id", user.id);
+    }
     await writeAudit("auth.sign_out", "users", null, {});
     const supabase = await createClient();
     await supabase.auth.signOut();

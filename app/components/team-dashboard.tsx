@@ -1456,7 +1456,6 @@ export function TeamDashboard({
       }
     : null;
   const sidebarPhoto = (entuziastiOn ? (selfMember?.ehl?.photoUrl ?? teamPlayer(profile, activeTeam?.code)?.photoUrl) : null) ?? profile?.avatarUrl ?? null;
-  const headerIdentity = phone && !account;
 
   function renderTeamSwitcher(compact: boolean, docked = true) {
     if (!sidebarTeam) return null;
@@ -1479,7 +1478,7 @@ export function TeamDashboard({
     );
   }
 
-  function renderMemberBalance(compact: boolean) {
+  function renderMemberBalance(compact: boolean, header = false) {
     if (!financeAllowed || !selfMember) return null;
     return (
       <MemberBalance
@@ -1487,6 +1486,7 @@ export function TeamDashboard({
         team={activeTeam ? { id: "id" in activeTeam ? activeTeam.id : undefined, demo: Boolean(activeTeam.demo) } : null}
         reservedHolds={memberHolds[selfMember.id] ?? []}
         compact={compact}
+        header={header}
       />
     );
   }
@@ -1532,8 +1532,8 @@ export function TeamDashboard({
         </button>
       ) : null}
       <div className={overlay ? "relative z-40" : "contents"}>
-      <aside className={overlay ? "fixed top-0 left-0 z-40 hidden h-screen w-60 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl min-[600px]:flex" : `order-2 hidden overflow-hidden border-r border-line bg-side text-ink min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col ${sidebarCollapsed ? "min-[600px]:overflow-hidden" : "min-[600px]:overflow-x-hidden min-[600px]:overflow-y-auto"}`}>
-        <div className="hidden items-center gap-2 overflow-hidden px-2.5 py-4 min-[600px]:flex">
+      <aside className={overlay ? "fixed top-0 left-0 z-40 hidden h-screen w-60 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl min-[600px]:flex" : "order-2 hidden overflow-hidden border-r border-line bg-side text-ink min-[600px]:sticky min-[600px]:top-0 min-[600px]:z-20 min-[600px]:order-none min-[600px]:flex min-[600px]:h-screen min-[600px]:flex-col"}>
+        <div className="hidden shrink-0 items-center gap-2 overflow-hidden px-2.5 py-4 min-[600px]:flex">
           <button
             type="button"
             aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
@@ -1554,41 +1554,35 @@ export function TeamDashboard({
             {renderTeamSwitcher(sidebarCollapsed)}
           </div>
         ) : null}
-        <nav
-          className={`flex flex-wrap gap-1 pb-3 max-[599px]:w-full max-[599px]:flex-nowrap max-[599px]:items-stretch max-[599px]:justify-around max-[599px]:gap-0.5 max-[599px]:px-1 max-[599px]:py-1.5 min-[600px]:min-h-0 min-[600px]:flex-1 min-[600px]:flex-col min-[600px]:flex-nowrap min-[600px]:items-stretch min-[600px]:overflow-x-hidden min-[600px]:pb-4 ${sidebarCollapsed ? "min-[600px]:px-2.5" : "min-[600px]:overflow-y-auto min-[600px]:pr-4 min-[600px]:pl-2.5"}`}
-          aria-label={t("nav.sections")}
-        >
-          <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
-          <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
-          {showGuests ? <SideItem label={t("pond.guests")} count={guestCount} icon={<IconGuest />} active={view === "guests"} busy={pendingNav === "guests"} compact={sidebarCollapsed} onClick={() => showView("guests")} /> : null}
-          {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} busy={pendingNav === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
-          {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
-          {showTeamSettings ? <SideItem label={t("nav.team_settings")} icon={<IconGear />} compact={sidebarCollapsed} onClick={openTeamSettings} /> : null}
-        </nav>
-        {needsTeam && guestSignups.length > 0 && !sidebarCollapsed ? (
-          <div className="hidden max-h-72 shrink-0 overflow-y-auto border-t border-line py-3 pr-4 pl-2.5 min-[600px]:block">
-            <GuestSignups tone="paper" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
-          </div>
-        ) : null}
-        <div className="mt-auto hidden shrink-0 flex-col min-[600px]:flex">
-        {account ? (
-          <nav
-            aria-label={t("nav.help")}
-            className={`flex shrink-0 flex-col gap-1 overflow-hidden border-t border-line pt-3 pb-3 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}
-          >
-            <SideItem label={t("nav.report_bug")} icon={<IconBug />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("bug")} />
-            <SideItem label={t("nav.suggestions")} icon={<IconBulb />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("suggestion")} />
-            <SideItem label={t("nav.feedback")} icon={<IconComment />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("feedback")} />
-            <SideItem label={t("landing.nav.contact")} icon={<IconMail />} compact={sidebarCollapsed} onClick={() => setContactOpen(true)} />
+        <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}>
+          <nav className="flex flex-col gap-1 pb-3" aria-label={t("nav.sections")}>
+            <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} compact={sidebarCollapsed} onClick={() => showHome("kalendars")} />
+            <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} compact={sidebarCollapsed} onClick={() => showView("team")} />
+            {showGuests ? <SideItem label={t("pond.guests")} count={guestCount} icon={<IconGuest />} active={view === "guests"} busy={pendingNav === "guests"} compact={sidebarCollapsed} onClick={() => showView("guests")} /> : null}
+            {canManageTeam && moduleOn(FRONTEND_MODULE_KEYS.subteams) ? <SideItem label={t("nav.subteams")} count={subteamCount} icon={<IconLayers />} active={view === "subteams"} busy={pendingNav === "subteams"} compact={sidebarCollapsed} onClick={() => showView("subteams")} /> : null}
+            {canManageTeam ? <SideItem label={t("nav.venues")} count={venueCount} icon={<IconPin />} active={view === "venues"} busy={pendingNav === "venues"} compact={sidebarCollapsed} onClick={() => showView("venues")} /> : null}
+            {showTeamSettings ? <SideItem label={t("nav.team_settings")} icon={<IconGear />} compact={sidebarCollapsed} onClick={openTeamSettings} /> : null}
           </nav>
-        ) : null}
+          {needsTeam && guestSignups.length > 0 && !sidebarCollapsed ? (
+            <div className="border-t border-line py-3">
+              <GuestSignups tone="paper" visits={guestSignups} onLeft={(eventId) => setGuestSignups((current) => current.filter((visit) => visit.eventId !== eventId))} />
+            </div>
+          ) : null}
+          {account ? (
+            <nav aria-label={t("nav.help")} className="flex flex-col gap-1 border-t border-line py-3">
+              <SideItem label={t("nav.report_bug")} icon={<IconBug />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("bug")} />
+              <SideItem label={t("nav.suggestions")} icon={<IconBulb />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("suggestion")} />
+              <SideItem label={t("nav.feedback")} icon={<IconComment />} compact={sidebarCollapsed} onClick={() => setFeedbackKind("feedback")} />
+              <SideItem label={t("landing.nav.contact")} icon={<IconMail />} compact={sidebarCollapsed} onClick={() => setContactOpen(true)} />
+            </nav>
+          ) : null}
+        </div>
         {!phone ? (
-          <div className={`border-t border-line py-2 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}>
+          <div className={`shrink-0 border-t border-line py-2 ${sidebarCollapsed ? "px-2.5" : "pr-4 pl-2.5"}`}>
             {renderMemberBalance(sidebarCollapsed)}
             {renderUserMenu(sidebarCollapsed)}
           </div>
         ) : null}
-        </div>
       </aside>
       <MobileDock
         sectionsLabel={t("nav.sections")}
@@ -1624,10 +1618,10 @@ export function TeamDashboard({
       {account && menuPresence.mounted ? (
         <div className="fixed inset-0 z-[55] overflow-hidden overscroll-none min-[600px]:hidden">
           <button type="button" aria-label={t("event.close")} className={`absolute inset-0 bg-ink/40 backdrop-blur-sm transition-opacity duration-200 ${menuPresence.shown ? "opacity-100" : "opacity-0"}`} onClick={() => setMenuOpen(false)} />
-          <aside className={`absolute inset-y-0 left-0 z-10 flex w-64 flex-col overflow-hidden border-r border-line bg-side pt-14 text-ink shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
-            <div className="flex h-full min-h-0 flex-col">
+          <aside className={`absolute top-14 bottom-0 left-0 z-10 flex w-64 flex-col overflow-hidden border-r border-line bg-side text-ink shadow-xl transition-transform duration-200 ${menuPresence.shown ? "translate-x-0" : "-translate-x-full"}`}>
+            <div className="flex min-h-0 flex-1 flex-col">
             {phone && sidebarTeam ? <div className="shrink-0 pt-3 pr-4 pb-4 pl-[18px]">{renderTeamSwitcher(false)}</div> : null}
-            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pr-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pr-4">
               <nav aria-label={t("nav.sections")} className="flex flex-col gap-1">
                 <SideItem label={t("nav.home")} icon={<IconCalendar />} active={view === "home"} busy={pendingNav === "home"} row onClick={() => { setMenuOpen(false); showHome("kalendars"); }} />
                 <SideItem label={t("nav.members")} count={rosterCount} icon={<IconUsers />} active={view === "team"} busy={pendingNav === "team"} row onClick={() => { setMenuOpen(false); showView("team"); }} />
@@ -1673,8 +1667,13 @@ export function TeamDashboard({
           else releaseMobileMenu("admin");
           setAdminOpen(next);
         } : undefined}
-        leading={headerIdentity ? renderTeamSwitcher(false, false) : null}
-        trailing={headerIdentity ? renderUserMenu(false, false) : null}
+        leading={phone && !menuOpen ? renderTeamSwitcher(false, false) : null}
+        trailing={phone ? (
+          <>
+            {renderMemberBalance(false, true)}
+            {renderUserMenu(false, false)}
+          </>
+        ) : null}
       />
       <main className="order-3 flex-1 px-4 py-5 max-[599px]:pt-[calc(3.5rem+1.25rem)] sm:px-6 lg:order-none lg:px-8 lg:py-7">
         {teamPending ? (

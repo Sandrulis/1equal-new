@@ -13,6 +13,7 @@ import { formatClock, formatDisplayDate, formatMoney } from "@/app/lib/format";
 import { messages, asLang, translate, type Lang, type MessageKey } from "@/app/lib/messages";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
+import { sendNewEventPush } from "@/app/lib/push/send-event-push";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import type { TeamEvent } from "@/app/lib/demo-data";
 import { DEFAULT_GAME_VOTING_HOURS, DEFAULT_TRAINING_VOTING_HOURS, isCurrency, type CurrencyCode } from "@/app/lib/team-defaults";
@@ -42,6 +43,7 @@ function voteLinks(token: string): { going: string; absent: string } {
 }
 
 export async function notifyNewEvent(event: TeamEvent, teamId: string, skipUserId: string): Promise<void> {
+  await sendNewEventPush(event, teamId, skipUserId);
   try {
     const client = createAdminClient();
     if (!client) return;

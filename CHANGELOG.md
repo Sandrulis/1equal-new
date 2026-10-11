@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.1
+
+- Telefonā komandas izvēle ir kreisajā pusē, bilance un lietotāja izvēlne labajā. Kreisās izvēlnes linki ritinās kopā
+- Sinhronizācijas poga rādās tikai tad, kad Entuziastu saite ir ielādējusi logo un abas formas
+- Android lietotne saņem paziņojumu par jaunu spēli vai treniņu
+
 ## v0.3.0
 
 - Komandas uzstādījumos, zem logo un formām, vadītājs un administrators sinhronizē spēlētājus no Entuziastu saites

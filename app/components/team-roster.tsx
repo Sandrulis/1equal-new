@@ -1015,6 +1015,7 @@ function TeamSettingsDialog({
   const [avatarDirty, setAvatarDirty] = useState(false);
   const avatarRef = useRef<AvatarCropHandle>(null);
   const previewRef = useRef<ResolvedEhlTeam | null>(null);
+  const [resolvedLink, setResolvedLink] = useState<ResolvedEhlTeam | null>(null);
   const [mismatch, setMismatch] = useState<{ remote: string; url: string; logoUrl: string | null } | null>(null);
   const settingsKey = `${open}|${name}|${sourceUrl ?? ""}|${currency ?? ""}|${trainingHours}|${gameHours}|${sportId ?? ""}`;
   const [seenSettings, setSeenSettings] = useState(settingsKey);
@@ -1030,6 +1031,7 @@ function TeamSettingsDialog({
       setBusy(null);
       setAvatarDirty(false);
       setMismatch(null);
+      setResolvedLink(null);
     }
   }
 
@@ -1043,6 +1045,8 @@ function TeamSettingsDialog({
     ? { name, url: savedUrl, logoUrl, homeKitUrl: homeKitUrl ?? null, awayKitUrl: awayKitUrl ?? null }
     : null;
   const linkValue = showLink ? draftLink.trim() : (sourceUrl ?? "");
+  const loadedLink = sameEhlTeam(draftLink, resolvedLink) ? resolvedLink : sameEhlTeam(draftLink, storedPreview) ? storedPreview : null;
+  const kitsReady = Boolean(loadedLink?.logoUrl && loadedLink.homeKitUrl && loadedLink.awayKitUrl && sameEhlTeam(sourceUrl ?? "", loadedLink));
   const showAvatar = linkValue === "";
   const dirty = draftName.trim() !== name || (showLink && draftLink.trim() !== (sourceUrl ?? "")) || draftCurrency !== currency || trainingValue !== trainingHours || gameValue !== gameHours || pickedSport !== (sportId ?? null) || (showAvatar && avatarDirty);
 
@@ -1132,11 +1136,12 @@ function TeamSettingsDialog({
               onLoading={setLinkBusy}
               onResolved={(next) => {
                 previewRef.current = next;
+                setResolvedLink(next);
                 if (next && next.url !== savedUrl) setDraftName(next.name.slice(0, 80));
               }}
             />
           ) : null}
-          {showLink && onSync ? (
+          {showLink && onSync && kitsReady ? (
             <button type="button" disabled={syncing || busy !== null || linkBusy} onClick={onSync} className="flex w-full items-center justify-center gap-2 rounded-lg bg-ice px-3 py-2 text-sm font-medium text-ink ring-1 ring-line hover:bg-paper disabled:opacity-40">
               {syncing ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" /> : null}
               {t("roster.ehl.sync")}

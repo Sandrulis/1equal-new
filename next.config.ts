@@ -13,6 +13,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["firebase-admin"],
   turbopack: {
     root: projectRoot,
   },

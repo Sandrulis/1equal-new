@@ -4,6 +4,7 @@ import { DM_Sans } from "next/font/google";
 import { CookieConsentProvider } from "@/app/components/cookie-consent";
 import { FeedbackToastProvider } from "@/app/components/feedback-toast";
 import { AuthHashSession } from "@/app/components/auth-hash-session";
+import { NativePush } from "@/app/components/native-push";
 import { SiteBrandProvider } from "@/app/components/site-brand-provider";
 import { SentryClient } from "@/app/components/sentry-client";
 import { UmamiScript } from "@/app/components/umami-script";
@@ -57,6 +58,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <UmamiScript websiteId={umami?.websiteId ?? null} scriptUrl={umami?.scriptUrl ?? null} />
               <FeedbackToastProvider>{children}</FeedbackToastProvider>
               <AuthHashSession />
+              <NativePush />
             </CookieConsentProvider>
           </LanguageProvider>
         </SiteBrandProvider>

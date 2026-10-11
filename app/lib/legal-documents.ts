@@ -29,7 +29,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Kādus datus apstrādājam",
           paragraphs: [
-            "Kontam glabājam vārdu, uzvārdu un e-pastu. Ja tos pievieno, glabājam arī profila attēlu, valodas un datuma iestatījumus, izvēli par notikumu e-pastiem un aktīvo komandu. Paroli glabā autentifikācijas sistēma kā jaucējkodu, nevis atklātā tekstā.",
+            "Kontam glabājam vārdu, uzvārdu un e-pastu. Ja tos pievieno, glabājam arī profila attēlu, valodas un datuma iestatījumus, izvēli par notikumu e-pastiem un aktīvo komandu. Ja lieto Android lietotni, glabājam arī šīs ierīces paziņojumu tokenu, lai nosūtītu paziņojumu par jaunu notikumu. Paroli glabā autentifikācijas sistēma kā jaucējkodu, nevis atklātā tekstā.",
             "Komandai glabājam nosaukumu, sporta veidu, logotipu, dalībniekus (vārds, e-pasts, tālrunis, numurs, pozīcijas), apakškomandas, laukumus, notikumus, dalību, bilanci un rezervācijas. Ja pievieno Entuziastu saiti, no tās publiskās lapas varam nolasīt tur redzamo profilu un attēlu.",
             "Sākumlapas kontaktu forma nosūta vārdu, e-pastu, tematu un ziņu uzturētājam.",
             "Tehniski varam redzēt IP adresi, pārlūka veidu un pēdējo paneļa atvēršanas laiku. Administratoram rādām konta pēdējo IP adresi un valsti, kā arī IP adresi un valsti, no kuras izveidota komanda, lai zinātu, ar ko sazināties. Ja serveris valsti nepaziņo, IP adresi var nosūtīt ģeolokācijas pakalpojumam, lai noteiktu valsti. Tos izmantojam drošībai un darbības nodrošināšanai, nevis reklāmai.",
@@ -48,7 +48,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Cik ilgi",
           paragraphs: [
-            "Konta un komandas dati glabājas, kamēr konts vai komanda pastāv. Profilu vari labot, un no komandas vari izstāties.",
+            "Konta un komandas dati glabājas, kamēr konts vai komanda pastāv. Profilu vari labot, un no komandas vari izstāties. Android paziņojumu tokenu dzēšam, kad izraksties vai konts tiek dzēsts.",
             "Sīkdatņu izvēle glabājas 12 mēnešus. Valoda glabājas šajā pārlūkā, līdz to nomaini vai iztīri vietnes datus.",
             "Ja atzīmē Atcerēties mani, sesija paliek 30 dienas. Citādi sesija beidzas, aizverot pārlūku. E-pasta maiņas saite der 24 stundas.",
           ],
@@ -57,7 +57,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           heading: "Kam datus nododam",
           paragraphs: [
             "Datus nepārdodam un nenododam reklāmas tīkliem.",
-            "Datubāzi, autentifikāciju un attēlus glabā Supabase. E-pastus, ja integrācija ir ieslēgta, nosūta Resend. Botu pārbaudi, ja tā ir ieslēgta, veic Cloudflare. Google ienākšanu, ja tā ir ieslēgta, veic Google. Kļūdu ziņojumus, ja tie ir ieslēgti, saņem Sentry. Umami saņem anonīmu lapas skatījumu tikai ar statistikas piekrišanu.",
+            "Datubāzi, autentifikāciju un attēlus glabā Supabase. E-pastus, ja integrācija ir ieslēgta, nosūta Resend. Android paziņojumus nosūta Firebase (Google). Botu pārbaudi, ja tā ir ieslēgta, veic Cloudflare. Google ienākšanu, ja tā ir ieslēgta, veic Google. Kļūdu ziņojumus, ja tie ir ieslēgti, saņem Sentry. Umami saņem anonīmu lapas skatījumu tikai ar statistikas piekrišanu.",
             "Šie pakalpojumi var apstrādāt datus ārpus Latvijas, saskaņā ar sava pakalpojuma noteikumiem.",
           ],
         },
@@ -95,7 +95,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "What data we process",
           paragraphs: [
-            "For an account we store the first name, last name and email. If you add them, we also store a profile image, language and date settings, the choice about event emails, and the active team. The password is kept by the authentication system as a hash, not as plain text.",
+            "For an account we store the first name, last name and email. If you add them, we also store a profile image, language and date settings, the choice about event emails, and the active team. If you use the Android app, we also store that device's notification token so we can send a notification about a new event. The password is kept by the authentication system as a hash, not as plain text.",
             "For a team we store the name, sport, logo, members (name, email, phone, number, positions), sub-teams, venues, events, attendance, balance and reservations. If you add an Entuziasti link, we may read the public profile and image shown on that page.",
             "The contact form on the landing page sends the name, email, subject and message to the operator.",
             "Technically we may see an IP address, browser type and the last time the panel was opened. An administrator can see an account's last IP address and country, and the IP address and country from which a team was created, so they know who to contact. If the server does not provide a country, the IP address may be sent to a geolocation service to determine it. We use that for security and to run the service, not for advertising.",
@@ -114,7 +114,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "How long",
           paragraphs: [
-            "Account and team data stay while the account or team exists. You can edit your profile and leave a team.",
+            "Account and team data stay while the account or team exists. You can edit your profile and leave a team. We delete the Android notification token when you sign out or the account is deleted.",
             "The cookie choice is kept for 12 months. The language stays in this browser until you change it or clear this site's data.",
             "If you check Remember me, the session stays for 30 days. Otherwise it ends when you close the browser. An email-change link is valid for 24 hours.",
           ],
@@ -123,7 +123,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           heading: "Who we share data with",
           paragraphs: [
             "We do not sell data and we do not pass it to advertising networks.",
-            "The database, authentication and images are stored by Supabase. Email, when that integration is on, is sent by Resend. The bot check, when it is on, is done by Cloudflare. Google sign-in, when it is on, is done by Google. Error reports, when they are on, are received by Sentry. Umami receives an anonymous page view only with analytics consent.",
+            "The database, authentication and images are stored by Supabase. Email, when that integration is on, is sent by Resend. Android notifications are sent by Firebase (Google). The bot check, when it is on, is done by Cloudflare. Google sign-in, when it is on, is done by Google. Error reports, when they are on, are received by Sentry. Umami receives an anonymous page view only with analytics consent.",
             "These services may process data outside Latvia, under the terms of that service.",
           ],
         },
@@ -161,7 +161,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Какие данные мы обрабатываем",
           paragraphs: [
-            "Для аккаунта храним имя, фамилию и e-mail. Если ты их добавишь, храним также фото профиля, настройки языка и даты, выбор писем о событиях и активную команду. Пароль хранит система аутентификации как хеш, а не открытый текст.",
+            "Для аккаунта храним имя, фамилию и e-mail. Если ты их добавишь, храним также фото профиля, настройки языка и даты, выбор писем о событиях и активную команду. Если пользуешься приложением Android, храним также токен уведомлений этого устройства, чтобы отправить уведомление о новом событии. Пароль хранит система аутентификации как хеш, а не открытый текст.",
             "Для команды храним название, вид спорта, логотип, участников (имя, e-mail, телефон, номер, позиции), подкоманды, катки, события, явку, баланс и резервы. Если добавить ссылку Entuziasti, мы можем прочитать публичный профиль и фото с этой страницы.",
             "Форма на главной странице отправляет имя, e-mail, тему и сообщение оператору.",
             "Технически мы можем видеть IP-адрес, тип браузера и время последнего открытия панели. Администратор видит последний IP-адрес и страну аккаунта, а также IP-адрес и страну, откуда создана команда, чтобы знать, с кем связаться. Если сервер не сообщает страну, IP-адрес может быть отправлен в сервис геолокации, чтобы определить её. Это нужно для безопасности и работы сервиса, а не для рекламы.",
@@ -180,7 +180,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
         {
           heading: "Как долго",
           paragraphs: [
-            "Данные аккаунта и команды хранятся, пока существуют аккаунт или команда. Профиль можно исправить, из команды можно выйти.",
+            "Данные аккаунта и команды хранятся, пока существуют аккаунт или команда. Профиль можно исправить, из команды можно выйти. Токен уведомлений Android удаляем при выходе или удалении аккаунта.",
             "Выбор cookie хранится 12 месяцев. Язык остаётся в этом браузере, пока ты его не сменишь или не очистишь данные сайта.",
             "Если отметить Запомнить меня, сессия остаётся на 30 дней. Иначе она заканчивается при закрытии браузера. Ссылка смены e-mail действует 24 часа.",
           ],
@@ -189,7 +189,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           heading: "Кому передаём данные",
           paragraphs: [
             "Данные не продаём и не передаём рекламным сетям.",
-            "Базу, аутентификацию и изображения хранит Supabase. Письма, если интеграция включена, отправляет Resend. Проверку на бота, если она включена, делает Cloudflare. Вход через Google, если он включён, делает Google. Сообщения об ошибках, если они включены, получает Sentry. Umami получает анонимный просмотр страницы только при согласии на аналитику.",
+            "Базу, аутентификацию и изображения хранит Supabase. Письма, если интеграция включена, отправляет Resend. Уведомления Android отправляет Firebase (Google). Проверку на бота, если она включена, делает Cloudflare. Вход через Google, если он включён, делает Google. Сообщения об ошибках, если они включены, получает Sentry. Umami получает анонимный просмотр страницы только при согласии на аналитику.",
             "Эти сервисы могут обрабатывать данные за пределами Латвии по своим условиям.",
           ],
         },

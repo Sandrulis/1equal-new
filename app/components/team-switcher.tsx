@@ -147,43 +147,39 @@ export function TeamSwitcher({
   }
 
   return (
-    <div ref={rootRef} className={sidebar ? "min-w-0" : "relative min-w-0"}>
+    <div ref={rootRef} className={sidebar ? "min-w-0" : "relative shrink-0"}>
       <div className="flex min-w-0 items-center">
         <button
           ref={buttonRef}
           type="button"
           aria-label={team.name}
           title={sidebar && compact ? team.name : undefined}
-          aria-expanded={canSwitch && (sidebar || wide) ? open : undefined}
-          aria-haspopup={canSwitch && (sidebar || wide) ? "menu" : undefined}
-          onClick={activate}
-          className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "flex min-w-0 items-center gap-2.5 rounded-lg hover:bg-ice"}
+          aria-expanded={canSwitch ? open : undefined}
+          aria-haspopup={canSwitch ? "menu" : undefined}
+          onClick={() => {
+            if (sidebar || wide) {
+              activate();
+              return;
+            }
+            if (!canSwitch) {
+              onHome();
+              return;
+            }
+            const next = !open;
+            if (next) claimMobileMenu("team");
+            else releaseMobileMenu("team");
+            setOpen(next);
+          }}
+          className={sidebar ? `flex w-full min-w-0 items-center gap-2 rounded-xl text-left hover:bg-paper ${compact ? "justify-center" : ""}` : "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg py-0 pr-2.5 pl-0 hover:bg-ice"}
         >
           <TeamMark name={team.name} logoUrl={logoOf(team)} className="h-9 w-9 shrink-0 overflow-hidden rounded-lg" />
-          <span className={sidebar ? `min-w-0 flex-1 truncate text-sm font-semibold ${compact ? "sr-only" : ""}` : "hidden min-w-0 truncate text-base font-semibold tracking-tight min-[600px]:block"}>{team.name}</span>
+          {sidebar ? <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${compact ? "sr-only" : ""}`}>{team.name}</span> : null}
           {canSwitch && !(sidebar && compact) ? (
-            <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "hidden size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line min-[600px]:grid"}>
+            <span aria-hidden className={sidebar ? "mr-2 grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line" : "grid size-5 shrink-0 place-items-center rounded-md bg-paper text-ink ring-1 ring-line"}>
               <IconChevronsUpDown />
             </span>
           ) : null}
         </button>
-        {canSwitch && !wide && !sidebar ? (
-          <button
-            type="button"
-            aria-label={t("team.switch.label")}
-            aria-expanded={open}
-            aria-haspopup="menu"
-            onClick={() => {
-              const next = !open;
-              if (next) claimMobileMenu("team");
-              else releaseMobileMenu("team");
-              setOpen(next);
-            }}
-            className="grid h-9 w-8 shrink-0 place-items-center rounded-lg text-ink hover:bg-ice"
-          >
-            <IconChevronDown open={open} />
-          </button>
-        ) : null}
       </div>
       {open && canSwitch ? (
         <TeamMenuFrame sidebar={sidebar} pos={placedMenu} menuRef={menuRef} label={t("team.switch.label")}>
@@ -513,14 +509,6 @@ function TeamMenuFrame({
   );
   if (sidebar && typeof document !== "undefined") return createPortal(node, document.body);
   return node;
-}
-
-function IconChevronDown({ open }: { open: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={open ? "rotate-180" : ""}>
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
 }
 
 function IconChevronsUpDown() {

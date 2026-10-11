@@ -10,3 +10,11 @@ dist/
 next-env.d.ts
 *.tsbuildinfo
 *.code-workspace
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+android/captures/
+android/.idea/
+*.jks
+*.keystore

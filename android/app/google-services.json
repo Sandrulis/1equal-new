@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "540287273640",
+    "project_id": "equal-65e23",
+    "storage_bucket": "equal-65e23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:540287273640:android:5b1a8454f96840de00909d",
+        "android_client_info": {
+          "package_name": "com.oneequal.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALdOuvFxDLHhmqe6PSpHzH6QKvBKkhEjk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
