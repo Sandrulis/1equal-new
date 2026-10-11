@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.10
+
+- Publiskā zīmola adrese Android ielādei paliek bez konta pārbaudes
+
 ## v0.3.9
 
 - Android ierīces reģistrācija paziņojumiem pārbauda ielogoto kontu

@@ -166,6 +166,14 @@ jobs:
                   fi
                   continue
                   ;;
+                # Public brand name and logo for the Android launch screen. No account data.
+                app/api/brand/route.ts)
+                  if ! grep -q "getSiteBrand" "$file"; then
+                    echo "FAIL: No public brand read in $file"
+                    exit 1
+                  fi
+                  continue
+                  ;;
               esac
               if ! grep -qE "getAccountProfile|requireUserAdmin" "$file"; then
                 echo "FAIL: No auth check in $file"
