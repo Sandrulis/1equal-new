@@ -4,8 +4,9 @@ const config: CapacitorConfig = {
   appId: "com.oneequal.app",
   appName: "1Equal",
   webDir: "mobile/www",
+  appendUserAgent: "1EqualAndroid",
   server: {
-    url: "https://www.1equal.com",
+    url: "https://www.1equal.com/login",
     androidScheme: "https",
     allowNavigation: ["www.1equal.com", "1equal.com"],
   },

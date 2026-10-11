@@ -5,6 +5,12 @@ import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const NATIVE_APP_MARK = "1EqualAndroid";
+
+async function isNativeAppRequest(): Promise<boolean> {
+  const userAgent = (await headers()).get("user-agent") ?? "";
+  return userAgent.includes(NATIVE_APP_MARK);
+}
 
 type TurnstileConfig = { siteKey: string; secret: string };
 
@@ -23,6 +29,7 @@ async function readTurnstile(): Promise<TurnstileConfig | null> {
 }
 
 export async function getPublicTurnstileSiteKey(): Promise<string | null> {
+  if (await isNativeAppRequest()) return null;
   const config = await readTurnstile();
   return config?.siteKey ?? null;
 }
@@ -50,6 +57,7 @@ async function verifyToken(token: string, secret: string, remoteIp?: string): Pr
 }
 
 export async function requireTurnstileToken(token: string | null | undefined): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
+  if (await isNativeAppRequest()) return { ok: true };
   const config = await readTurnstile();
   if (!config) return { ok: true };
   const trimmed = token?.trim();

@@ -75,11 +75,16 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   );
 }
 
+function isNativeApp() {
+  const native = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return native?.isNativePlatform?.() === true;
+}
+
 function CookieConsentUi() {
   const { consent, isSettingsOpen } = useCookieConsent();
   const mounted = useIsClient();
 
-  if (!mounted) return null;
+  if (!mounted || isNativeApp()) return null;
   if (isSettingsOpen) return createPortal(<CookieSettings />, document.body);
   if (consent) return null;
   return createPortal(<CookieBanner />, document.body);

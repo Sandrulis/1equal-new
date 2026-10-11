@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.3
+
+- Android lietotne atveras uz ielogošanos, un ielogotu aizved uz paneli
+- Android lietotnē nav sīkdatņu loga un botu pārbaudes. Vietnē abi paliek
+
 ## v0.3.2
 
 - Android lietotne atver vietni, un kamēr tā ielādējas, centrā ir logo vai sistēmas nosaukums ar ielādes joslu
