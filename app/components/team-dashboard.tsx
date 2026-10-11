@@ -737,12 +737,13 @@ export function TeamDashboard({
   const activeSubteamId = subteamId && filterSubteams.some((item) => item.id === subteamId) ? subteamId : null;
   const activeVenueId = venueId && venues.some((item) => item.id === venueId) ? venueId : null;
 
+  const catalogMonthIso = `${todayIso.slice(0, 7)}-01`;
   const calendarEvents = useMemo(() => {
-    const source = basePath === "/demo" ? [...(demoBundle?.catalogEvents(parseIsoDate(`${todayIso.slice(0, 7)}-01`)) ?? []), ...demoEvents] : [...(ownedTeam?.events ?? []), ...pastEvents];
+    const source = basePath === "/demo" ? [...(demoBundle?.catalogEvents(parseIsoDate(catalogMonthIso)) ?? []), ...demoEvents] : [...(ownedTeam?.events ?? []), ...pastEvents];
     const byId = new Map<string, TeamEvent>();
     for (const event of source) byId.set(event.id, event);
     return [...byId.values()].filter((event) => !hiddenEventIds.includes(event.id)).map((event) => eventEdits[event.id] ?? event);
-  }, [basePath, demoBundle, demoEvents, eventEdits, hiddenEventIds, ownedTeam, pastEvents, todayIso]);
+  }, [basePath, catalogMonthIso, demoBundle, demoEvents, eventEdits, hiddenEventIds, ownedTeam, pastEvents]);
 
   const filtered = useMemo(() => {
     return calendarEvents.filter((event) => {
@@ -1237,10 +1238,12 @@ export function TeamDashboard({
   }
 
   const now = useNow();
-  useEffect(() => {
-    if (lineup || !routeEventId) return;
+  if (!lineup && routeEventId) {
     setModalEventId(routeEventId);
     setClientPath(basePath);
+  }
+  useEffect(() => {
+    if (lineup || !routeEventId) return;
     softReplace(basePath);
   }, [basePath, lineup, routeEventId]);
   const openEventDate = openEventId && !lineup ? (calendarEvents.find((item) => item.id === openEventId)?.date ?? null) : null;

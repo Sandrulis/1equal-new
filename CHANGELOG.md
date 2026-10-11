@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.22
+
+- Release pārbaude vairs nekrīt uz lint: izvēlnes, notikuma forma un kalendāra saraksts
+
 ## v0.2.21
 
 - Treniņa formā Treneris ir kā Veids: Bez vai Ar, un jaunam treniņam ir Bez

@@ -202,11 +202,10 @@ export function UserMenu({
     };
   }, [open]);
 
+  const placedMenu = open && sidebar ? menuPos : null;
+
   useLayoutEffect(() => {
-    if (!open || !sidebar) {
-      setMenuPos(null);
-      return;
-    }
+    if (!open || !sidebar) return;
     function place() {
       const rect = buttonRef.current?.getBoundingClientRect();
       const menu = menuRef.current?.getBoundingClientRect();
@@ -294,7 +293,7 @@ export function UserMenu({
     <div
       ref={menuRef}
       role="menu"
-      style={{ top: menuPos?.top ?? -9999, left: menuPos?.left ?? 0, width: menuPos?.width ?? 256, visibility: menuPos ? "visible" : "hidden" }}
+      style={{ top: placedMenu?.top ?? -9999, left: placedMenu?.left ?? 0, width: placedMenu?.width ?? 256, visibility: placedMenu ? "visible" : "hidden" }}
       className="fixed z-[70] max-h-[min(24rem,calc(100dvh-1rem))] overflow-y-auto rounded-xl bg-paper shadow-lg ring-1 ring-line"
     >
       {menuItems}

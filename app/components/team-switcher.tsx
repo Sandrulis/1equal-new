@@ -107,11 +107,10 @@ export function TeamSwitcher({
     };
   }, [open]);
 
+  const placedMenu = open && sidebar ? menuPos : null;
+
   useLayoutEffect(() => {
-    if (!open || !sidebar) {
-      setMenuPos(null);
-      return;
-    }
+    if (!open || !sidebar) return;
     function place() {
       const rect = buttonRef.current?.getBoundingClientRect();
       const menu = menuRef.current?.getBoundingClientRect();
@@ -187,7 +186,7 @@ export function TeamSwitcher({
         ) : null}
       </div>
       {open && canSwitch ? (
-        <TeamMenuFrame sidebar={sidebar} pos={menuPos} menuRef={menuRef} label={t("team.switch.label")}>
+        <TeamMenuFrame sidebar={sidebar} pos={placedMenu} menuRef={menuRef} label={t("team.switch.label")}>
           {teams.map((item) => (
             <div key={item.code} className={`flex items-center rounded-lg ${item.code === team.code ? "bg-ice" : ""}`}>
               <button

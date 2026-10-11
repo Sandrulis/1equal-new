@@ -144,7 +144,7 @@ export function EventFormDialog({
                   {t("event.game.side")}
                   <sup className="ml-0.5 text-[10px] leading-none font-semibold text-game" aria-hidden="true">*</sup>
                 </span>
-                <div className={`mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ${home == null ? "ring-game" : "ring-line"}`} role="group" aria-required="true" aria-label={t("event.game.side")}>
+                <div className={`mt-1 flex w-full rounded-lg bg-ice p-1 ring-1 ${home == null ? "ring-game" : "ring-line"}`} role="group" aria-label={t("event.game.side")}>
                   {([true, false] as const).map((option) => (
                     <button
                       key={option ? "home" : "away"}

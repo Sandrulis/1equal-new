@@ -36,9 +36,7 @@ export function LanguageMenu({ embedded = false, slot = null, docked = false }: 
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) setFlyout(null);
-  }, [open]);
+  const placedFlyout = open ? flyout : null;
 
   useLayoutEffect(() => {
     if (!open || !embedded || (narrow && !docked)) return;
@@ -129,7 +127,7 @@ export function LanguageMenu({ embedded = false, slot = null, docked = false }: 
               data-language-popover
               role="listbox"
               aria-label={current.name}
-              style={{ top: flyout?.top ?? -9999, left: flyout?.left ?? 0, visibility: flyout ? "visible" : "hidden" }}
+              style={{ top: placedFlyout?.top ?? -9999, left: placedFlyout?.left ?? 0, visibility: placedFlyout ? "visible" : "hidden" }}
               className="fixed z-[80] flex min-w-40 flex-col gap-0.5 rounded-xl bg-paper p-1 shadow-lg ring-1 ring-line"
             >
               {languageOptions()}
