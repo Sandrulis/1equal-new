@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AuthNoticeModal } from "@/app/components/auth-notice-modal";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { PasswordStrengthMeter } from "@/app/components/password-strength-meter";
+import { LanguageMenu } from "@/app/components/language-menu";
 import { SiteFooter } from "@/app/components/site-footer";
 import { SiteHeader } from "@/app/components/site-header";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/app/components/turnstile-widget";
@@ -15,7 +16,7 @@ import { safeTrainingPath } from "@/app/lib/safe-next";
 
 type Mode = "login" | "signup" | "forgot";
 
-export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "", trainingNext = null }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string; trainingNext?: string | null }) {
+export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "", trainingNext = null, native = false }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string; trainingNext?: string | null; native?: boolean }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
   const router = useRouter();
@@ -108,10 +109,17 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
 
   return (
     <div className="flex min-h-screen flex-col bg-ice">
-      <SiteHeader />
+      {native ? null : <SiteHeader />}
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-2xl bg-paper p-6 ring-1 ring-line sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {native ? (
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="min-w-0 text-2xl font-semibold tracking-tight">{title}</h1>
+              <LanguageMenu dropdown />
+            </div>
+          ) : (
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          )}
           <p className="mt-2 text-sm leading-6 text-muted">{lead}</p>
           <form ref={formRef} className="mt-6 grid gap-4" onSubmit={(event) => void onSubmit(event)}>
               {mode === "signup" ? (

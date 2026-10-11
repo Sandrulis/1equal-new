@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { AuthScreen } from "@/app/components/auth-screen";
 import { absolutePublicUrl } from "@/app/lib/public-metadata";
 import { safeTrainingPath } from "@/app/lib/safe-next";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { getPublicTurnstileSiteKey } from "@/app/lib/security/turnstile";
 
 export const metadata: Metadata = {
@@ -12,6 +13,6 @@ export const metadata: Metadata = {
 };
 
 export default async function ForgotPasswordPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const [turnstileSiteKey, headerStore, query] = await Promise.all([getPublicTurnstileSiteKey(), headers(), searchParams]);
-  return <AuthScreen mode="forgot" turnstileSiteKey={turnstileSiteKey} scriptNonce={headerStore.get("x-nonce") ?? ""} trainingNext={safeTrainingPath(query.next)} />;
+  const [turnstileSiteKey, headerStore, query, native] = await Promise.all([getPublicTurnstileSiteKey(), headers(), searchParams, isNativeAppRequest()]);
+  return <AuthScreen mode="forgot" turnstileSiteKey={turnstileSiteKey} scriptNonce={headerStore.get("x-nonce") ?? ""} trainingNext={safeTrainingPath(query.next)} native={native} />;
 }

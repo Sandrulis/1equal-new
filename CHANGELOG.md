@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.5
+
+- Android lietotnē ielogošanās ir bez augšējās joslas. Valodas karogs ir pa labi no virsraksta
+
 ## v0.3.4
 
 - Android lietotnē sīkdatņu logs pats neatveras. Iestatījumus joprojām var atvērt no kājenes

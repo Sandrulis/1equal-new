@@ -6,14 +6,14 @@ import { useLanguage } from "@/app/lib/language";
 import { claimMobileMenu, releaseMobileMenu, useExclusiveMobileMenu } from "@/app/lib/mobile-menu";
 import { useNarrow, useHeaderBottom, usePresence } from "@/app/lib/use-presence";
 
-export function LanguageMenu({ embedded = false, slot = null, docked = false }: { embedded?: boolean; slot?: HTMLElement | null; docked?: boolean }) {
+export function LanguageMenu({ embedded = false, slot = null, docked = false, dropdown = false }: { embedded?: boolean; slot?: HTMLElement | null; docked?: boolean; dropdown?: boolean }) {
   const { t, lang, languages, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
   const [flyout, setFlyout] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow();
+  const narrow = useNarrow() && !dropdown;
   const sheet = usePresence(open && narrow && !docked);
   const sheetTop = useHeaderBottom(sheet.mounted, rootRef);
   useExclusiveMobileMenu("language", open && !docked, () => setOpen(false));

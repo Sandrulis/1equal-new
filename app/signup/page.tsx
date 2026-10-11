@@ -4,6 +4,7 @@ import { AuthScreen } from "@/app/components/auth-screen";
 import { isGoogleSignInEnabled } from "@/app/lib/auth/google-oauth";
 import { absolutePublicUrl } from "@/app/lib/public-metadata";
 import { safeTrainingPath } from "@/app/lib/safe-next";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { getPublicTurnstileSiteKey } from "@/app/lib/security/turnstile";
 
 export const metadata: Metadata = {
@@ -13,6 +14,6 @@ export const metadata: Metadata = {
 };
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const [turnstileSiteKey, googleEnabled, headerStore, query] = await Promise.all([getPublicTurnstileSiteKey(), isGoogleSignInEnabled(), headers(), searchParams]);
-  return <AuthScreen mode="signup" turnstileSiteKey={turnstileSiteKey} googleEnabled={googleEnabled} scriptNonce={headerStore.get("x-nonce") ?? ""} trainingNext={safeTrainingPath(query.next)} />;
+  const [turnstileSiteKey, googleEnabled, headerStore, query, native] = await Promise.all([getPublicTurnstileSiteKey(), isGoogleSignInEnabled(), headers(), searchParams, isNativeAppRequest()]);
+  return <AuthScreen mode="signup" turnstileSiteKey={turnstileSiteKey} googleEnabled={googleEnabled} scriptNonce={headerStore.get("x-nonce") ?? ""} trainingNext={safeTrainingPath(query.next)} native={native} />;
 }

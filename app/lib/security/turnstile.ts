@@ -1,16 +1,11 @@
 import { headers } from "next/headers";
 import type { MessageKey } from "@/app/lib/messages";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { trustedClientIp } from "@/app/lib/security/client-ip";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const NATIVE_APP_MARK = "1EqualAndroid";
-
-async function isNativeAppRequest(): Promise<boolean> {
-  const userAgent = (await headers()).get("user-agent") ?? "";
-  return userAgent.includes(NATIVE_APP_MARK);
-}
 
 type TurnstileConfig = { siteKey: string; secret: string };
 
