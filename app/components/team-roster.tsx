@@ -16,7 +16,7 @@ import type { Member, Subteam } from "@/app/lib/demo-data";
 import type { TeamLedgerLine } from "@/app/lib/invite-code";
 import { formatJersey } from "@/app/lib/format-jersey";
 import { InviteEmailFields, listedEmails } from "@/app/components/invite-email-fields";
-import { adjustMemberBalance, deleteTeamInvite, inviteTeamPlayer, listTeamInvites, removeOwnedMember, resendTeamInvite, saveTeamAvatar, setMemberTeamAdmin, updateOwnedTeam } from "@/app/lib/team-actions";
+import { adjustMemberBalance, deleteTeamInvite, inviteTeamPlayer, listTeamInvites, removeOwnedMember, resendTeamInvite, saveTeamAvatar, setMemberTeamAdmin, syncEntuziastiPlayers, updateOwnedTeam } from "@/app/lib/team-actions";
 import { PlayerProfile } from "@/app/components/player-profile";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { useDisplayFormat } from "@/app/components/display-preferences";
@@ -51,6 +51,10 @@ function initials(name: string): string {
 
 function memberCountKey(count: number): MessageKey {
   return count === 1 ? "members.count.one" : "members.count";
+}
+
+function syncCountKey(count: number): MessageKey {
+  return count === 1 ? "roster.ehl.sync.done.one" : "roster.ehl.sync.done";
 }
 
 type TeamEntry = {
@@ -214,6 +218,7 @@ export function TeamRoster({
     if (externalSettingsOpen) onExternalSettingsClose?.();
   }
   const [appointing, setAppointing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const isLeader = Boolean(teamId && accountId && (asLeader || (leaderId && leaderId === accountId)));
   const canAdjust = Boolean(teamId && accountId && (isLeader || members.some((member) => member.id === accountId && member.teamAdmin)));
   useEffect(() => {
@@ -312,6 +317,29 @@ export function TeamRoster({
     onMemberSaved?.(next, inviteCode);
     setAdjusting(null);
     showFeedback({ message: t("roster.balance.saved"), variant: "success" });
+  }
+
+  async function syncPlayers() {
+    if (!teamId || syncing) return;
+    setSyncing(true);
+    const result = await syncEntuziastiPlayers(teamId);
+    setSyncing(false);
+    if (!result.ok) {
+      showFeedback({ message: t(result.error), variant: "error" });
+      return;
+    }
+    if (result.linked.length) {
+      setMembers((current) => current.map((member) => {
+        const hit = result.linked.find((item) => item.userId === member.id);
+        if (!hit) return member;
+        return { ...member, ehl: hit.ehl, photoUrl: hit.ehl.photoUrl ?? member.photoUrl };
+      }));
+      for (const hit of result.linked) {
+        const member = members.find((item) => item.id === hit.userId);
+        if (member) onMemberSaved?.({ ...member, ehl: hit.ehl, photoUrl: hit.ehl.photoUrl ?? member.photoUrl }, inviteCode);
+      }
+    }
+    showFeedback({ message: t(syncCountKey(result.count), { count: result.count }), variant: "success" });
   }
 
   async function toggleAdmin(member: Member) {
@@ -631,6 +659,8 @@ export function TeamRoster({
           sportId={sportId}
           sports={sports}
           enabledModules={enabledModules}
+          syncing={syncing}
+          onSync={sourceUrl ? () => void syncPlayers() : undefined}
           trainingHours={trainingVotingHours}
           gameHours={gameVotingHours}
           onClose={closeTeamSettings}
@@ -948,6 +978,8 @@ function TeamSettingsDialog({
   sportId,
   sports,
   enabledModules = null,
+  syncing = false,
+  onSync,
   onClose,
   onSave,
 }: {
@@ -964,6 +996,8 @@ function TeamSettingsDialog({
   sportId: string | null;
   sports: Sport[];
   enabledModules?: string[] | null;
+  syncing?: boolean;
+  onSync?: () => void;
   onClose: () => void;
   onSave: (next: { name: string; currency: string | null; trainingVotingHours: number; gameVotingHours: number; sourceUrl: string | null; logoUrl: string | null; sportId: string | null }) => Promise<boolean>;
 }) {
@@ -1101,6 +1135,12 @@ function TeamSettingsDialog({
                 if (next && next.url !== savedUrl) setDraftName(next.name.slice(0, 80));
               }}
             />
+          ) : null}
+          {showLink && onSync ? (
+            <button type="button" disabled={syncing || busy !== null || linkBusy} onClick={onSync} className="flex w-full items-center justify-center gap-2 rounded-lg bg-ice px-3 py-2 text-sm font-medium text-ink ring-1 ring-line hover:bg-paper disabled:opacity-40">
+              {syncing ? <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-line border-t-navy" aria-hidden="true" /> : null}
+              {t("roster.ehl.sync")}
+            </button>
           ) : null}
           <label className="block text-sm">
             <span className="text-muted">{t("team.settings.name")}</span>

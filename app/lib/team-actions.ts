@@ -5,8 +5,8 @@ import { ownAvatarUrl, removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-s
 import { refreshTeamData } from "@/app/lib/cache-tags";
 import { writeAudit } from "@/app/lib/security/audit";
 import type { Member, TeamEvent, Venue } from "@/app/lib/demo-data";
-import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, type EhlPlayerProfile } from "@/app/lib/ehl-player";
-import { isEhlHost, parseEhlTeamUrl } from "@/app/lib/ehl-team";
+import { mergeStoredEhlPlayer, parseEhlPlayerPage, parseEhlPlayerUrl, readStoredEhlPlayer, type EhlPlayerProfile } from "@/app/lib/ehl-player";
+import { isEhlHost, matchEhlRoster, parseEhlTeamUrl, readEhlTeamPlayers } from "@/app/lib/ehl-team";
 import { fetchEhlTeamKits } from "@/app/lib/ehl-team-lookup";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { isOwnAvatarUrl } from "@/app/lib/avatar-url";
@@ -177,6 +177,70 @@ async function fetchPlayer(raw: string): Promise<{ profile: EhlPlayerProfile } |
   } catch {
     return { error: "user.player.failed" };
   }
+}
+
+export async function syncEntuziastiPlayers(teamId: string): Promise<{ ok: true; count: number; linked: { userId: string; ehl: EhlPlayerProfile }[] } | { ok: false; error: MessageKey }> {
+  const gate = await requireUserAdmin();
+  if (!gate) return { ok: false, error: "auth.error.generic" };
+  if (await rateLimit(`ehl-sync:${teamId}:${gate.account.id}`, 8, 15 * 60 * 1000)) return { ok: false, error: "auth.error.rate" };
+  if (!(await managesTeam(gate.client, teamId, gate.account.id))) return { ok: false, error: "auth.error.generic" };
+  const team = await gate.client.from("teams").select("source_url, sport_id, invite_code").eq("id", teamId).maybeSingle();
+  if (team.error || !team.data) return { ok: false, error: "auth.error.generic" };
+  const entuziasti = await moduleEnabledForSport(gate.client, team.data.sport_id, FRONTEND_MODULE_KEYS.entuziasti, teamId);
+  const source = entuziasti ? parseEhlTeamUrl(team.data.source_url ?? "") : null;
+  if (!source) return { ok: false, error: "team.link.invalid" };
+  let html = "";
+  try {
+    const response = await fetch(source, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+      headers: { accept: "text/html" },
+    });
+    if (!isEhlHost(new URL(response.url).hostname) || !response.ok) return { ok: false, error: "team.link.failed" };
+    html = (await response.text()).slice(0, 500_000);
+  } catch {
+    return { ok: false, error: "team.link.failed" };
+  }
+  const remote = readEhlTeamPlayers(html, source.toString());
+  const rows = await gate.client.from("team_members").select("user_id, jersey_number, ehl_player, users(name, first_name, last_name)").eq("team_id", teamId);
+  if (rows.error || !rows.data) return { ok: false, error: "auth.error.generic" };
+  const members = rows.data.map((row) => {
+    const user = Array.isArray(row.users) ? row.users[0] : row.users;
+    const first = user?.first_name?.trim() ?? "";
+    const last = user?.last_name?.trim() ?? "";
+    const stored = readStoredEhlPlayer(row.ehl_player);
+    return {
+      id: row.user_id,
+      name: first && last ? `${first} ${last}` : (user?.name?.trim() ?? ""),
+      number: row.jersey_number,
+      linked: Boolean(stored?.sourceUrl),
+    };
+  });
+  const pairs = matchEhlRoster(members, remote);
+  const teamCode = team.data.invite_code ?? "";
+  const linked: { userId: string; ehl: EhlPlayerProfile }[] = [];
+  const queue = [...pairs];
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) {
+      const pair = queue.shift();
+      if (!pair) return;
+      const loaded = await fetchPlayer(pair.url);
+      if ("error" in loaded) continue;
+      const updated = await gate.client.from("team_members").update({ ehl_player: loaded.profile, updated_at: new Date().toISOString() }).eq("team_id", teamId).eq("user_id", pair.memberId).select("user_id").maybeSingle();
+      if (updated.error || !updated.data) continue;
+      if (/^[A-Z0-9]{4,16}$/.test(teamCode)) {
+        const current = await gate.client.from("users").select("ehl_player").eq("id", pair.memberId).maybeSingle();
+        if (!current.error) {
+          await gate.client.from("users").update({ ehl_player: mergeStoredEhlPlayer(current.data?.ehl_player, teamCode, loaded.profile) }).eq("id", pair.memberId);
+        }
+      }
+      linked.push({ userId: pair.memberId, ehl: loaded.profile });
+    }
+  });
+  await Promise.all(workers);
+  await writeAudit("member.ehl_sync", "teams", teamId, { teamId, count: linked.length }, { teamId });
+  refreshTeamData();
+  return { ok: true, count: linked.length, linked };
 }
 
 export async function lookupPlayerLink(raw: string): Promise<LookupResult> {

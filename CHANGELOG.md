@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0
+
+- Komandas uzstādījumos, zem logo un formām, vadītājs un administrators sinhronizē spēlētājus no Entuziastu saites
+- Sakritība ir pēc vārda un uzvārda vai numura, un spēlētājs ar jau pievienotu saiti tiek izlaists
+- Sinhronizācijas poga ir visā modāļa platumā
+
 ## v0.2.23
 
 - Telefonā balsošanas atskaite ir labajā kolonnā pie laukuma, citur bloka labajā augšējā stūrī
