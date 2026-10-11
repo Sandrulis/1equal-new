@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   server: {
     url: "https://www.1equal.com/login",
     androidScheme: "https",
-    allowNavigation: ["www.1equal.com", "1equal.com"],
+    allowNavigation: ["www.1equal.com", "1equal.com", "accounts.google.com", "*.google.com", "*.googleusercontent.com", "*.gstatic.com", "accounts.youtube.com"],
   },
   plugins: {
     PushNotifications: {

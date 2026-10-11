@@ -16,32 +16,6 @@ import { safeTrainingPath } from "@/app/lib/safe-next";
 
 type Mode = "login" | "signup" | "forgot";
 
-function nativePlatform() {
-  return (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
-}
-
-async function returnFromGoogle(raw: string) {
-  let incoming: URL;
-  try {
-    incoming = new URL(raw);
-  } catch {
-    return;
-  }
-  if (incoming.protocol !== "oneequal:") return;
-  try {
-    const seen = sessionStorage.getItem("1equal-google-return");
-    if (seen === raw) return;
-    sessionStorage.setItem("1equal-google-return", raw);
-  } catch {
-    // The return still continues if this WebView blocks storage.
-  }
-  const { Browser } = await import("@capacitor/browser");
-  await Browser.close().catch(() => undefined);
-  const target = new URL("/auth/callback", window.location.origin);
-  incoming.searchParams.forEach((value, key) => target.searchParams.set(key, value));
-  window.location.assign(target.href);
-}
-
 export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = false, scriptNonce = "", trainingNext = null, native = false }: { mode: Mode; turnstileSiteKey?: string | null; googleEnabled?: boolean; scriptNonce?: string; trainingNext?: string | null; native?: boolean }) {
   const { t } = useLanguage();
   const { showFeedback } = useFeedbackToast();
@@ -78,28 +52,6 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }, [showFeedback, t]);
 
-  useEffect(() => {
-    if (!nativePlatform()) return;
-    let stop = false;
-    const removers: Array<() => void> = [];
-    void (async () => {
-      const [{ App }, { Browser }] = await Promise.all([import("@capacitor/app"), import("@capacitor/browser")]);
-      if (stop) return;
-      const opened = await App.addListener("appUrlOpen", (event) => {
-        void returnFromGoogle(event.url);
-      });
-      removers.push(() => void opened.remove());
-      const finished = await Browser.addListener("browserFinished", () => setGooglePending(false));
-      removers.push(() => void finished.remove());
-      const launch = await App.getLaunchUrl();
-      if (!stop && launch?.url) void returnFromGoogle(launch.url);
-    })();
-    return () => {
-      stop = true;
-      removers.forEach((remove) => remove());
-    };
-  }, []);
-
   async function startGoogle() {
     if (turnstileRequired && !turnstileToken) {
       showFeedback({ message: t("auth.turnstile.required"), variant: "error" });
@@ -112,21 +64,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
     if (next) url.searchParams.set("next", next);
     if (remember) url.searchParams.set("remember", "1");
     if (turnstileToken) url.searchParams.set("turnstile", turnstileToken);
-    if (!nativePlatform()) {
-      window.location.assign(url.href);
-      return;
-    }
-    url.searchParams.set("client", "app");
-    try {
-      const response = await fetch(url.href);
-      const data = (await response.json()) as { url?: string };
-      if (!response.ok || !data.url) throw new Error("google");
-      const { Browser } = await import("@capacitor/browser");
-      await Browser.open({ url: data.url, toolbarColor: "#102433" });
-    } catch {
-      setGooglePending(false);
-      showFeedback({ message: t("auth.google.failed"), variant: "error" });
-    }
+    window.location.assign(url.href);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {

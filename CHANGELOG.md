@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.7
+
+- Android lietotnē Google ielogošanās notiek pašā aplikācijā, bez adreses joslas
+
 ## v0.3.6
 
 - Android lietotnē Google ielogošanās vairs neatver pilno pārlūku. Logs aizveras un atgriežas aplikācijā
