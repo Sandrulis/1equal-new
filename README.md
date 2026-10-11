@@ -2,7 +2,7 @@
 
 Komandas vadības panelis. Spēles, treniņi, uzaicinājumi, dalība un komandas izdevumi vienuviet. Publiska landing lapa, demo bez konta un ielogots panelis ar Supabase.
 
-**Current version:** `0.3.8`
+**Current version:** `0.3.9`
 
 ## Palaist
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.9
+
+- Android ierīces reģistrācija paziņojumiem pārbauda ielogoto kontu
+
 ## v0.3.8
 
 - Produkcija ielādē Firebase atslēgu, lai Android paziņojums par jaunu notikumu aiziet
