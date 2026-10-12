@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.12
+
+- Atgādinājuma bloks paziņojumos parādās Android aplikācijā arī tad, ja serveris uzreiz nepazīst lietotni
+
 ## v0.3.11
 
 - Android atgādinājums notikumam, kurā esi atzīmējis, ka iesi. Noklusējums ir plkst. 8:00, un to var izslēgt, iestatīt citu laiku vai stundas pirms sākuma
