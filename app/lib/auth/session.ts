@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { EMPTY_USER_DISPLAY_PREFERENCES, readUserDisplayPreferences } from "@/app/lib/display-preferences";
+import { storedEventReminder } from "@/app/lib/push/event-reminder";
 import { readStoredEhlPlayers } from "@/app/lib/ehl-player";
 import type { AccountProfile } from "@/app/lib/auth/profile";
 import { getVerifiedAuth, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
@@ -19,7 +20,7 @@ export const getAccountProfile = cache(async (): Promise<AccountProfile | null> 
 
   const profile = await supabase
     .from("users")
-    .select("first_name, last_name, name, phone, is_admin, ehl_player, avatar_url, event_emails, week_start_day, date_format, date_separator, time_format, timezone, active_team_id")
+    .select("first_name, last_name, name, phone, is_admin, ehl_player, avatar_url, event_emails, event_reminder, week_start_day, date_format, date_separator, time_format, timezone, active_team_id")
     .eq("id", user.id)
     .maybeSingle();
   const hasPassword = user.app_metadata?.password_set !== false;
@@ -36,6 +37,7 @@ export const getAccountProfile = cache(async (): Promise<AccountProfile | null> 
       ehlPlayers: readStoredEhlPlayers(row.ehl_player),
       avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
       eventEmails: row.event_emails !== false,
+      eventReminder: storedEventReminder(row.event_reminder),
       hasPassword,
       display: readUserDisplayPreferences(row),
       activeTeamId: typeof row.active_team_id === "string" ? row.active_team_id : null,
@@ -54,6 +56,7 @@ export const getAccountProfile = cache(async (): Promise<AccountProfile | null> 
     ehlPlayers: {},
     avatarUrl: null,
     eventEmails: true,
+    eventReminder: "08:00",
     hasPassword,
     display: EMPTY_USER_DISPLAY_PREFERENCES,
     activeTeamId: null,

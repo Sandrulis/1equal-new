@@ -5,6 +5,7 @@ import { removeAvatar, uploadAvatarJpeg } from "@/app/lib/avatar-storage";
 import { redirect } from "next/navigation";
 import { deletionBlockedReason, scheduleAccountDeletion, sendAccountDeletionConfirmation, settleAccountDeletionOnSignIn } from "@/app/lib/auth/account-deletion";
 import { getVerifiedAuth, needsMfaChallenge, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
+import { getAccountProfile } from "@/app/lib/auth/session";
 import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
@@ -16,6 +17,7 @@ import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { writeAudit } from "@/app/lib/security/audit";
+import { eventReminderValue } from "@/app/lib/push/event-reminder";
 import { rateLimit } from "@/app/lib/security/rate-limit";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/app/lib/supabase/env";
@@ -446,6 +448,19 @@ export async function saveEventEmails(enabled: boolean): Promise<{ ok: true } | 
   const saved = await admin.from("users").update({ event_emails: enabled }).eq("id", user.id);
   if (saved.error) return { ok: false, error: "auth.error.generic" };
   return { ok: true };
+}
+
+export async function saveEventReminder(value: string): Promise<{ ok: true; value: string } | { ok: false; error: MessageKey }> {
+  const reminder = eventReminderValue(value);
+  if (!reminder) return { ok: false, error: "auth.error.generic" };
+  const account = await getAccountProfile();
+  if (!account) return { ok: false, error: "auth.error.generic" };
+  if (await rateLimit(`event-reminder:${account.id}`, 30, 10 * 60 * 1000)) return { ok: false, error: "auth.error.rate" };
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "auth.error.config" };
+  const saved = await admin.from("users").update({ event_reminder: reminder }).eq("id", account.id);
+  if (saved.error) return { ok: false, error: "auth.error.generic" };
+  return { ok: true, value: reminder };
 }
 
 export async function requestAccountDeletion(formData: FormData): Promise<AuthResult> {

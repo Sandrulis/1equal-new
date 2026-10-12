@@ -155,7 +155,7 @@ export function UserMenu({
   photoUrl: string | null;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
-  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; phone?: string; hasPassword?: boolean }) => void;
+  onSaved: (account: Pick<AccountProfile, "firstName" | "lastName" | "ehlPlayers" | "avatarUrl" | "display"> & { eventEmails?: boolean; eventReminder?: string; phone?: string; hasPassword?: boolean }) => void;
   calendarIntegration?: boolean;
   sidebar?: boolean;
   compact?: boolean;
@@ -370,8 +370,9 @@ export function UserMenu({
       {noticesOpen && account ? (
         <NotificationsDialog
           enabled={account.eventEmails}
+          reminder={account.eventReminder}
           onClose={() => setNoticesOpen(false)}
-          onSaved={(eventEmails) => onSaved({ firstName: account.firstName, lastName: account.lastName, ehlPlayers: account.ehlPlayers, avatarUrl: account.avatarUrl, display: account.display, eventEmails })}
+          onSaved={(patch) => onSaved({ firstName: account.firstName, lastName: account.lastName, ehlPlayers: account.ehlPlayers, avatarUrl: account.avatarUrl, display: account.display, ...patch })}
         />
       ) : null}
       {calendarOpen && account ? <CalendarExportDialog onClose={() => setCalendarOpen(false)} /> : null}

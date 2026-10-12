@@ -48,6 +48,7 @@ import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconTipButton,
 import type { SideMap, SlotMap } from "@/app/components/event-lineup";
 import type { BalanceHold } from "@/app/components/team-roster";
 import { SiteFooter } from "@/app/components/site-footer";
+import { useNativeApp } from "@/app/components/native-app-provider";
 import { EntuziastiProvider } from "@/app/components/entuziasti-context";
 import { teamLogoUrl } from "@/app/lib/entuziasti-view";
 import { CurrencyProvider } from "@/app/components/currency-provider";
@@ -240,6 +241,7 @@ export function TeamDashboard({
     setAdmin(initialAdmin);
   }
   const { formatLang, t } = useLanguage();
+  const native = useNativeApp();
   const { showFeedback } = useFeedbackToast();
   const brand = useSiteBrand();
   const creating = useRef(false);
@@ -2311,9 +2313,11 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
+      {native ? null : (
       <div data-dock-pad className="order-4 bg-paper max-[599px]:pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <SiteFooter />
       </div>
+      )}
       </div>
       {account?.isAdmin && adminPresence.mounted ? (
         <div className="fixed inset-0 z-[55] min-[600px]:hidden">

@@ -13,6 +13,7 @@ export function AdminCronPage() {
   const { showFeedback } = useFeedbackToast();
   const [enabled, setEnabled] = useState(false);
   const [url, setUrl] = useState("");
+  const [reminderUrl, setReminderUrl] = useState("");
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -27,6 +28,7 @@ export function AdminCronPage() {
       }
       setEnabled(result.enabled);
       setUrl(result.url);
+      setReminderUrl(result.reminderUrl);
       setReady(true);
     });
     return () => {
@@ -49,10 +51,10 @@ export function AdminCronPage() {
     router.refresh();
   }
 
-  async function copy() {
-    if (!url) return;
+  async function copy(value: string) {
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(value);
       showFeedback({ message: t("calendar.export.copied"), variant: "success" });
     } catch {
       showFeedback({ message: t("auth.error.generic"), variant: "error" });
@@ -82,7 +84,20 @@ export function AdminCronPage() {
         </div>
         <div className="mt-3 flex items-center gap-1 rounded-lg bg-ice py-1 pr-1 pl-3">
           <p className="min-w-0 flex-1 break-all font-mono text-xs text-ink">{url || "..."}</p>
-          <IconTipButton label={t("admin.cron.copy")} tone="muted" disabled={!url} onClick={() => void copy()}>
+          <IconTipButton label={t("admin.cron.copy")} tone="muted" disabled={!url} onClick={() => void copy(url)}>
+            <IconCopy />
+          </IconTipButton>
+        </div>
+        <a href="https://console.cron-job.org/jobs" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm font-medium text-train hover:underline">
+          {t("admin.cron.open")}
+        </a>
+      </div>
+      <div className="mt-4 rounded-xl bg-paper p-4 ring-1 ring-line">
+        <p className="text-sm font-medium">{t("user.notices.reminder")}</p>
+        <p className="mt-1 text-xs text-muted">{t("admin.cron.reminder_schedule")}</p>
+        <div className="mt-3 flex items-center gap-1 rounded-lg bg-ice py-1 pr-1 pl-3">
+          <p className="min-w-0 flex-1 break-all font-mono text-xs text-ink">{reminderUrl || "..."}</p>
+          <IconTipButton label={t("admin.cron.copy")} tone="muted" disabled={!reminderUrl} onClick={() => void copy(reminderUrl)}>
             <IconCopy />
           </IconTipButton>
         </div>

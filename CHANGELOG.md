@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.11
+
+- Android atgādinājums notikumam, kurā esi atzīmējis, ka iesi. Noklusējums ir plkst. 8:00, un to var izslēgt, iestatīt citu laiku vai stundas pirms sākuma
+- Aplikācijā kājene nerādās, un atgādinājuma iestatījums ir tikai aplikācijā
+
 ## v0.3.10
 
 - Publiskā zīmola adrese Android ielādei paliek bez konta pārbaudes

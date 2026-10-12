@@ -104,19 +104,35 @@ export async function sendNewEventPush(event: TeamEvent, teamId: string, skipUse
       });
     }
     if (!pending.length) return;
+    await sendPushBatch(pending);
+  } catch {
+    console.error("event push failed");
+  }
+}
 
-    const stale: string[] = [];
+export async function sendPushBatch(pending: { token: string; message: Message }[]): Promise<Set<string> | null> {
+  const messaging = messagingOrNull();
+  const client = createAdminClient();
+  if (!messaging || !client) return null;
+  const delivered = new Set<string>();
+  const stale: string[] = [];
+  try {
     for (let offset = 0; offset < pending.length; offset += 500) {
       const slice = pending.slice(offset, offset + 500);
+      if (!slice.length) continue;
       const result = await messaging.sendEach(slice.map((item) => item.message));
       result.responses.forEach((item, index) => {
         const token = slice[index]?.token;
-        if (token && item.error && STALE_TOKEN.has(item.error.code)) stale.push(token);
+        if (!token) return;
+        if (!item.error) delivered.add(token);
+        else if (STALE_TOKEN.has(item.error.code)) stale.push(token);
       });
       if (result.failureCount) console.error("event push failed", result.failureCount);
     }
     if (stale.length) await client.from("push_devices").delete().in("token", stale);
+    return delivered;
   } catch {
     console.error("event push failed");
+    return delivered;
   }
 }

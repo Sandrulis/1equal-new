@@ -4,6 +4,7 @@ import { DM_Sans } from "next/font/google";
 import { CookieConsentProvider } from "@/app/components/cookie-consent";
 import { FeedbackToastProvider } from "@/app/components/feedback-toast";
 import { AuthHashSession } from "@/app/components/auth-hash-session";
+import { NativeAppProvider } from "@/app/components/native-app-provider";
 import { NativePush } from "@/app/components/native-push";
 import { SiteBrandProvider } from "@/app/components/site-brand-provider";
 import { SentryClient } from "@/app/components/sentry-client";
@@ -14,6 +15,7 @@ import { asLang } from "@/app/lib/messages";
 import { getPublicI18n, getPublicSentry, getPublicUmami, getSiteBrand } from "@/app/lib/site-admin/repository";
 import { localeFromPathname } from "@/app/lib/seo-slugs";
 import { displayBrandName } from "@/app/lib/site-brand";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { getIndexableSiteUrl, siteDescription } from "@/app/lib/site";
 import "./globals.css";
 
@@ -43,7 +45,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [brand, i18n, umami, sentry] = await Promise.all([getSiteBrand(), getPublicI18n(), getPublicUmami(), getPublicSentry()]);
+  const [brand, i18n, umami, sentry, native] = await Promise.all([getSiteBrand(), getPublicI18n(), getPublicUmami(), getPublicSentry(), isNativeAppRequest()]);
   const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN || sentry?.dsn || null;
   const sentryEnvironment = process.env.SENTRY_ENVIRONMENT || sentry?.environment || "";
   const pathname = (await headers()).get("x-pathname") ?? "";
@@ -53,6 +55,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className="font-sans antialiased" suppressHydrationWarning>
         <SentryClient dsn={sentryDsn} environment={sentryEnvironment} />
         <SiteBrandProvider brand={brand}>
+          <NativeAppProvider native={native}>
           <LanguageProvider i18n={i18n} brandName={brand.name} initialLang={initialLang} initialPack={messagePack(initialLang)}>
             <CookieConsentProvider>
               <UmamiScript websiteId={umami?.websiteId ?? null} scriptUrl={umami?.scriptUrl ?? null} />
@@ -61,6 +64,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <NativePush />
             </CookieConsentProvider>
           </LanguageProvider>
+          </NativeAppProvider>
         </SiteBrandProvider>
       </body>
     </html>

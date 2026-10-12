@@ -66,7 +66,7 @@ Tikai `public.users.is_admin`. Ne-admin `/dashboard/admin` iet atpakaļ uz `/das
 | `/dashboard/admin/subteams` | `public.subteams` ar komandas vārdu. Meklēšana, labošana, noņemšana. Pievienot nav |
 | `/dashboard/admin/modules` | `site_frontend_modules`. Slēdzis, individuāls slēdzis, pievienot pēc atslēgas, dzēst. Individuāls modulis sākas izslēgts katrā komandā. Ja komandu veido no Latvijas IP (`LV`) vai no `localhost`, `module_entuziasti` tiek ierakstīts `team_modules`. Izveides formā Entuziastu saite rādās, ja sporta veidam modulis ir pieejams, arī jaunam lietotājam ārpus Latvijas. Ievadītā saite aizpilda nosaukumu, rāda logo un abas formas, un individuālo moduli ieslēdz šai komandai. `module_calendar`, `module_team` un `module_venues` nav sarakstā un tos nevar izveidot |
 | `/dashboard/admin/sports` | Sporta veidi visās valodās. Ikonu meklē starp brīvajām Font Awesome solid, regular un brands ikonām, un ielāde rāda indikatoru. Formā ir tikai kopīgie moduļi. Individuālos ieslēdz komandai. Pie katra veida poga Pozīcijas: jauna pozīcija atveras savā logā, kods un nosaukums katrā valodā, secību maina velkot, vilkšanas laikā redzama sprauga, labošana un dzēšana. Kļūda un saglabāšana rādās kā paziņojums. Dzēst nevar, ja pozīciju lieto spēlētājs. Koda maiņa pārraksta to komandu dalībniekiem. Sastāvs rāda tikai šī sporta pozīcijas. Vismaz vienam sporta veidam jābūt aktīvam. Pirmais, Hokejs, ir piesaistīts esošajām komandām un sākumā saņem LW, C, RW, D un G |
-| `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Tokens ir tikai admina lapā |
+| `/dashboard/admin/cron` | Finanšu rezervāciju slēdzis un saite cron-job.org pārbaudei katru stundu. Otra saite ir atgādinājumiem katras 15 minūtes. Tokens ir tikai admina lapā |
 | `/dashboard/admin/audit` | Darbību žurnāls `audit_log`. Labajā admina joslā. Filtri: datums, lietotājs, komanda, veiksmīgi vai kļūdas, meklēšana. Ielogošanās, paroles, komandas un notikumi raksta jaunu rindu |
 | `/dashboard/admin/settings` | Nosaukums, logotips, favicon, slogans katrai valodai un apkopes slēdzis. Tukšs slogans e-pasta kājenē nerādās. Attēlu var izvēlēties vai ievilkt. Glabājas bucket `branding`. Apkope izslēdz sistēmu: `/login` paliek, un ielogoties var tikai `users.is_admin` |
 | `/maintenance` | Apkopes lapa, kad `site_settings.maintenance` ir ieslēgts. Bez apkopes ved uz `/` |
@@ -171,6 +171,8 @@ Migrācijas `supabase/migrations/`, palaiž `npm run db:migrate`. Skripts pierak
 | `066_settle_events_without_cron.sql` | `settle_finished_events` ar `only_started`. Bez cron noslēdz arī nākotnes izdevumus |
 | `067_team_player_invites.sql` | `team_player_invites`. Neapstiprināts uzaicinājums pa e-pastu |
 | `068_team_content_revision.sql` | `teams.content_updated_at`. Sadaļas maiņa pārlādē komandu, ja dati ir jaunāki |
+| `072_event_reminders.sql` | `users.event_reminder` un `event_reminders_sent`. Noklusējums ir notikuma dienā 08:00 |
+| `073_event_reminder_hours.sql` | Atgādinājums pirms notikuma var būt 1 līdz 12 stundas |
 
 `postgres` pooler loma nevar mainīt `auth.users` trigeri uz `ENABLE ALWAYS`. Profilu tāpēc veido arī `ensure_user_profile` pēc reģistrācijas.
 

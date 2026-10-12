@@ -54,7 +54,7 @@ export function NativePush() {
       await PushNotifications.createChannel({
         id: "events",
         name: "Notikumi",
-        description: "Jaunas spēles un treniņi",
+        description: "Spēles, treniņi un atgādinājumi",
         importance: 5,
         visibility: 1,
         sound: "default",

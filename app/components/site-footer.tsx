@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCookieConsent } from "@/app/components/cookie-consent";
+import { useNativeApp } from "@/app/components/native-app-provider";
 import { useLanguage } from "@/app/lib/language";
 import { localeFromPathname, publicPath } from "@/app/lib/seo-slugs";
 
 export function SiteFooter() {
+  const native = useNativeApp();
   const { formatLang, t } = useLanguage();
   const { openSettings } = useCookieConsent();
   const locale = localeFromPathname(usePathname()) ?? formatLang;
+
+  if (native) return null;
 
   return (
     <footer className="border-t border-line bg-paper">

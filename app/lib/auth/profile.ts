@@ -11,6 +11,7 @@ export type AccountProfile = {
   ehlPlayers: Record<string, EhlPlayerProfile>;
   avatarUrl: string | null;
   eventEmails: boolean;
+  eventReminder: string;
   hasPassword: boolean;
   display: UserDisplayPreferences;
   activeTeamId: string | null;

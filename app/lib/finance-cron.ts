@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { purgeDueAccounts } from "@/app/lib/auth/account-deletion";
+import { runEventReminders } from "@/app/lib/push/send-event-reminders";
 import { getSiteUrl } from "@/app/lib/site";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
@@ -41,6 +42,11 @@ export async function runFinanceCron(token: string): Promise<{ ok: true; enabled
   const row = await admin.from("cron_jobs").select("enabled, token").eq("job_key", JOB_KEY).maybeSingle();
   if (row.error || !row.data || typeof row.data.token !== "string" || !sameToken(row.data.token, token)) return { ok: false };
   await purgeDueAccounts();
+  try {
+    await runEventReminders();
+  } catch {
+    console.error("event reminders failed");
+  }
   if (row.data.enabled !== true) return { ok: true, enabled: false, charged: 0 };
   const settled = await admin.rpc("settle_finance_reservations", { only_started: true });
   if (settled.error) return { ok: false };

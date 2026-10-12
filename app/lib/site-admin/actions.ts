@@ -14,6 +14,7 @@ import { EMAIL_KINDS, type AdminFeedbackItem, type AdminTodo, type EmailKind, ty
 import { isTimeZone, normalizeDateFormat, normalizeDateSeparator, normalizeTimeFormat, normalizeWeekStartDay } from "@/app/lib/display-preferences";
 import { isCurrency, votingHours } from "@/app/lib/team-defaults";
 import { readFinanceCron, writeFinanceCron } from "@/app/lib/finance-cron";
+import { readReminderCronUrl } from "@/app/lib/push/send-event-reminders";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 const MAX_BYTES = 1_572_864;
@@ -569,12 +570,13 @@ export async function deleteSiteTranslation(key: string): Promise<ActionResult> 
   return { ok: true };
 }
 
-export async function loadFinanceCron(): Promise<{ ok: true; enabled: boolean; url: string } | { ok: false; error: MessageKey }> {
+export async function loadFinanceCron(): Promise<{ ok: true; enabled: boolean; url: string; reminderUrl: string } | { ok: false; error: MessageKey }> {
   const gate = await adminClient();
   if (!gate.client) return { ok: false, error: gate.error ?? "admin.error.forbidden" };
   const settings = await readFinanceCron(gate.client);
   if (!settings) return { ok: false, error: "auth.error.generic" };
-  return { ok: true, enabled: settings.enabled, url: settings.url };
+  const reminderUrl = await readReminderCronUrl();
+  return { ok: true, enabled: settings.enabled, url: settings.url, reminderUrl: reminderUrl ?? "" };
 }
 
 export async function saveFinanceCron(enabled: boolean): Promise<ActionResult> {
