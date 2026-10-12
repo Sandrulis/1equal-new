@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.16
+
+- Atgādinājuma izvēle “Noteiktā laikā” un “Pirms laika” ir vienā rindā, un laika ievade ir zem tās
+- Admina tekstā atgādinājumu pārbaude cron-job.org ir katru minūti, lai paziņojums aiziet izvēlētajā minūtē
+
 ## v0.3.15
 
 - Android aplikācija paliek ielogota bez Atcerēties mani, un atgādinājuma pulkstenis seko 1equal 24 h vai 12 h iestatījumam

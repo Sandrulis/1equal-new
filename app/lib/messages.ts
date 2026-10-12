@@ -328,7 +328,7 @@ export const messages = {
   },
   "admin.cron.url": { lv: "Saites adrese", en: "Link address", ru: "Адрес ссылки" },
   "admin.cron.schedule": { lv: "Pārbaudi iestati uz katru 1 stundu.", en: "Set the check to every 1 hour.", ru: "Поставь проверку на каждый 1 час." },
-  "admin.cron.reminder_schedule": { lv: "Ievadi saiti cron-job.org un iestati pārbaudi katras 15 minūtes. Paziņojums aiziet tiem, kas atzīmējuši, ka ies.", en: "Paste the link into cron-job.org and set the check to every 15 minutes. The notification goes to people who marked that they are going.", ru: "Вставь ссылку в cron-job.org и поставь проверку каждые 15 минут. Уведомление уходит тем, кто отметил, что придёт." },
+  "admin.cron.reminder_schedule": { lv: "Ievadi saiti cron-job.org un iestati pārbaudi katru minūti. Paziņojums aiziet tajā minūtē, kuru lietotājs izvēlējies, tiem, kas atzīmējuši, ka ies.", en: "Paste the link into cron-job.org and set the check to every minute. The notification goes out in the minute the person chose, to people who marked that they are going.", ru: "Вставь ссылку в cron-job.org и поставь проверку каждую минуту. Уведомление уходит в ту минуту, которую выбрал человек, тем, кто отметил, что придёт." },
   "admin.cron.copy": { lv: "Kopēt saiti", en: "Copy link", ru: "Копировать ссылку" },
   "admin.cron.open": { lv: "Atvērt cron-job.org", en: "Open cron-job.org", ru: "Открыть cron-job.org" },
   "finance.reserved": { lv: "Rezervēts {amount}", en: "Reserved {amount}", ru: "Зарезервировано {amount}" },

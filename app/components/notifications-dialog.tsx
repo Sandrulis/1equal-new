@@ -118,14 +118,14 @@ export function NotificationsDialog({
             </button>
           </div>
           {reminderOn ? (
-            <div className="mt-3 grid grid-cols-2 items-stretch gap-2">
-              <div className="flex h-9 min-w-0 rounded-lg bg-ice p-0.5 ring-1 ring-line" role="group" aria-label={t("user.notices.reminder")}>
+            <div className="mt-3 grid gap-2">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label={t("user.notices.reminder")}>
                 <button
                   type="button"
                   aria-pressed={mode === "clock"}
                   disabled={pending}
                   onClick={() => void saveReminder(time)}
-                  className={`flex min-w-0 flex-1 items-center justify-center rounded-[5px] px-1 text-xs whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${mode === "clock" ? "bg-paper font-medium shadow-sm" : "text-muted"}`}
+                  className={`flex h-8 min-w-0 items-center justify-center rounded-lg px-2 text-xs whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${mode === "clock" ? "bg-paper font-medium shadow-sm ring-1 ring-line" : "text-muted"}`}
                 >
                   {t("user.notices.reminder.day")}
                 </button>
@@ -134,7 +134,7 @@ export function NotificationsDialog({
                   aria-pressed={mode === "hours"}
                   disabled={pending}
                   onClick={() => void saveReminder(`${hours}h`)}
-                  className={`flex min-w-0 flex-1 items-center justify-center rounded-[5px] px-1 text-xs whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${mode === "hours" ? "bg-paper font-medium shadow-sm" : "text-muted"}`}
+                  className={`flex h-8 min-w-0 items-center justify-center rounded-lg px-2 text-xs whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${mode === "hours" ? "bg-paper font-medium shadow-sm ring-1 ring-line" : "text-muted"}`}
                 >
                   {t("user.notices.reminder.before")}
                 </button>
@@ -142,17 +142,17 @@ export function NotificationsDialog({
               {mode === "clock" ? (
                 <ReminderClock value={time} disabled={pending} onCommit={(next) => void saveReminder(next)} />
               ) : (
-                <div className="flex h-9 min-w-0 items-stretch rounded-lg bg-ice p-0.5 ring-1 ring-line" role="group" aria-label={t("user.notices.reminder.before")}>
+                <div className="flex h-9 min-w-0 items-stretch rounded-lg bg-paper ring-1 ring-line" role="group" aria-label={t("user.notices.reminder.before")}>
                   <button
                     type="button"
                     aria-label={t("user.notices.reminder.less")}
                     disabled={pending || hours <= REMINDER_HOUR_MIN}
                     onClick={() => void saveReminder(`${hours - 1}h`)}
-                    className="flex flex-1 items-center justify-center rounded-[5px] px-1 text-xs text-muted disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex w-9 items-center justify-center text-sm text-muted disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     −
                   </button>
-                  <span className="flex flex-1 items-center justify-center rounded-[5px] bg-paper px-1 text-center text-xs font-medium whitespace-nowrap shadow-sm">
+                  <span className="flex min-w-0 flex-1 items-center justify-center text-center text-sm font-medium whitespace-nowrap">
                     {t("user.notices.reminder.hours", { hours })}
                   </span>
                   <button
@@ -160,7 +160,7 @@ export function NotificationsDialog({
                     aria-label={t("user.notices.reminder.more")}
                     disabled={pending || hours >= REMINDER_HOUR_MAX}
                     onClick={() => void saveReminder(`${hours + 1}h`)}
-                    className="flex flex-1 items-center justify-center rounded-[5px] px-1 text-xs text-muted disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex w-9 items-center justify-center text-sm text-muted disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     +
                   </button>
@@ -203,7 +203,7 @@ function ReminderClock({ value, disabled, onCommit }: { value: string; disabled:
   }
 
   return (
-    <div className="flex h-9 min-w-0 items-center rounded-lg bg-paper px-1 ring-1 ring-line">
+    <div className="flex h-9 w-full min-w-0 items-center rounded-lg bg-paper px-1 ring-1 ring-line">
       <select
         aria-label={t("user.notices.reminder.day")}
         disabled={disabled}
