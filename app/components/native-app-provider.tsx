@@ -1,8 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 
 const NativeAppContext = createContext(false);
+
+function subscribe() {
+  return () => {};
+}
 
 function runningInApp(): boolean {
   const cap = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
@@ -16,9 +20,6 @@ export function NativeAppProvider({ native, children }: { native: boolean; child
 
 export function useNativeApp() {
   const fromServer = useContext(NativeAppContext);
-  const [fromClient, setFromClient] = useState(false);
-  useEffect(() => {
-    if (runningInApp()) setFromClient(true);
-  }, []);
+  const fromClient = useSyncExternalStore(subscribe, runningInApp, () => false);
   return fromServer || fromClient;
 }

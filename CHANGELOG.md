@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.14
+
+- Aplikācijas pazīme vairs neizsauc stāvokļa maiņu efekta iekšienē, tāpēc lint pārbaude iziet
+
 ## v0.3.13
 
 - Iestatījumu lauki vairs nesaplūst un nepaliek pie modāļa labās malas. Šaurā ekrānā vārds, uzvārds, e-pasts un tālrunis ir viens zem otra
