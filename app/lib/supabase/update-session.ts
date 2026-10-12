@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { parseRememberSession, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
+import { parseSessionPersistence, REMEMBER_SESSION_COOKIE, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
 import { JOIN_INVITE_COOKIE, joinInviteCookieOptions, normalizeJoinCode } from "@/app/lib/join-invite";
 import { isMaintenanceOpenPath, siteMaintenanceOn } from "@/app/lib/maintenance";
 import { isIndexablePublicPath } from "@/app/lib/seo-slugs";
@@ -74,7 +74,7 @@ export async function updateSession(request: NextRequest) {
     isIndexablePublicPath(pathname);
 
   let supabaseResponse = nextWithPolicy(requestHeaders, policy);
-  const remember = parseRememberSession(request.cookies.get(REMEMBER_SESSION_COOKIE)?.value);
+  const remember = parseSessionPersistence(request.cookies.get(REMEMBER_SESSION_COOKIE)?.value);
   const supabase = createServerClient(env.url, env.anonKey, {
     cookies: {
       getAll() {

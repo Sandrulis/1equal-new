@@ -50,7 +50,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           paragraphs: [
             "Konta un komandas dati glabājas, kamēr konts vai komanda pastāv. Profilu vari labot, un no komandas vari izstāties. Android paziņojumu tokenu dzēšam, kad izraksties vai konts tiek dzēsts.",
             "Sīkdatņu izvēle glabājas 12 mēnešus. Valoda glabājas šajā pārlūkā, līdz to nomaini vai iztīri vietnes datus.",
-            "Ja atzīmē Atcerēties mani, sesija paliek 30 dienas. Citādi sesija beidzas, aizverot pārlūku. E-pasta maiņas saite der 24 stundas.",
+            "Ja atzīmē Atcerēties mani, sesija paliek 30 dienas. Citādi sesija beidzas, aizverot pārlūku. Android aplikācijā sesija paliek, kamēr iziet. E-pasta maiņas saite der 24 stundas.",
           ],
         },
         {
@@ -116,7 +116,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           paragraphs: [
             "Account and team data stay while the account or team exists. You can edit your profile and leave a team. We delete the Android notification token when you sign out or the account is deleted.",
             "The cookie choice is kept for 12 months. The language stays in this browser until you change it or clear this site's data.",
-            "If you check Remember me, the session stays for 30 days. Otherwise it ends when you close the browser. An email-change link is valid for 24 hours.",
+            "If you check Remember me, the session stays for 30 days. Otherwise it ends when you close the browser. In the Android app the session stays until you sign out. An email-change link is valid for 24 hours.",
           ],
         },
         {
@@ -182,7 +182,7 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
           paragraphs: [
             "Данные аккаунта и команды хранятся, пока существуют аккаунт или команда. Профиль можно исправить, из команды можно выйти. Токен уведомлений Android удаляем при выходе или удалении аккаунта.",
             "Выбор cookie хранится 12 месяцев. Язык остаётся в этом браузере, пока ты его не сменишь или не очистишь данные сайта.",
-            "Если отметить Запомнить меня, сессия остаётся на 30 дней. Иначе она заканчивается при закрытии браузера. Ссылка смены e-mail действует 24 часа.",
+            "Если отметить Запомнить меня, сессия остаётся на 30 дней. Иначе она заканчивается при закрытии браузера. В приложении Android сессия остаётся, пока не выйдешь. Ссылка смены e-mail действует 24 часа.",
           ],
         },
         {
@@ -386,13 +386,13 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
             },
             {
               name: "1equal-remember-session",
-              purpose: "Atceras, ka ienākot tika atzīmēts Atcerēties mani.",
-              duration: "30 dienas",
+              purpose: "Atceras, ka ienākot tika atzīmēts Atcerēties mani, vai ka ienākšana bija Android aplikācijā.",
+              duration: "30 dienas vietnē. Android aplikācijā līdz iziešanai.",
             },
             {
               name: "sb-…-auth-token",
               purpose: "Uztur pieslēgšanās sesiju.",
-              duration: "30 dienas, ja atzīmēts Atcerēties mani. Citādi līdz pārlūka aizvēršanai.",
+              duration: "30 dienas, ja atzīmēts Atcerēties mani. Citādi līdz pārlūka aizvēršanai. Android aplikācijā līdz iziešanai.",
             },
             {
               name: "1equal-google-oauth",
@@ -448,13 +448,13 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
             },
             {
               name: "1equal-remember-session",
-              purpose: "Remembers that Remember me was checked at login.",
-              duration: "30 days",
+              purpose: "Remembers that Remember me was checked at login, or that sign-in was in the Android app.",
+              duration: "30 days on the website. In the Android app until sign-out.",
             },
             {
               name: "sb-…-auth-token",
               purpose: "Keeps the sign-in session.",
-              duration: "30 days when Remember me is checked. Otherwise until the browser closes.",
+              duration: "30 days when Remember me is checked. Otherwise until the browser closes. In the Android app until sign-out.",
             },
             {
               name: "1equal-google-oauth",
@@ -510,13 +510,13 @@ const documents: Record<LegalId, Record<Lang, LegalDocument>> = {
             },
             {
               name: "1equal-remember-session",
-              purpose: "Помнит, что при входе было отмечено Запомнить меня.",
-              duration: "30 дней",
+              purpose: "Помнит, что при входе было отмечено Запомнить меня, или что вход был в приложении Android.",
+              duration: "30 дней на сайте. В приложении Android до выхода.",
             },
             {
               name: "sb-…-auth-token",
               purpose: "Держит сессию входа.",
-              duration: "30 дней, если отмечено Запомнить меня. Иначе до закрытия браузера.",
+              duration: "30 дней, если отмечено Запомнить меня. Иначе до закрытия браузера. В приложении Android до выхода.",
             },
             {
               name: "1equal-google-oauth",

@@ -6,12 +6,13 @@ import { redirect } from "next/navigation";
 import { deletionBlockedReason, scheduleAccountDeletion, sendAccountDeletionConfirmation, settleAccountDeletionOnSignIn } from "@/app/lib/auth/account-deletion";
 import { getVerifiedAuth, needsMfaChallenge, sessionNeedsMfaVerify } from "@/app/lib/auth/mfa";
 import { getAccountProfile } from "@/app/lib/auth/session";
-import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions } from "@/app/lib/auth/remember-session";
+import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions, sessionCookieValue, type SessionPersistence } from "@/app/lib/auth/remember-session";
 import { isTimeZone, type UserDisplayPreferences } from "@/app/lib/display-preferences";
 import { buildEmailHtml } from "@/app/lib/email/build-email-html";
 import { emailTakenByOther, requestEmailChange } from "@/app/lib/email/email-change";
 import { isEmailAddress } from "@/app/lib/email/email-address";
 import { asLang, translate, type MessageKey } from "@/app/lib/messages";
+import { isNativeAppRequest } from "@/app/lib/native-app";
 import { siteMaintenanceOn } from "@/app/lib/maintenance";
 import { getSiteBrand } from "@/app/lib/site-admin/repository";
 import { getSiteUrl } from "@/app/lib/site";
@@ -72,10 +73,10 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
   const turnstile = await requireTurnstileToken(readField(formData, "turnstileToken"));
   if (!turnstile.ok) return { error: turnstile.error };
 
-  const remember = formData.get("remember") === "on";
+  const persistence: SessionPersistence = (await isNativeAppRequest()) ? "app" : formData.get("remember") === "on" ? "remember" : "session";
   const cookieStore = await cookies();
-  cookieStore.set(REMEMBER_SESSION_COOKIE, remember ? "1" : "", rememberPreferenceOptions(remember));
-  const supabase = await createClient(remember);
+  cookieStore.set(REMEMBER_SESSION_COOKIE, sessionCookieValue(persistence), rememberPreferenceOptions(persistence));
+  const supabase = await createClient(persistence);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     const key = mapAuthError(error.code, error.message);
@@ -514,7 +515,7 @@ export async function signOut() {
     const supabase = await createClient();
     await supabase.auth.signOut();
     const cookieStore = await cookies();
-    cookieStore.set(REMEMBER_SESSION_COOKIE, "", rememberPreferenceOptions(false));
+    cookieStore.set(REMEMBER_SESSION_COOKIE, "", rememberPreferenceOptions("session"));
   }
   redirect("/");
 }

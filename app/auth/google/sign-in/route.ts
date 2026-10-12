@@ -11,6 +11,7 @@ import { isNativeAppRequest } from "@/app/lib/native-app";
 import { publicRequestOrigin } from "@/app/lib/public-origin";
 import { safeTrainingPath } from "@/app/lib/safe-next";
 import { requireTurnstileToken } from "@/app/lib/security/turnstile";
+import type { SessionPersistence } from "@/app/lib/auth/remember-session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -28,8 +29,10 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${back}?error=${error}`);
   }
 
-  const native = searchParams.get("client") === "app" && (await isNativeAppRequest());
-  const state = createGoogleOAuthState(searchParams.get("remember") === "1", from, safeTrainingPath(searchParams.get("next")));
+  const inApp = await isNativeAppRequest();
+  const native = searchParams.get("client") === "app" && inApp;
+  const persistence: SessionPersistence = inApp ? "app" : searchParams.get("remember") === "1" ? "remember" : "session";
+  const state = createGoogleOAuthState(persistence !== "session", from, safeTrainingPath(searchParams.get("next")), persistence);
   const url = await buildGoogleAuthorizeUrl(origin, state.nonce, native);
   if (!url) return NextResponse.redirect(`${origin}${back}?error=google`);
 

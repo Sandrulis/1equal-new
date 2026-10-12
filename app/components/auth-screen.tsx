@@ -140,6 +140,13 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
               />
               )}
               {mode === "login" ? (
+                native ? (
+                  <div className="flex justify-end">
+                    <Link href="/forgot-password" className="cursor-pointer text-sm text-train hover:underline">
+                      {t("auth.forgot.link")}
+                    </Link>
+                  </div>
+                ) : (
                 <div className="flex items-center justify-between gap-3">
                   <label className="flex cursor-pointer items-center gap-2 text-sm font-normal">
                     <input type="checkbox" name="remember" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="size-4 cursor-pointer accent-navy" />
@@ -149,6 +156,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                     {t("auth.forgot.link")}
                   </Link>
                 </div>
+                )
               ) : null}
               {turnstileRequired && turnstileSiteKey ? (
                 <>
@@ -176,6 +184,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                     <div className="h-px flex-1 bg-line" />
                   </div>
                   <div className="flex items-center gap-2">
+                    {native ? null : (
                     <label className="group relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-ice">
                       <input
                         type="checkbox"
@@ -188,6 +197,7 @@ export function AuthScreen({ mode, turnstileSiteKey = null, googleEnabled = fals
                         {t("auth.login.remember")}
                       </span>
                     </label>
+                    )}
                     <button
                       type="button"
                       disabled={pending || googlePending}

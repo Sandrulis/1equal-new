@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.15
+
+- Android aplikācija paliek ielogota bez Atcerēties mani, un atgādinājuma pulkstenis seko 1equal 24 h vai 12 h iestatījumam
+- Ja vēl jābalso, sākums atver balsojuma skatu. Vadītājam tas paliek, kamēr notikums nav sācies. Nākamās nedēļas kartīte atver notikuma logu
+- Atgādinājums izmanto lietotāja laiku, datumu, joslu un valodu, ja tie ir izvēlēti, citādi sistēmas noklusējumu. Aplikācijā saturs vairs nepaliek aiz apakšējās izvēlnes
+
 ## v0.3.14
 
 - Aplikācijas pazīme vairs neizsauc stāvokļa maiņu efekta iekšienē, tāpēc lint pārbaude iziet

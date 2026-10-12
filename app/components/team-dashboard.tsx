@@ -663,7 +663,7 @@ export function TeamDashboard({
       const incoming = initialTeams.find((team) => team.code === preferred) ?? initialTeams[0];
       const next = incoming.loaded === false && ownedTeam && ownedTeam.id === incoming.id && ownedTeam.loaded !== false ? ownedTeam : incoming;
       setOwnedTeam(next);
-      if (queued && next.id === queued.id) setHomePick("calendar");
+      if (queued && next.id === queued.id) setHomePick(null);
       setTeams(initialTeams);
       const seeded: Record<string, Record<string, Rsvp>> = {};
       for (const row of next.rsvps ?? []) seeded[row.eventId] = { ...seeded[row.eventId], [row.userId]: row.status };
@@ -679,7 +679,7 @@ export function TeamDashboard({
   }, [account, initialTeams, ownedTeam?.code, preferredCode, serverTeams]);
   useEffect(() => subscribeTeamSwitch(() => {
     setClientPath(basePath);
-    setHomePick("calendar");
+    setHomePick(null);
   }), [basePath]);
   useEffect(() => {
     const queuedId = peekTeamSwitch();
@@ -1104,6 +1104,7 @@ export function TeamDashboard({
   function showHome(anchor?: string) {
     collapseIfNarrow();
     setModalEventId(null);
+    if (pendingVoteEvents.length > 0) setHomePick(null);
     const onCalendar = view === "home" && !lineup;
     if (onCalendar) {
       if (!anchor) window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1189,6 +1190,9 @@ export function TeamDashboard({
   const lineupAllowed = moduleOn(FRONTEND_MODULE_KEYS.gameLayout);
   const teamPending = Boolean(account && ownedTeam?.loaded === false);
   const ghostLeader = Boolean(activeTeam?.watching && account?.isAdmin);
+  const managesTeam = Boolean(
+    profile && activeTeam && !activeTeam.demo && (ghostLeader || activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
+  );
   const roster = (activeTeam && !activeTeam.demo && activeTeam.members ? activeTeam.members : demoMembers).filter((member) => !(ghostLeader && member.id === profile?.id));
   const knownRsvp = Boolean(activeTeam && !activeTeam.demo && activeTeam.id);
   const financeAllowed = moduleOn(FRONTEND_MODULE_KEYS.finance);
@@ -1286,7 +1290,8 @@ export function TeamDashboard({
   const pendingVoteEvents = selfMember
     ? calendarEvents
         .filter((event) => {
-          if (!eventVotingOpen(event, voteTraining, voteGame, now)) return false;
+          if (eventHasEnded(event, now)) return false;
+          if (!managesTeam && !eventVotingOpen(event, voteTraining, voteGame, now)) return false;
           if (!eventAudienceIncludes(event, selfMember)) return false;
           const people = membersForEvent(event, roster);
           const index = people.findIndex((member) => member.id === selfMember.id);
@@ -1295,6 +1300,12 @@ export function TeamDashboard({
         })
         .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
     : [];
+  const pendingVoteKey = pendingVoteEvents.map((event) => event.id).join("\n");
+  const [seenVoteKey, setSeenVoteKey] = useState<string | null>(null);
+  if (pendingVoteKey !== seenVoteKey) {
+    setSeenVoteKey(pendingVoteKey);
+    if (pendingVoteKey) setHomePick(null);
+  }
   const pendingVoteIds = new Set(pendingVoteEvents.map((event) => event.id));
   const resolvedHomeView = homePick ?? (pendingVoteEvents.length > 0 ? "poll" : "calendar");
   const showPoll = resolvedHomeView === "poll" && pendingVoteEvents.length > 0;
@@ -1428,9 +1439,6 @@ export function TeamDashboard({
   const openEvent = openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupEvent = lineup && openEventId ? calendarEvents.find((event) => event.id === openEventId) ?? null : null;
   const lineupReady = !lineupEvent || lineupEvent.lineupLoaded !== false;
-  const managesTeam = Boolean(
-    profile && activeTeam && !activeTeam.demo && (ghostLeader || activeTeam.leaderId === profile.id || activeTeam.members?.some((member) => member.id === profile.id && member.teamAdmin)),
-  );
   const canManageTeam = basePath === "/demo" || managesTeam;
   const showTeamSettings = Boolean(managesTeam && !showStart && !teamPending && activeTeam?.id);
   const pondOn = moduleOn(FRONTEND_MODULE_KEYS.pond) && basePath !== "/demo";
@@ -1929,12 +1937,13 @@ export function TeamDashboard({
           </div>
         ) : null}
         <div className={view === "home" && !lineupEvent && !showStart && !teamPending && moduleVisible ? (sectionMotion || undefined) : "hidden"}>
+        <div id="kalendars" className="scroll-mt-4 max-[599px]:scroll-mt-16">
         {pendingVoteEvents.length ? (
           <div className="mb-4">
             <CalendarPollSwitch value={resolvedHomeView} onChange={setHomePick} />
           </div>
         ) : null}
-        <section id="kalendars" className={`scroll-mt-4 ${showPoll ? "space-y-4" : "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"}`}>
+        <section className={showPoll ? "space-y-4" : "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"}>
           {showPoll ? (
             <>
               <ul className="space-y-4">
@@ -2175,14 +2184,14 @@ export function TeamDashboard({
                   return (
                     <li key={event.id} style={wash ? { backgroundColor: wash } : undefined} className={`rounded-xl p-3 ${wash ? "" : "bg-ice"} ${lineup && lineupEvent?.id === event.id ? "ring-1 ring-navy" : ""}`}>
                       <div className="grid grid-cols-2 items-start gap-x-3">
-                        <div className="min-w-0">
+                        <button type="button" onClick={() => showEvent(event, parseIsoDate(event.date))} className="min-w-0 text-left">
                           <p className={`text-lg font-semibold leading-tight ${game ? "text-game" : "text-train"}`}>
                             {game ? t("legend.game") : t("legend.training")}
                           </p>
                           {detail ? <p className="mt-0.5 text-sm">{detail}</p> : null}
                           <p className="mt-1 text-sm tabular-nums">{formatDate(event.date)} {timeLabel}</p>
                           <VoteCountdown deadline={eventVotingDeadline(event, voteTraining, voteGame)} align="start" compact className="mt-2 [&_p]:flex-wrap" />
-                        </div>
+                        </button>
                         <div className="flex min-w-0 flex-col items-end text-right">
                           {showActions ? (
                             <div className="flex items-center justify-end gap-0.5">
@@ -2228,6 +2237,7 @@ export function TeamDashboard({
           </aside>
           </div>
         </section>
+        </div>
         {addingEvent || editingEvent ? (
           <EventFormDialog
             key={editingEvent?.id ?? selectedIso}
@@ -2313,11 +2323,9 @@ export function TeamDashboard({
         ) : null}
         </div>
       </main>
-      {native ? null : (
-      <div data-dock-pad className="order-4 bg-paper max-[599px]:pb-[calc(4rem+env(safe-area-inset-bottom))]">
-        <SiteFooter />
+      <div data-dock-pad className="order-4 bg-paper max-[599px]:pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
+        {native ? null : <SiteFooter />}
       </div>
-      )}
       </div>
       {account?.isAdmin && adminPresence.mounted ? (
         <div className="fixed inset-0 z-[55] min-[600px]:hidden">
@@ -2675,8 +2683,8 @@ function CalendarPollSwitch({ value, onChange }: { value: "calendar" | "poll"; o
   const { t } = useLanguage();
   const [tip, setTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
   const options = [
-    { id: "calendar" as const, label: t("event.vote.calendar_view"), icon: <IconCalendar /> },
-    { id: "poll" as const, label: t("event.vote.poll_view"), icon: <IconPoll /> },
+    { id: "calendar" as const, label: t("event.vote.calendar_view"), short: t("event.vote.calendar"), icon: <IconCalendar /> },
+    { id: "poll" as const, label: t("event.vote.poll_view"), short: t("event.vote.poll"), icon: <IconPoll /> },
   ];
 
   function place(target: HTMLButtonElement, text: string) {
@@ -2699,9 +2707,10 @@ function CalendarPollSwitch({ value, onChange }: { value: "calendar" | "poll"; o
           onMouseLeave={() => setTip(null)}
           onFocus={(event) => place(event.currentTarget, option.label)}
           onBlur={() => setTip(null)}
-          className={`grid h-9 w-11 place-items-center rounded-md ${value === option.id ? "bg-navy text-white shadow-sm" : "text-muted hover:bg-ice hover:text-ink"}`}
+          className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium ${value === option.id ? "bg-navy text-white shadow-sm" : "text-muted hover:bg-ice hover:text-ink"}`}
         >
-          {option.icon}
+          <span className="grid h-5 w-5 place-items-center [&_svg]:h-5 [&_svg]:w-5">{option.icon}</span>
+          {option.short}
         </button>
       ))}
       {tip ? (

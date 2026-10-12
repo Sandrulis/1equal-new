@@ -1616,9 +1616,9 @@ export const messages = {
   "cookie.always": { lv: "Vienmēr ieslēgtas", en: "Always on", ru: "Всегда включены" },
   "cookie.necessary.title": { lv: "Obligātās sīkdatnes", en: "Necessary cookies", ru: "Обязательные cookie" },
   "cookie.necessary.text": {
-    lv: "Saglabā tavu piekrišanu un pieslēgšanās sesiju. Ja ienākot atzīmē Atcerēties mani, sesija paliek 30 dienas.",
-    en: "Store your consent and the sign-in session. If you check Remember me when logging in, the session stays for 30 days.",
-    ru: "Хранят твоё согласие и сессию входа. Если при входе отметить Запомнить меня, сессия остаётся на 30 дней."
+    lv: "Saglabā tavu piekrišanu un pieslēgšanās sesiju. Ja ienākot atzīmē Atcerēties mani, sesija paliek 30 dienas. Android aplikācijā sesija paliek, kamēr iziet.",
+    en: "Store your consent and the sign-in session. If you check Remember me when logging in, the session stays for 30 days. In the Android app the session stays until you sign out.",
+    ru: "Хранят твоё согласие и сессию входа. Если при входе отметить Запомнить меня, сессия остаётся на 30 дней. В приложении Android сессия остаётся, пока не выйдешь."
   },
   "cookie.preferences.title": { lv: "Preferenču sīkdatnes", en: "Preference cookies", ru: "Cookie предпочтений" },
   "cookie.preferences.text": {

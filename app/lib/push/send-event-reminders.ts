@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 import type { Message } from "firebase-admin/messaging";
 import { eventHref } from "@/app/lib/dashboard-path";
-import { isTimeZone } from "@/app/lib/display-preferences";
+import { isTimeZone, mergeDisplayPreferences, readUserDisplayPreferences, type SiteDisplaySettings } from "@/app/lib/display-preferences";
 import { formatClock, formatDisplayDate } from "@/app/lib/format";
 import { translate, type Lang } from "@/app/lib/messages";
 import { reminderIsDue, reminderMoment, zonedInstant } from "@/app/lib/push/event-reminder";
@@ -51,7 +51,21 @@ export async function reminderCronAuthorized(request: NextRequest): Promise<bool
 }
 
 type EventRow = { id: string; team_id: string; event_date: string; start_time: string; event_type: string };
-type PersonRow = { id: string; language_code: string | null; timezone: string | null; event_reminder: string | null; deletion_due_at: string | null };
+type PersonRow = {
+  id: string;
+  language_code: string | null;
+  timezone: string | null;
+  event_reminder: string | null;
+  deletion_due_at: string | null;
+  week_start_day: string | null;
+  date_format: string | null;
+  date_separator: string | null;
+  time_format: string | null;
+};
+
+function personDisplay(person: PersonRow, system: SiteDisplaySettings): SiteDisplaySettings {
+  return mergeDisplayPreferences(system, readUserDisplayPreferences(person));
+}
 
 async function rowsIn<T>(ids: string[], load: (slice: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[] | null> {
   const rows: T[] = [];
@@ -93,7 +107,7 @@ export async function runEventReminders(): Promise<{ ok: true; sent: number } | 
   const userIds = [...new Set(going.map((row) => row.user_id))];
   const teamIds = [...new Set(upcoming.map((row) => row.team_id))];
   const [people, devices, teams] = await Promise.all([
-    rowsIn<PersonRow>(userIds, (slice) => client.from("users").select("id, language_code, timezone, event_reminder, deletion_due_at").in("id", slice)),
+    rowsIn<PersonRow>(userIds, (slice) => client.from("users").select("id, language_code, timezone, event_reminder, deletion_due_at, week_start_day, date_format, date_separator, time_format").in("id", slice)),
     rowsIn(userIds, (slice) => client.from("push_devices").select("token, user_id").in("user_id", slice)),
     rowsIn(teamIds, (slice) => client.from("teams").select("id, name").in("id", slice)),
   ]);
@@ -120,7 +134,7 @@ export async function runEventReminders(): Promise<{ ok: true; sent: number } | 
     const person = personById.get(vote.user_id);
     const tokens = tokensByUser.get(vote.user_id);
     if (!event || !person || person.deletion_due_at || !tokens?.length) continue;
-    const timeZone = typeof person.timezone === "string" && isTimeZone(person.timezone) ? person.timezone : eventZone;
+    const timeZone = personDisplay(person, { ...brand.display, timeZone: eventZone }).timeZone;
     const at = reminderMoment({
       eventDate: event.event_date,
       startTime: event.start_time,
@@ -149,11 +163,12 @@ export async function runEventReminders(): Promise<{ ok: true; sent: number } | 
     const tokens = tokensByUser.get(item.userId) ?? [];
     if (!event || !person) continue;
     const lang = personLang(person.language_code, fallback);
+    const display = personDisplay(person, { ...brand.display, timeZone: eventZone });
     const typeKey = event.event_type === "game" ? "legend.game" : "legend.training";
     const body = translate(lang, "push.reminder.body", {
       type: translate(lang, typeKey),
-      date: formatDisplayDate(event.event_date, brand.display),
-      time: formatClock(event.start_time, brand.display.timeFormat),
+      date: formatDisplayDate(event.event_date, display),
+      time: formatClock(event.start_time, display.timeFormat),
     });
     const title = teamName.get(event.team_id) || brand.name;
     const path = eventHref("/dashboard", event.id);

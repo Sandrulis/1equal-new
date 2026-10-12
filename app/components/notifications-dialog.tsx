@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { AdminDialog } from "@/app/components/admin-dialog";
+import { useDisplayFormat } from "@/app/components/display-preferences";
 import { useNativeApp } from "@/app/components/native-app-provider";
 import { useFeedbackToast } from "@/app/components/feedback-toast";
 import { saveEventEmails, saveEventReminder } from "@/app/lib/auth/actions";
@@ -37,7 +38,6 @@ export function NotificationsDialog({
   const [time, setTime] = useState(initial.time);
   const [hours, setHours] = useState(initial.hours);
   const [saved, setSaved] = useState(eventReminderValue(reminder) ?? DEFAULT_EVENT_REMINDER);
-  const committedTime = useRef(initial.time);
   const [pending, setPending] = useState(false);
 
   async function toggleEmails() {
@@ -71,10 +71,7 @@ export function NotificationsDialog({
     setSaved(result.value);
     setReminderOn(next.enabled);
     setMode(next.mode);
-    if (next.mode === "clock" && next.enabled) {
-      setTime(next.time);
-      committedTime.current = next.time;
-    }
+    if (next.mode === "clock" && next.enabled) setTime(next.time);
     if (next.mode === "hours") setHours(next.hours);
     onSaved({ eventReminder: result.value });
     showFeedback({ message: t("user.settings.saved"), variant: "success" });
@@ -143,27 +140,7 @@ export function NotificationsDialog({
                 </button>
               </div>
               {mode === "clock" ? (
-                <input
-                  type="time"
-                  value={time}
-                  aria-label={t("user.notices.reminder.day")}
-                  disabled={pending}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    if (eventReminderValue(next)) setTime(next);
-                  }}
-                  onBlur={(event) => {
-                    const next = event.target.value;
-                    if (!eventReminderValue(next)) {
-                      setTime(committedTime.current);
-                      return;
-                    }
-                    void saveReminder(next).then((ok) => {
-                      if (!ok) setTime(committedTime.current);
-                    });
-                  }}
-                  className="h-9 w-full rounded-lg bg-paper px-3 text-sm text-ink ring-1 ring-line disabled:cursor-not-allowed disabled:opacity-60"
-                />
+                <ReminderClock value={time} disabled={pending} onCommit={(next) => void saveReminder(next)} />
               ) : (
                 <div className="flex h-9 min-w-0 items-stretch rounded-lg bg-ice p-0.5 ring-1 ring-line" role="group" aria-label={t("user.notices.reminder.before")}>
                   <button
@@ -195,5 +172,77 @@ export function NotificationsDialog({
         ) : null}
       </div>
     </AdminDialog>
+  );
+}
+
+const CLOCK_HOURS_24 = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+const CLOCK_HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1));
+const CLOCK_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+
+function hour24From12(displayHour: string, period: "AM" | "PM"): number {
+  const hour = Number(displayHour);
+  if (period === "AM") return hour === 12 ? 0 : hour;
+  return hour === 12 ? 12 : hour + 12;
+}
+
+function ReminderClock({ value, disabled, onCommit }: { value: string; disabled: boolean; onCommit: (value: string) => void }) {
+  const { t } = useLanguage();
+  const { display } = useDisplayFormat();
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  const hour24 = Number(match?.[1] ?? "8");
+  const minute = match?.[2] ?? "00";
+  const is12 = display.timeFormat === "12";
+  const period: "AM" | "PM" = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = String(hour24 % 12 || 12);
+  const selectClass = "h-full min-w-0 flex-1 bg-transparent text-center text-sm outline-none disabled:cursor-not-allowed";
+
+  function commit(nextHour: string, nextMinute: string, nextPeriod: "AM" | "PM") {
+    const hour = is12 ? hour24From12(nextHour, nextPeriod) : Number(nextHour);
+    const clock = `${String(hour).padStart(2, "0")}:${nextMinute}`;
+    if (eventReminderValue(clock)) onCommit(clock);
+  }
+
+  return (
+    <div className="flex h-9 min-w-0 items-center rounded-lg bg-paper px-1 ring-1 ring-line">
+      <select
+        aria-label={t("user.notices.reminder.day")}
+        disabled={disabled}
+        value={is12 ? hour12 : String(hour24).padStart(2, "0")}
+        onChange={(event) => commit(event.target.value, minute, period)}
+        className={selectClass}
+      >
+        {(is12 ? CLOCK_HOURS_12 : CLOCK_HOURS_24).map((hour) => (
+          <option key={hour} value={hour}>
+            {hour}
+          </option>
+        ))}
+      </select>
+      <span className="text-sm text-muted">:</span>
+      <select
+        aria-label={t("user.notices.reminder.day")}
+        disabled={disabled}
+        value={minute}
+        onChange={(event) => commit(is12 ? hour12 : String(hour24).padStart(2, "0"), event.target.value, period)}
+        className={selectClass}
+      >
+        {CLOCK_MINUTES.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+      {is12 ? (
+        <select
+          aria-label={t("user.notices.reminder.day")}
+          disabled={disabled}
+          value={period}
+          onChange={(event) => commit(hour12, minute, event.target.value === "PM" ? "PM" : "AM")}
+          className={selectClass}
+        >
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      ) : null}
+    </div>
   );
 }

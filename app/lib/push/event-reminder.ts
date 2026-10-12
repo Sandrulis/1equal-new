@@ -61,9 +61,12 @@ function zoneOffset(utcMs: number, timeZone: string): number | null {
 }
 
 export function zonedInstant(date: string, time: string, timeZone: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !CLOCK.test(time) || !isTimeZone(timeZone)) return null;
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
+  const dayText = date.slice(0, 10);
+  const clock = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(time.trim());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayText) || !clock || !isTimeZone(timeZone)) return null;
+  const [year, month, day] = dayText.split("-").map(Number);
+  const hour = Number(clock[1]);
+  const minute = Number(clock[2]);
   if (!year || !month || !day) return null;
   let utc = Date.UTC(year, month - 1, day, hour, minute);
   for (let pass = 0; pass < 3; pass += 1) {

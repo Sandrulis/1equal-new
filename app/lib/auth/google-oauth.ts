@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { settleAccountDeletionOnSignIn, withAccountRestoredCookie } from "@/app/lib/auth/account-deletion";
 import { siteMaintenanceOn } from "@/app/lib/maintenance";
 import { safeTrainingPath } from "@/app/lib/safe-next";
-import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions, withAuthCookieOptions } from "@/app/lib/auth/remember-session";
+import { REMEMBER_SESSION_COOKIE, rememberPreferenceOptions, sessionCookieValue, withAuthCookieOptions, type SessionPersistence } from "@/app/lib/auth/remember-session";
 import { openIntegrationSecret } from "@/app/lib/security/integration-secret";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { getSupabasePublicEnv } from "@/app/lib/supabase/env";
@@ -26,6 +26,7 @@ type GoogleProfile = {
 export type GoogleOAuthState = {
   nonce: string;
   remember: boolean;
+  persistence: SessionPersistence;
   from: "login" | "signup";
   next: string | null;
 };
@@ -62,12 +63,14 @@ export async function isGoogleSignInEnabled() {
   return (await readGoogleOAuthCredentials()) !== null;
 }
 
-export function createGoogleOAuthState(remember: boolean, from: "login" | "signup", next: string | null = null): GoogleOAuthState {
-  return { nonce: randomBytes(16).toString("hex"), remember, from, next };
+export function createGoogleOAuthState(remember: boolean, from: "login" | "signup", next: string | null = null, persistence?: SessionPersistence): GoogleOAuthState {
+  const mode = persistence ?? (remember ? "remember" : "session");
+  return { nonce: randomBytes(16).toString("hex"), remember: mode !== "session", persistence: mode, from, next };
 }
 
 export function serializeGoogleOAuthState(state: GoogleOAuthState) {
-  const base = `v1.${state.nonce}.${state.remember ? "1" : "0"}.${state.from}`;
+  const mark = state.persistence === "app" ? "a" : state.persistence === "remember" ? "1" : "0";
+  const base = `v1.${state.nonce}.${mark}.${state.from}`;
   return state.next ? `${base}.${encodeURIComponent(state.next)}` : base;
 }
 
@@ -75,10 +78,11 @@ export function parseGoogleOAuthState(raw: string | null | undefined): GoogleOAu
   if (!raw) return null;
   const [version, nonce, remember, from, encoded] = raw.split(".");
   if (version !== "v1" || !nonce || nonce.length !== 32) return null;
-  if (remember !== "0" && remember !== "1") return null;
+  if (remember !== "0" && remember !== "1" && remember !== "a") return null;
   if (from !== "login" && from !== "signup") return null;
   const next = encoded ? safeTrainingPath(decodeURIComponent(encoded)) : null;
-  return { nonce, remember: remember === "1", from, next };
+  const persistence: SessionPersistence = remember === "a" ? "app" : remember === "1" ? "remember" : "session";
+  return { nonce, remember: persistence !== "session", persistence, from, next };
 }
 
 function sameNonce(left: string, right: string) {
@@ -245,7 +249,7 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
   if (link.error || !tokenHash) return fail();
 
   const redirectResponse = NextResponse.redirect(`${origin}${state.next ?? "/dashboard"}`);
-  redirectResponse.cookies.set(REMEMBER_SESSION_COOKIE, state.remember ? "1" : "", rememberPreferenceOptions(state.remember));
+  redirectResponse.cookies.set(REMEMBER_SESSION_COOKIE, sessionCookieValue(state.persistence), rememberPreferenceOptions(state.persistence));
   const requestCookies = readRequestCookies(request);
   const supabase = createServerClient(env.url, env.anonKey, {
     cookies: {
@@ -253,7 +257,7 @@ export async function completeGoogleSignIn(request: Request, origin: string, cod
         return requestCookies;
       },
       setAll(cookiesToSet) {
-        withAuthCookieOptions(cookiesToSet, state.remember).forEach(({ name, value, options }) => {
+        withAuthCookieOptions(cookiesToSet, state.persistence).forEach(({ name, value, options }) => {
           redirectResponse.cookies.set(name, value, {
             path: options?.path,
             maxAge: options?.maxAge,

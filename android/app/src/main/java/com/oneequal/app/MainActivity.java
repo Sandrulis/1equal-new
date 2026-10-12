@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -56,6 +57,12 @@ public class MainActivity extends BridgeActivity {
         shownAt = SystemClock.uptimeMillis();
         handler.post(watchPage);
         loadBrand();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
     }
 
     @Override
