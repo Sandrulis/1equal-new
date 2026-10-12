@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.13
+
+- Iestatījumu lauki vairs nesaplūst un nepaliek pie modāļa labās malas. Šaurā ekrānā vārds, uzvārds, e-pasts un tālrunis ir viens zem otra
+
 ## v0.3.12
 
 - Atgādinājuma bloks paziņojumos parādās Android aplikācijā arī tad, ja serveris uzreiz nepazīst lietotni

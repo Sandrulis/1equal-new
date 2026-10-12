@@ -64,7 +64,7 @@ const SEPARATOR_KEYS: Record<SiteDateSeparator, MessageKey> = {
   " ": "site_settings.form.date_separator.space",
 };
 
-const selectClassName = "mt-2 w-full rounded-xl bg-paper px-3 py-2 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy disabled:cursor-not-allowed";
+const selectClassName = "mt-2 w-full min-w-0 max-w-full rounded-xl bg-paper py-2 pr-10 pl-3 text-sm font-normal ring-1 ring-line outline-none focus:ring-navy disabled:cursor-not-allowed";
 
 export function DisplayPreferencesFields({
   values,
@@ -90,7 +90,7 @@ export function DisplayPreferencesFields({
 
   return (
     <div className="space-y-4">
-      <label className="block text-sm font-medium" htmlFor={`${idPrefix}-week`}>
+      <label className="block min-w-0 text-sm font-medium" htmlFor={`${idPrefix}-week`}>
         {t("site_settings.form.week_start_day")}
         <select
           id={`${idPrefix}-week`}
@@ -109,8 +109,8 @@ export function DisplayPreferencesFields({
         </select>
         <span className="mt-1.5 block text-xs font-normal text-muted">{t("site_settings.form.week_start_day_hint")}</span>
       </label>
-      <div className="grid items-start gap-4 min-[600px]:grid-cols-2">
-        <label className="block text-sm font-medium" htmlFor={`${idPrefix}-date`}>
+      <div className="grid min-w-0 items-start gap-4 min-[600px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <label className="block min-w-0 text-sm font-medium" htmlFor={`${idPrefix}-date`}>
           {t("site_settings.form.date_format")}
           <select
             id={`${idPrefix}-date`}
@@ -128,7 +128,7 @@ export function DisplayPreferencesFields({
             ))}
           </select>
         </label>
-        <label className="block text-sm font-medium" htmlFor={`${idPrefix}-separator`}>
+        <label className="block min-w-0 text-sm font-medium" htmlFor={`${idPrefix}-separator`}>
           {t("site_settings.form.date_separator")}
           <select
             id={`${idPrefix}-separator`}
@@ -148,8 +148,8 @@ export function DisplayPreferencesFields({
           <span className="mt-1.5 block text-xs font-normal text-muted">{t("site_settings.form.date_separator_hint")}</span>
         </label>
       </div>
-      <div className="grid items-start gap-4 min-[600px]:grid-cols-2">
-        <label className="block text-sm font-medium" htmlFor={`${idPrefix}-time`}>
+      <div className="grid min-w-0 items-start gap-4 min-[600px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <label className="block min-w-0 text-sm font-medium" htmlFor={`${idPrefix}-time`}>
           {t("site_settings.form.time_format")}
           <select
             id={`${idPrefix}-time`}
@@ -168,7 +168,7 @@ export function DisplayPreferencesFields({
           </select>
           <span className="mt-1.5 block text-xs font-normal text-muted">{t("site_settings.form.time_format_hint")}</span>
         </label>
-        <label className="block text-sm font-medium" htmlFor={`${idPrefix}-zone`}>
+        <label className="block min-w-0 text-sm font-medium" htmlFor={`${idPrefix}-zone`}>
           {t("site_settings.form.timezone")}
           <select
             id={`${idPrefix}-zone`}

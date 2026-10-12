@@ -112,7 +112,7 @@ export function AccountSettingsDialog({
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <button type="button" aria-label={t("event.close")} className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-paper p-6 ring-1 ring-line">
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-2xl bg-paper p-6 ring-1 ring-line">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold tracking-tight">
@@ -125,12 +125,12 @@ export function AccountSettingsDialog({
           </button>
         </div>
         <form onSubmit={(event) => void onSubmit(event)}>
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 min-[600px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[600px]:gap-4">
           <NameField label={t("auth.firstName")} name="firstName" value={firstName} autoComplete="given-name" disabled={pending} onChange={setFirstName} />
           <NameField label={t("auth.lastName")} name="lastName" value={lastName} autoComplete="family-name" disabled={pending} onChange={setLastName} />
         </div>
-        <div className="mt-3 grid grid-cols-2 items-start gap-3">
-          <label className="grid gap-1.5 text-sm font-medium">
+        <div className="mt-3 grid grid-cols-1 items-start gap-3 min-[600px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[600px]:gap-4">
+          <label className="grid min-w-0 gap-1.5 text-sm font-medium">
             {t("common.email")}
             <input
               name="email"
@@ -140,11 +140,11 @@ export function AccountSettingsDialog({
               autoComplete="email"
               maxLength={200}
               onChange={(event) => setEmail(event.target.value)}
-              className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
+              className="h-11 w-full min-w-0 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
             />
             {emailChanged ? <span className="font-normal text-muted">{t("user.settings.email_hint")}</span> : null}
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
+          <label className="grid min-w-0 gap-1.5 text-sm font-medium">
             {t("roster.fields.phone")}
             <input
               name="phone"
@@ -154,7 +154,7 @@ export function AccountSettingsDialog({
               autoComplete="tel"
               maxLength={40}
               onChange={(event) => setPhone(event.target.value)}
-              className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
+              className="h-11 w-full min-w-0 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line"
             />
           </label>
         </div>
@@ -234,7 +234,7 @@ function NameField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium">
+    <label className="grid min-w-0 gap-1.5 text-sm font-medium">
       {label}
       <input
         required
@@ -243,7 +243,7 @@ function NameField({
         autoComplete={autoComplete}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line disabled:opacity-60"
+        className="h-11 w-full min-w-0 rounded-lg bg-ice px-3 text-sm font-normal ring-1 ring-line disabled:opacity-60"
       />
     </label>
   );
