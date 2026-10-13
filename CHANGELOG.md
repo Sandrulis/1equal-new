@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.17
+
+- Spēles izklājumā jau izvietots spēlētājs paliek iekrāsots, un klikšķis viņu pārcels no iepriekšējās vietas
+- Saglabātā sastāvā viens spēlētājs paliek tikai vienā pozīcijā
+
 ## v0.3.16
 
 - Atgādinājuma izvēle “Noteiktā laikā” un “Pirms laika” ir vienā rindā, un laika ievade ir zem tās

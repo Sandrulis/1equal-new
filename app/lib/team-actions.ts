@@ -21,6 +21,7 @@ import { eventHasEnded } from "@/app/lib/event-voting";
 import type { IssuedTeam } from "@/app/lib/invite-code";
 import type { MessageKey } from "@/app/lib/messages";
 import { historySince } from "@/app/lib/history-window";
+import { keepFirstSlotPerMember } from "@/app/lib/lineup-slots";
 import { eventFromRow, memberFromRow, readMemberBalance, requireUserAdmin, TEAM_EVENT_COLUMNS, TEAM_MEMBER_COLUMNS, TEAM_MEMBER_USER_COLUMNS } from "@/app/lib/team-membership";
 import type { Subteam } from "@/app/lib/demo-data";
 import { toLocalDateTimeStamp } from "@/app/lib/format";
@@ -931,12 +932,14 @@ export async function saveOwnedLineup(input: {
 }
 
 function cleanSlots(slots: Record<number, string> | undefined, allowed: Set<string>): Record<string, string> {
-  const next: Record<string, string> = {};
+  const entries: [number, string][] = [];
   for (const [key, memberId] of Object.entries(slots ?? {})) {
     const slot = Number(key);
     if (!Number.isInteger(slot) || slot < 1 || slot > 16 || !allowed.has(memberId)) continue;
-    next[String(slot)] = memberId;
+    entries.push([slot, memberId]);
   }
+  const next: Record<string, string> = {};
+  for (const [slot, memberId] of keepFirstSlotPerMember(entries)) next[String(slot)] = memberId;
   return next;
 }
 

@@ -1153,6 +1153,7 @@ export const messages = {
   "lineup.recommended": { lv: "Ieteicamie", en: "Suggested", ru: "Рекомендуемые" },
   "lineup.others": { lv: "Pārējie", en: "Everyone else", ru: "Остальные" },
   "lineup.clear": { lv: "Noņemt no pozīcijas", en: "Remove from the position", ru: "Убрать с позиции" },
+  "lineup.taken": { lv: "Jau ir citā vietā. Klikšķis pārcels.", en: "Already in another spot. A click moves them.", ru: "Уже на другом месте. Нажатие перенесёт." },
   "lineup.search.empty": { lv: "Neviens spēlētājs nav atrasts.", en: "No players found.", ru: "Игроки не найдены." },
   "lineup.save.error": { lv: "Neizdevās saglabāt izklājumu.", en: "Could not save the lineup.", ru: "Не удалось сохранить расстановку." },
   "lineup.leave.title": { lv: "Izklājums nav saglabāts", en: "Lineup is not saved", ru: "Расстановка не сохранена" },

@@ -15,6 +15,7 @@ import { moduleEnabledForSport } from "@/app/lib/sport-module";
 import { roleFromPosition } from "@/app/lib/team-creator";
 import { listUserOrigins } from "@/app/lib/admin-origin";
 import { fetchEhlTeamKits } from "@/app/lib/ehl-team-lookup";
+import { keepFirstSlotPerMember } from "@/app/lib/lineup-slots";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
 type UserName = { email: string; name: string; first_name: string; last_name: string; avatar_url?: string | null };
@@ -100,10 +101,12 @@ function lineupFromJson(value: unknown): Pick<TeamEvent, "lineupSlots" | "lineup
   const raw = value as { slots?: unknown; sides?: unknown };
   const lineupSlots: Record<number, string> = {};
   if (raw.slots && typeof raw.slots === "object") {
+    const entries: [number, string][] = [];
     for (const [key, memberId] of Object.entries(raw.slots)) {
       const slot = Number(key);
-      if (Number.isInteger(slot) && slot >= 1 && slot <= 16 && typeof memberId === "string") lineupSlots[slot] = memberId;
+      if (Number.isInteger(slot) && slot >= 1 && slot <= 16 && typeof memberId === "string") entries.push([slot, memberId]);
     }
+    for (const [slot, memberId] of keepFirstSlotPerMember(entries)) lineupSlots[slot] = memberId;
   }
   const lineupSides: Record<string, "black" | "white"> = {};
   if (raw.sides && typeof raw.sides === "object") {

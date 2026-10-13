@@ -8,6 +8,7 @@ import { memberRsvp, type Rsvp } from "@/app/components/event-details";
 import { IconChevronLeft, IconChevronRight, IconX } from "@/app/components/icon-tip-button";
 import type { Member, TeamEvent } from "@/app/lib/demo-data";
 import { formatJersey } from "@/app/lib/format-jersey";
+import { keepFirstSlotPerMember } from "@/app/lib/lineup-slots";
 import { isTrainerMember, normalizePositionCode, trainerPositionName, type PositionCatalogItem, type PositionCode } from "@/app/lib/positions";
 import { useDisplayFormat } from "@/app/components/display-preferences";
 import { memberFaceUrl } from "@/app/lib/entuziasti-view";
@@ -88,10 +89,14 @@ function keepSaved<T>(saved: T, value: T, keyOf: (item: T) => string, baseline: 
 
 function pruneSlots(map: SlotMap, going: Member[]): SlotMap {
   const ids = new Set(going.map((member) => member.id));
-  const next: SlotMap = {};
+  const entries: [number, string][] = [];
   for (const [slot, memberId] of Object.entries(map)) {
-    if (ids.has(memberId)) next[Number(slot)] = memberId;
+    const key = Number(slot);
+    if (!Number.isInteger(key) || !ids.has(memberId)) continue;
+    entries.push([key, memberId]);
   }
+  const next: SlotMap = {};
+  for (const [slot, memberId] of keepFirstSlotPerMember(entries)) next[slot] = memberId;
   return next;
 }
 
@@ -324,7 +329,14 @@ function GameLineup({
   }, [openSlot]);
 
   function assign(slot: number, memberId: string) {
-    setSlots((map) => ({ ...map, [slot]: memberId }));
+    setSlots((map) => {
+      if (map[slot] === memberId) return map;
+      const next = { ...map, [slot]: memberId };
+      for (const [key, id] of Object.entries(map)) {
+        if (Number(key) !== slot && id === memberId) delete next[Number(key)];
+      }
+      return next;
+    });
     setOpenSlot(null);
     setQuery("");
   }
@@ -653,10 +665,16 @@ function PositionPick({
 }
 
 function PlayerOption({ member, taken = false, onPick }: { member: Member; taken?: boolean; onPick: () => void }) {
+  const { t } = useLanguage();
   const name = memberName(member);
   const jersey = formatJersey(member.number);
   return (
-    <button type="button" onClick={onPick} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left ${taken ? "bg-game-soft hover:bg-[#f6d4d1]" : "hover:bg-ice"}`}>
+    <button
+      type="button"
+      title={taken ? t("lineup.taken") : undefined}
+      onClick={onPick}
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left ${taken ? "bg-game-soft hover:bg-[#f6d4d1]" : "hover:bg-ice"}`}
+    >
       <PlayerFace member={member} compact />
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block truncate text-sm">{name}</span>
